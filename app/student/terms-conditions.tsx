@@ -3,13 +3,10 @@ import {
   View,
   Text,
   Pressable,
-  StyleSheet,
   Platform,
   ScrollView,
   useWindowDimensions,
-  useColorScheme,
   type ViewStyle,
-  type PressableStateCallbackType,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,121 +16,860 @@ import {
   useStudentMenu,
 } from '../../components/student/StudentMenu';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Project design tokens (no DashboardLayout wrapper — tokens only)
+// ─────────────────────────────────────────────────────────────────────────────
+import {
+  spacing,
+  typography,
+  radii,
+  useTheme,
+} from '../../components/student/DashboardLayout';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 type Breakpoint = 'mobile' | 'tablet' | 'desktop';
 
-type ThemeColors = {
-  appBg: string;
-  surface: string;
-  surfaceMuted: string;
-  card: string;
-  cardAlt: string;
-  primarySoft: string;
-  text: string;
-  textMuted: string;
-  border: string;
-  white: string;
-};
-
-const BASE_SPACING = 4;
-const spacing = (n: number) => n * BASE_SPACING;
-const MIN_TAP = 44;
-const MAX_DESKTOP_WIDTH = 1180;
-
-const radii = {
-  md: spacing(4),
-  lg: spacing(5),
-  xl: spacing(6),
-  pill: 999,
-};
-
-const typography = {
-  hero: { fontSize: 28, lineHeight: 34, fontWeight: '900' as const },
-  title: { fontSize: 22, lineHeight: 28, fontWeight: '800' as const },
-  section: { fontSize: 16, lineHeight: 22, fontWeight: '800' as const },
-  body: { fontSize: 14, lineHeight: 22, fontWeight: '600' as const },
-  label: { fontSize: 13, lineHeight: 18, fontWeight: '700' as const },
-  caption: { fontSize: 12, lineHeight: 16, fontWeight: '700' as const },
-};
-
-const sections = [
+// ─────────────────────────────────────────────────────────────────────────────
+// Content
+// ─────────────────────────────────────────────────────────────────────────────
+const SECTIONS = [
   {
+    icon: 'checkmark-circle-outline' as const,
     title: 'Acceptance of Use',
-    body:
-      'By using UniPathway, you agree to use the platform responsibly and lawfully. The platform is intended to support students with applications, results handling, recommendations, and related academic processes.',
+    body: 'By using UniPathway, you agree to use the platform responsibly and lawfully. The platform is intended to support students with applications, results handling, recommendations, and related academic processes.',
+    accent: '#60A5FA',
   },
   {
+    icon: 'lock-closed-outline' as const,
     title: 'Account Responsibility',
-    body:
-      'You are responsible for keeping your account information secure and accurate. Any activity carried out under your account is considered your responsibility unless reported otherwise.',
+    body: 'You are responsible for keeping your account information secure and accurate. Any activity carried out under your account is considered your responsibility unless reported otherwise.',
+    accent: '#34D399',
   },
   {
+    icon: 'document-text-outline' as const,
     title: 'Information Accuracy',
-    body:
-      'Students should ensure that all personal details, academic results, and uploaded documents are accurate and up to date. Incorrect information may affect recommendations, applications, or other platform services.',
+    body: 'Students should ensure that all personal details, academic results, and uploaded documents are accurate and up to date. Incorrect information may affect recommendations, applications, or other platform services.',
+    accent: '#FBBF24',
   },
   {
+    icon: 'cloud-outline' as const,
     title: 'Platform Availability',
-    body:
-      'UniPathway aims to provide a reliable service, but temporary interruptions, maintenance periods, or feature updates may occur from time to time as the platform evolves.',
+    body: 'UniPathway aims to provide a reliable service, but temporary interruptions, maintenance periods, or feature updates may occur from time to time as the platform evolves.',
+    accent: '#A78BFA',
   },
   {
+    icon: 'shield-checkmark-outline' as const,
     title: 'Appropriate Use',
-    body:
-      'Users must not misuse the platform, interfere with its performance, attempt unauthorized access, or upload content that is false, harmful, offensive, or unlawful.',
+    body: 'Users must not misuse the platform, interfere with its performance, attempt unauthorized access, or upload content that is false, harmful, offensive, or unlawful.',
+    accent: '#F87171',
   },
   {
+    icon: 'refresh-circle-outline' as const,
     title: 'Changes to Terms',
-    body:
-      'These terms may be updated as UniPathway grows. Continued use of the platform after updates means you accept the revised terms and conditions.',
+    body: 'These terms may be updated as UniPathway grows. Continued use of the platform after updates means you accept the revised terms and conditions.',
+    accent: '#F472B6',
   },
 ];
 
-function getBreakpoint(width: number): Breakpoint {
-  if (width < 480) return 'mobile';
-  if (width <= 1024) return 'tablet';
-  return 'desktop';
+// ─────────────────────────────────────────────────────────────────────────────
+// Elevation helper
+// ─────────────────────────────────────────────────────────────────────────────
+function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md'): ViewStyle {
+  return useMemo<ViewStyle>(() => {
+    const opacity = 0.28;
+    const radius  = intensity === 'sm' ? 6 : intensity === 'md' ? 14 : 22;
+    const offsetY = intensity === 'sm' ? 2 : intensity === 'md' ? 5  : 10;
+    return (Platform.select({
+      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: offsetY }, shadowOpacity: opacity, shadowRadius: radius },
+      android: { elevation: intensity === 'sm' ? 3 : intensity === 'md' ? 6 : 12 },
+      web:     { boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})` } as any,
+      default: {},
+    }) ?? {}) as ViewStyle;
+  }, [intensity]);
 }
 
-function getPressableState(state: PressableStateCallbackType) {
-  const hovered = (state as any).hovered === true;
-  return { pressed: state.pressed, hovered };
+// ─────────────────────────────────────────────────────────────────────────────
+// SectionCard
+// ─────────────────────────────────────────────────────────────────────────────
+function SectionCard({
+  index,
+  icon,
+  title,
+  body,
+  accent,
+}: {
+  index: number;
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  body: string;
+  accent: string;
+}) {
+  const colors    = useTheme();
+  const elevation = useElevation('md');
+
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: colors.card,
+          borderRadius: radii.xxl,
+          borderWidth: 1,
+          borderColor: colors.border,
+          overflow: 'hidden',
+        },
+        elevation,
+      ]}
+    >
+      {/* Left accent bar */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          bottom: 0,
+          left: 0,
+          width: 3,
+          backgroundColor: accent,
+        }}
+      />
+
+      <View style={{ padding: spacing(5), paddingLeft: spacing(6) }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            gap: spacing(4),
+          }}
+        >
+          {/* Icon bubble */}
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: radii.xl,
+              backgroundColor: `${accent}1A`,
+              borderWidth: 1,
+              borderColor: `${accent}33`,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              marginTop: 2,
+            }}
+          >
+            <Ionicons name={icon} size={22} color={accent} />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            {/* Section number + title */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing(2),
+                marginBottom: spacing(2),
+              }}
+            >
+              <View
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 11,
+                  backgroundColor: `${accent}22`,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text
+                  style={[
+                    typography.caption,
+                    { color: accent, fontWeight: '700', fontSize: 11 },
+                  ]}
+                >
+                  {index + 1}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  typography.h2,
+                  { color: colors.textPrimary },
+                ]}
+              >
+                {title}
+              </Text>
+            </View>
+
+            <Text
+              style={[
+                typography.body,
+                { color: colors.textSecondary, lineHeight: 22 },
+              ]}
+            >
+              {body}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
 }
 
-function getColors(scheme: 'light' | 'dark'): ThemeColors {
-  const light = scheme === 'light';
-  return {
-    appBg: light ? '#F4F8FB' : '#081018',
-    surface: light ? '#FFFFFF' : '#121C26',
-    surfaceMuted: light ? '#EEF4F7' : '#182430',
-    card: light ? '#FFFFFF' : '#16202B',
-    cardAlt: light ? '#F7FBFD' : '#1A2632',
-    primarySoft: light ? 'rgba(87,175,194,0.14)' : 'rgba(87,175,194,0.22)',
-    text: light ? '#0B0F12' : '#EAF2F8',
-    textMuted: light ? 'rgba(11,15,18,0.72)' : 'rgba(234,242,248,0.78)',
-    border: light ? 'rgba(11,15,18,0.08)' : 'rgba(234,242,248,0.12)',
-    white: '#FFFFFF',
-  };
+// ─────────────────────────────────────────────────────────────────────────────
+// Sidebar panel (desktop only)
+// ─────────────────────────────────────────────────────────────────────────────
+function SidebarPanel() {
+  const colors    = useTheme();
+  const elevation = useElevation('md');
+
+  return (
+    <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
+      <View
+        style={[
+          {
+            backgroundColor: colors.surface,
+            borderRadius: radii.xxl,
+            borderWidth: 1,
+            borderColor: colors.border,
+            overflow: 'hidden',
+          },
+          elevation,
+        ]}
+      >
+        <View style={{ height: 3, backgroundColor: colors.primary }} />
+        <View style={{ padding: spacing(6), gap: spacing(4) }}>
+          <Text style={[typography.h2, { color: colors.textPrimary }]}>
+            Quick Index
+          </Text>
+
+          <View style={{ gap: spacing(2) }}>
+            {SECTIONS.map((s, i) => (
+              <View
+                key={s.title}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing(3),
+                  paddingHorizontal: spacing(3),
+                  paddingVertical: spacing(2),
+                  borderRadius: radii.lg,
+                  backgroundColor: `${s.accent}0F`,
+                  borderWidth: 1,
+                  borderColor: `${s.accent}22`,
+                }}
+              >
+                <View
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    backgroundColor: `${s.accent}22`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text
+                    style={[
+                      typography.caption,
+                      { color: s.accent, fontWeight: '700', fontSize: 10 },
+                    ]}
+                  >
+                    {i + 1}
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    typography.caption,
+                    { color: colors.textSecondary, flex: 1, fontWeight: '700' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {s.title}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={{ height: 1, backgroundColor: colors.divider }} />
+
+          {/* Settings link */}
+          <Pressable
+            onPress={() => router.push('/student/settings')}
+            style={({ pressed }) => ({
+              flexDirection: 'row' as const,
+              alignItems: 'center' as const,
+              gap: spacing(3),
+              padding: spacing(4),
+              borderRadius: radii.xl,
+              backgroundColor: colors.surfaceAlt,
+              borderWidth: 1,
+              borderColor: colors.border,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Ionicons name="settings-outline" size={18} color={colors.textSecondary} />
+            <Text style={[typography.label, { color: colors.textSecondary, flex: 1 }]}>
+              Back to Settings
+            </Text>
+            <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+          </Pressable>
+
+          {/* Effective date */}
+          <View
+            style={{
+              padding: spacing(4),
+              backgroundColor: `${colors.primary}14`,
+              borderRadius: radii.lg,
+              borderLeftWidth: 3,
+              borderLeftColor: colors.primary,
+            }}
+          >
+            <Text
+              style={[
+                typography.caption,
+                { color: colors.textSecondary, lineHeight: 18 },
+              ]}
+            >
+              📅 These terms are effective as of January 2026 and apply to all UniPathway users.
+            </Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
 }
 
-function getElevation(scheme: 'light' | 'dark'): ViewStyle {
-  return Platform.select<ViewStyle>({
-    ios: {
-      shadowColor: '#000',
-      shadowOpacity: scheme === 'light' ? 0.08 : 0.18,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 10 },
-    },
-    android: { elevation: scheme === 'light' ? 3 : 2 },
-    web: {
-      boxShadow:
-        scheme === 'light'
-          ? '0 10px 28px rgba(0,0,0,0.08)'
-          : '0 10px 28px rgba(0,0,0,0.28)',
-    } as any,
-    default: {},
-  }) as ViewStyle;
+// ─────────────────────────────────────────────────────────────────────────────
+// Main content
+// ─────────────────────────────────────────────────────────────────────────────
+function TermsConditionsContent() {
+  const { width }    = useWindowDimensions();
+  const colors       = useTheme();
+  const { openMenu } = useStudentMenu();
+  const elevMd       = useElevation('md');
+  const elevLg       = useElevation('lg');
+
+  const breakpoint = useMemo<Breakpoint>(() => {
+    if (width < 768)  return 'mobile';
+    if (width < 1024) return 'tablet';
+    return 'desktop';
+  }, [width]);
+
+  const isDesktop = breakpoint === 'desktop';
+  const isMobile  = breakpoint === 'mobile';
+  const padX      = isMobile ? spacing(4) : spacing(7);
+
+  // ── Top nav bar ────────────────────────────────────────────────────────────
+  const NavBar = (
+    <View
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: padX,
+          paddingVertical: spacing(4),
+          backgroundColor: colors.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+          gap: spacing(3),
+        },
+        elevMd,
+      ]}
+    >
+      {/* Back */}
+      <Pressable
+        onPress={() => router.back()}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        style={({ pressed }) => ({
+          width: 44,
+          height: 44,
+          borderRadius: radii.lg,
+          backgroundColor: colors.surfaceAlt,
+          borderWidth: 1,
+          borderColor: colors.border,
+          alignItems: 'center' as const,
+          justifyContent: 'center' as const,
+          opacity: pressed ? 0.8 : 1,
+        })}
+      >
+        <Ionicons name="arrow-back" size={20} color={colors.primary} />
+      </Pressable>
+
+      {/* Title */}
+      <View style={{ flex: 1 }}>
+        <Text style={[typography.h2, { color: colors.textPrimary }]}>
+          Terms & Conditions
+        </Text>
+        {!isMobile && (
+          <Text
+            style={[
+              typography.caption,
+              { color: colors.textSecondary, marginTop: 2 },
+            ]}
+            numberOfLines={1}
+          >
+            Platform usage terms and responsibilities
+          </Text>
+        )}
+      </View>
+
+      {/* Settings shortcut */}
+      <Pressable
+        onPress={() => router.push('/student/settings')}
+        style={({ pressed }) => ({
+          flexDirection: 'row' as const,
+          alignItems: 'center' as const,
+          gap: spacing(2),
+          paddingHorizontal: spacing(4),
+          paddingVertical: spacing(2),
+          borderRadius: radii.lg,
+          backgroundColor: colors.surfaceAlt,
+          borderWidth: 1,
+          borderColor: colors.border,
+          opacity: pressed ? 0.8 : 1,
+        })}
+      >
+        <Ionicons name="settings-outline" size={16} color={colors.textSecondary} />
+        {!isMobile && (
+          <Text style={[typography.label, { color: colors.textSecondary }]}>
+            Settings
+          </Text>
+        )}
+      </Pressable>
+
+      {/* Menu */}
+      <Pressable
+        onPress={openMenu}
+        accessibilityRole="button"
+        accessibilityLabel="Open menu"
+        style={({ pressed }) => ({
+          width: 44,
+          height: 44,
+          borderRadius: radii.lg,
+          backgroundColor: colors.surfaceAlt,
+          borderWidth: 1,
+          borderColor: colors.border,
+          alignItems: 'center' as const,
+          justifyContent: 'center' as const,
+          opacity: pressed ? 0.8 : 1,
+        })}
+      >
+        <Ionicons name="menu" size={22} color={colors.textPrimary} />
+      </Pressable>
+    </View>
+  );
+
+  // ── Hero banner ────────────────────────────────────────────────────────────
+  const HeroBanner = (
+    <View
+      style={[
+        {
+          backgroundColor: colors.surface,
+          borderRadius: radii.xxl,
+          borderWidth: 1,
+          borderColor: colors.border,
+          overflow: 'hidden',
+          marginBottom: spacing(7),
+          width: '100%',
+        },
+        elevLg,
+      ]}
+    >
+      <View style={{ height: 3, backgroundColor: colors.primary }} />
+      <View style={{ padding: isMobile ? spacing(5) : spacing(7) }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: spacing(4),
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            {/* Badge */}
+            <View
+              style={{
+                alignSelf: 'flex-start',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing(2),
+                paddingHorizontal: spacing(3),
+                paddingVertical: spacing(2),
+                borderRadius: radii.pill,
+                backgroundColor: `${colors.primary}22`,
+                borderWidth: 1,
+                borderColor: `${colors.primary}44`,
+                marginBottom: spacing(4),
+              }}
+            >
+              <Ionicons name="document-text-outline" size={13} color={colors.primary} />
+              <Text
+                style={[
+                  typography.caption,
+                  { color: colors.primary, fontWeight: '700' },
+                ]}
+              >
+                LEGAL
+              </Text>
+            </View>
+
+            <Text
+              style={[
+                typography.hero,
+                {
+                  color: colors.textPrimary,
+                  fontSize: isMobile ? 22 : 28,
+                  lineHeight: isMobile ? 28 : 34,
+                },
+              ]}
+            >
+              Terms of Use
+            </Text>
+            <Text
+              style={[
+                typography.body,
+                {
+                  color: colors.textSecondary,
+                  marginTop: spacing(2),
+                  lineHeight: 22,
+                  maxWidth: 520,
+                },
+              ]}
+            >
+              Please review the key conditions that guide the proper and
+              responsible use of the UniPathway platform. These terms apply
+              to all students and users of the service.
+            </Text>
+          </View>
+
+          {/* Section count pill */}
+          <View
+            style={{
+              flexShrink: 0,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: spacing(2),
+              paddingHorizontal: spacing(3),
+              paddingVertical: spacing(2),
+              borderRadius: radii.pill,
+              backgroundColor: `${colors.primary}22`,
+              borderWidth: 1,
+              borderColor: `${colors.primary}44`,
+            }}
+          >
+            <Ionicons name="list-outline" size={14} color={colors.primary} />
+            <Text
+              style={[
+                typography.caption,
+                { color: colors.primary, fontWeight: '700' },
+              ]}
+            >
+              {SECTIONS.length} sections
+            </Text>
+          </View>
+        </View>
+
+        {/* Effective date strip */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing(3),
+            marginTop: spacing(5),
+            padding: spacing(3),
+            backgroundColor: `${colors.primary}0F`,
+            borderRadius: radii.lg,
+            borderWidth: 1,
+            borderColor: `${colors.primary}22`,
+          }}
+        >
+          <Ionicons name="calendar-outline" size={15} color={colors.primary} />
+          <Text
+            style={[
+              typography.caption,
+              { color: colors.textSecondary, fontWeight: '700' },
+            ]}
+          >
+            Effective January 2026 · Applies to all UniPathway users
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+
+  // ── Mobile quick index (collapsible substitute on small screens) ───────────
+  const MobileIndex = isMobile && (
+    <View
+      style={{
+        marginBottom: spacing(6),
+        padding: spacing(4),
+        backgroundColor: colors.surface,
+        borderRadius: radii.xl,
+        borderWidth: 1,
+        borderColor: colors.border,
+        gap: spacing(2),
+      }}
+    >
+      <Text
+        style={[
+          typography.caption,
+          { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(1) },
+        ]}
+      >
+        SECTIONS
+      </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) }}>
+        {SECTIONS.map((s, i) => (
+          <View
+            key={s.title}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: spacing(2),
+              paddingHorizontal: spacing(3),
+              paddingVertical: spacing(1),
+              borderRadius: radii.pill,
+              backgroundColor: `${s.accent}14`,
+              borderWidth: 1,
+              borderColor: `${s.accent}33`,
+            }}
+          >
+            <Text
+              style={[
+                typography.caption,
+                { color: s.accent, fontWeight: '700', fontSize: 10 },
+              ]}
+            >
+              {i + 1}
+            </Text>
+            <Text
+              style={[
+                typography.caption,
+                { color: colors.textSecondary, fontWeight: '700' },
+              ]}
+            >
+              {s.title.split(' ')[0]}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: spacing(12) }}
+        >
+          {NavBar}
+
+          <View
+            style={{
+              paddingHorizontal: padX,
+              paddingTop: spacing(7),
+              maxWidth: 1280,
+              alignSelf: 'center',
+              width: '100%',
+            }}
+          >
+            {/* Breadcrumb */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing(3),
+                marginBottom: spacing(6),
+              }}
+            >
+              <Pressable
+                onPress={() => router.back()}
+                style={({ pressed }) => ({
+                  flexDirection: 'row' as const,
+                  alignItems: 'center' as const,
+                  gap: spacing(2),
+                  paddingHorizontal: spacing(4),
+                  paddingVertical: spacing(2),
+                  borderRadius: radii.lg,
+                  backgroundColor: colors.surfaceAlt,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  opacity: pressed ? 0.8 : 1,
+                })}
+              >
+                <Ionicons name="arrow-back" size={16} color={colors.primary} />
+                <Text style={[typography.label, { color: colors.primary }]}>Back</Text>
+              </Pressable>
+              <Text
+                style={[typography.caption, { color: colors.textMuted }]}
+                numberOfLines={1}
+              >
+                Settings › Terms & Conditions
+              </Text>
+            </View>
+
+            {/* Hero */}
+            {HeroBanner}
+
+            {/* Two-column on desktop, stacked otherwise */}
+            <View
+              style={{
+                flexDirection: isDesktop ? 'row' : 'column',
+                gap: spacing(8),
+                alignItems: 'flex-start',
+              }}
+            >
+              {/* Main column */}
+              <View style={{ flex: 1, minWidth: 0, width: '100%' }}>
+                {MobileIndex}
+
+                <Text
+                  style={[
+                    typography.caption,
+                    {
+                      color: colors.textMuted,
+                      letterSpacing: 0.5,
+                      marginBottom: spacing(4),
+                    },
+                  ]}
+                >
+                  ALL SECTIONS · {SECTIONS.length} ITEMS
+                </Text>
+
+                <View style={{ gap: spacing(4) }}>
+                  {SECTIONS.map((section, i) => (
+                    <SectionCard
+                      key={section.title}
+                      index={i}
+                      icon={section.icon}
+                      title={section.title}
+                      body={section.body}
+                      accent={section.accent}
+                    />
+                  ))}
+                </View>
+
+                {/* Footer acknowledgment */}
+                <View
+                  style={{
+                    marginTop: spacing(8),
+                    padding: isMobile ? spacing(5) : spacing(6),
+                    backgroundColor: colors.surface,
+                    borderRadius: radii.xxl,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    gap: spacing(4),
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: spacing(3),
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: radii.lg,
+                        backgroundColor: `${colors.success}22`,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons
+                        name="checkmark-done-outline"
+                        size={20}
+                        color={colors.success}
+                      />
+                    </View>
+                    <Text style={[typography.h2, { color: colors.textPrimary }]}>
+                      Your Agreement
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      typography.body,
+                      { color: colors.textSecondary, lineHeight: 22 },
+                    ]}
+                  >
+                    By continuing to use UniPathway, you confirm that you
+                    have read, understood, and agreed to all of the above
+                    terms and conditions. If you have any questions, please
+                    reach out via the Contact Support page.
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      gap: spacing(3),
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <Pressable
+                      onPress={() => router.push('/student/contact-support')}
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        minWidth: 160,
+                        flexDirection: 'row' as const,
+                        alignItems: 'center' as const,
+                        justifyContent: 'center' as const,
+                        gap: spacing(2),
+                        height: 52,
+                        borderRadius: radii.lg,
+                        backgroundColor: colors.primary,
+                        opacity: pressed ? 0.88 : 1,
+                        transform: pressed ? [{ scale: 0.98 }] : [],
+                      })}
+                    >
+                      <Ionicons name="help-circle-outline" size={18} color="#fff" />
+                      <Text style={[typography.label, { color: '#fff' }]}>
+                        Contact Support
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => router.back()}
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        minWidth: 160,
+                        flexDirection: 'row' as const,
+                        alignItems: 'center' as const,
+                        justifyContent: 'center' as const,
+                        gap: spacing(2),
+                        height: 52,
+                        borderRadius: radii.lg,
+                        backgroundColor: colors.surfaceAlt,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        opacity: pressed ? 0.85 : 1,
+                      })}
+                    >
+                      <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
+                      <Text style={[typography.label, { color: colors.textPrimary }]}>
+                        Go Back
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+
+              {/* Sidebar — desktop only */}
+              {isDesktop && <SidebarPanel />}
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
+  );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Exported Screen
+// ─────────────────────────────────────────────────────────────────────────────
 export default function TermsConditionsScreen() {
   return (
     <StudentMenuProvider>
@@ -141,228 +877,3 @@ export default function TermsConditionsScreen() {
     </StudentMenuProvider>
   );
 }
-
-function TermsConditionsContent() {
-  const { width, height } = useWindowDimensions();
-  const rawScheme = useColorScheme();
-  const scheme: 'light' | 'dark' = rawScheme === 'dark' ? 'dark' : 'light';
-  const colors = useMemo(() => getColors(scheme), [scheme]);
-  const elevation = useMemo(() => getElevation(scheme), [scheme]);
-  const bp = useMemo(() => getBreakpoint(width), [width]);
-  const { openMenu } = useStudentMenu();
-
-  const ui = useMemo(() => {
-    const isDesktop = bp === 'desktop';
-    const isTablet = bp === 'tablet';
-
-    return {
-      isDesktop,
-      shellWidth: isDesktop ? Math.min(MAX_DESKTOP_WIDTH, width - spacing(8) * 2) : width,
-      shellHeight: isDesktop ? Math.min(920, Math.round(height * 0.9)) : height,
-      shellRadius: isDesktop ? radii.xl : 0,
-      shellPadding: isDesktop ? spacing(7) : 0,
-      padX: isDesktop ? spacing(7) : isTablet ? spacing(6) : spacing(4),
-      padY: isDesktop ? spacing(6) : isTablet ? spacing(5) : spacing(4),
-      gap: isDesktop ? spacing(5) : spacing(4),
-    };
-  }, [bp, width, height]);
-
-  return (
-    <View style={[styles.page, { backgroundColor: colors.appBg }]}>
-      <View style={[styles.center, { padding: ui.shellPadding }]}>
-        <View
-          style={[
-            styles.shell,
-            {
-              width: ui.shellWidth,
-              height: ui.shellHeight,
-              borderRadius: ui.shellRadius,
-              backgroundColor: colors.surfaceMuted,
-            },
-            ui.isDesktop
-              ? [
-                  styles.shellDesktop,
-                  {
-                    borderColor: colors.border,
-                  },
-                  elevation,
-                ]
-              : null,
-          ]}
-        >
-          <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-            <View
-              style={[
-                styles.topBar,
-                {
-                  paddingHorizontal: ui.padX,
-                  borderBottomColor: colors.border,
-                  backgroundColor: colors.surface,
-                },
-              ]}
-            >
-              <View style={styles.topBarLeft}>
-                <HeaderIconButton icon="menu-outline" label="Open menu" colors={colors} onPress={openMenu} />
-                <HeaderIconButton
-                  icon="chevron-back"
-                  label="Go back"
-                  colors={colors}
-                  onPress={() => router.back()}
-                />
-              </View>
-
-              <View style={styles.headerCenter}>
-                <Text style={[styles.topTitle, typography.title, { color: colors.text }]}>Terms & Conditions</Text>
-                <Text style={[styles.topSubtitle, typography.caption, { color: colors.textMuted }]}>
-                  Platform usage terms and responsibilities
-                </Text>
-              </View>
-
-              <HeaderIconButton
-                icon="settings-outline"
-                label="Open settings"
-                colors={colors}
-                onPress={() => router.push('/student/settings')}
-              />
-            </View>
-
-            <ScrollView contentContainerStyle={{ paddingHorizontal: ui.padX, paddingVertical: ui.padY }}>
-              <View style={[styles.heroCard, { backgroundColor: colors.cardAlt, borderColor: colors.border }, elevation]}>
-                <View style={[styles.badge, { backgroundColor: colors.primarySoft }]}>
-                  <Ionicons name="document-text-outline" size={16} color={colors.text} />
-                  <Text style={[typography.caption, { color: colors.text }]}>Legal</Text>
-                </View>
-                <Text style={[typography.hero, { color: colors.text, marginTop: spacing(4) }]}>Terms of Use</Text>
-                <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing(2) }]}>
-                  Please review the key conditions that guide the proper use of the UniPathway platform.
-                </Text>
-              </View>
-
-              <View style={{ marginTop: ui.gap, gap: spacing(3) }}>
-                {sections.map((section) => (
-                  <View
-                    key={section.title}
-                    style={[
-                      styles.sectionCard,
-                      {
-                        backgroundColor: colors.card,
-                        borderColor: colors.border,
-                      },
-                      elevation,
-                    ]}
-                  >
-                    <Text style={[typography.section, { color: colors.text }]}>{section.title}</Text>
-                    <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing(2) }]}>
-                      {section.body}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-          </SafeAreaView>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function HeaderIconButton({
-  icon,
-  label,
-  onPress,
-  colors,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-  colors: ThemeColors;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => {
-        const state = getPressableState({ pressed } as PressableStateCallbackType);
-        return [
-          styles.headerIconButton,
-          {
-            backgroundColor: colors.surfaceMuted,
-            borderColor: colors.border,
-          },
-          state.hovered && Platform.OS === 'web' ? styles.hoverLift : null,
-          pressed ? styles.pressDown : null,
-        ];
-      }}
-    >
-      <Ionicons name={icon} size={20} color={colors.text} />
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
-  page: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  shell: { overflow: 'hidden' },
-  shellDesktop: { borderWidth: 1 },
-  safe: { flex: 1 },
-
-  topBar: {
-    minHeight: 72,
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(3),
-    paddingVertical: spacing(3),
-  },
-  topBarLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(2),
-  },
-  headerCenter: {
-    flex: 1,
-    minWidth: 0,
-    alignItems: 'center',
-  },
-  topTitle: { textAlign: 'center' },
-  topSubtitle: { marginTop: spacing(1), textAlign: 'center' },
-
-  headerIconButton: {
-    width: MIN_TAP,
-    height: MIN_TAP,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  heroCard: {
-    borderWidth: 1,
-    borderRadius: radii.xl,
-    padding: spacing(5),
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    minHeight: 38,
-    paddingHorizontal: spacing(3),
-    paddingVertical: spacing(2),
-    borderRadius: radii.pill,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(2),
-  },
-  sectionCard: {
-    borderWidth: 1,
-    borderRadius: radii.xl,
-    padding: spacing(5),
-  },
-
-  hoverLift: {
-    transform: [{ translateY: -1 }],
-  },
-  pressDown: {
-    opacity: 0.96,
-    transform: [{ scale: 0.98 }],
-  },
-});

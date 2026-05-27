@@ -3,137 +3,33 @@ import {
   View,
   Text,
   Pressable,
-  StyleSheet,
   useWindowDimensions,
   Platform,
-  ScrollView,
   Alert,
   Modal,
   TextInput,
   KeyboardAvoidingView,
-  useColorScheme,
   type ViewStyle,
-  type TextStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { StudentMenuProvider, useStudentMenu } from '../../components/student/StudentMenu';
+import { StudentMenuProvider } from '../../components/student/StudentMenu';
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Design System ────────────────────────────────────────────────────────────────
-// ──────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// DashboardLayout & design tokens
+// ─────────────────────────────────────────────────────────────────────────────
+import DashboardLayout, {
+  spacing,
+  typography,
+  radii,
+  useTheme,
+} from '../../components/student/DashboardLayout';
 
-const BASE_SPACING = 4;
-const spacing = (n: number) => n * BASE_SPACING;
-
-const typography = {
-  hero: { fontSize: 34, lineHeight: 40, fontWeight: '900' as const },
-  title: { fontSize: 26, lineHeight: 32, fontWeight: '800' as const },
-  section: { fontSize: 18, lineHeight: 24, fontWeight: '800' as const },
-  subtitle: { fontSize: 15, lineHeight: 20, fontWeight: '600' as const },
-  body: { fontSize: 15, lineHeight: 22, fontWeight: '500' as const },
-  bodyStrong: { fontSize: 15, lineHeight: 22, fontWeight: '700' as const },
-  label: { fontSize: 13, lineHeight: 18, fontWeight: '700' as const },
-  caption: { fontSize: 12, lineHeight: 16, fontWeight: '600' as const },
-} satisfies Record<string, TextStyle>;
-
-const radii = {
-  xs: spacing(1),
-  sm: spacing(2),
-  md: spacing(3),
-  lg: spacing(4),
-  xl: spacing(6),
-  xxl: spacing(8),
-  pill: 9999,
-};
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 type Breakpoint = 'mobile' | 'tablet' | 'desktop';
-
-const breakpoints = {
-  mobile: 0,
-  tablet: 480,
-  desktop: 1024,
-} as const;
-
-const MAX_CONTENT_WIDTH = 1240;
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Theme & Elevation ─────────────────────────────────────────────────────────────
-// ──────────────────────────────────────────────────────────────────────────────
-
-type ThemeColors = {
-  background: string;
-  surface: string;
-  surfaceAlt: string;
-  card: string;
-  cardHover: string;
-  primary: string;
-  primaryStrong: string;
-  primarySoft: string;
-  successSoft: string;
-  text: string;
-  textSecondary: string;
-  textTertiary: string;
-  border: string;
-  borderStrong: string;
-  overlay: string;
-};
-
-function useThemeColors() {
-  const scheme = useColorScheme() ?? 'light';
-  return useMemo<ThemeColors>(() => {
-    const isDark = scheme === 'dark';
-    return {
-      background: isDark ? '#0A0F14' : '#F8FAFC',
-      surface: isDark ? '#11181F' : '#FFFFFF',
-      surfaceAlt: isDark ? '#17232F' : '#F1F5F9',
-      card: isDark ? '#15212C' : '#FFFFFF',
-      cardHover: isDark ? '#1E2A38' : '#F8FAFC',
-      primary: '#4FA8C8',
-      primaryStrong: isDark ? '#6BC8E8' : '#2A8BB2',
-      primarySoft: isDark ? 'rgba(79,168,200,0.18)' : 'rgba(79,168,200,0.12)',
-      successSoft: isDark ? 'rgba(52,211,153,0.18)' : 'rgba(52,211,153,0.10)',
-      text: isDark ? '#E2E8F0' : '#0F172A',
-      textSecondary: isDark ? '#94A3B8' : '#475569',
-      textTertiary: isDark ? '#64748B' : '#64748B',
-      border: isDark ? 'rgba(226,232,240,0.08)' : 'rgba(15,23,42,0.08)',
-      borderStrong: isDark ? 'rgba(226,232,240,0.14)' : 'rgba(15,23,42,0.12)',
-      overlay: 'rgba(0,0,0,0.40)',
-    };
-  }, [scheme]);
-}
-
-function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md') {
-  const scheme = useColorScheme() ?? 'light';
-  const isDark = scheme === 'dark';
-
-  return useMemo<ViewStyle>(() => {
-    const opacity = isDark ? 0.35 : 0.12;
-    const radius = intensity === 'sm' ? 6 : intensity === 'md' ? 12 : 20;
-    const offsetY = intensity === 'sm' ? 2 : intensity === 'md' ? 4 : 8;
-
-    return Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: offsetY },
-        shadowOpacity: opacity,
-        shadowRadius: radius,
-      },
-      android: {
-        elevation: intensity === 'sm' ? 3 : intensity === 'md' ? 6 : 12,
-      },
-      web: {
-        boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})`,
-      },
-      default: {},
-    });
-  }, [intensity, isDark]);
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Data ──────────────────────────────────────────────────────────────────────────
-// ──────────────────────────────────────────────────────────────────────────────
+type IconName   = keyof typeof Ionicons.glyphMap;
 
 type ScholarshipDetails = {
   id: string;
@@ -141,637 +37,648 @@ type ScholarshipDetails = {
   providerName: string;
   amount: string;
   deadline: string;
+  daysLeft: number;
+  category: 'Local' | 'International';
+  status: string;
+  statusVariant: 'good' | 'warning' | 'info' | 'neutral';
+  description: string;
   eligibility: string[];
   howToApply: string[];
+  documents: string[];
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Data
+// ─────────────────────────────────────────────────────────────────────────────
 const DETAILS_DB: Record<string, ScholarshipDetails> = {
-  "abc-excellence": {
-    id: "abc-excellence",
-    title: "ABC Academic Excellence Scholarship",
-    providerName: "ABC Foundation",
-    amount: "P5,000 (Tuition Support)",
-    deadline: "May 10, 2026",
+  'abc-excellence': {
+    id: 'abc-excellence',
+    title: 'ABC Academic Excellence Scholarship',
+    providerName: 'ABC Foundation',
+    amount: 'BWP 12,000 / year',
+    deadline: 'May 10, 2026',
+    daysLeft: 23,
+    category: 'Local',
+    status: 'You May Qualify',
+    statusVariant: 'good',
+    description:
+      'Awarded annually to top-performing BGCSE students who demonstrate outstanding academic achievement and community leadership. This scholarship covers partial tuition fees and is renewable for up to four years subject to continued academic performance.',
     eligibility: [
-      "Currently enrolled in an undergraduate program",
-      "Academic standing: Minimum 3.0 GPA",
-      "Demonstrated financial need",
-      "Strong leadership and extracurricular involvement",
+      'Minimum 36 BGCSE points across best 6 subjects',
+      'Botswana citizen or permanent resident',
+      'Currently enrolled or accepted into an accredited undergraduate programme',
+      'Demonstrated community service or extracurricular involvement',
+      'No outstanding disciplinary record',
     ],
     howToApply: [
-      "Complete the online application form",
-      "Submit a copy of your academic transcript",
-      "Provide a personal statement outlining your study plans and goals",
-      "Submit a letter of recommendation from a professor or advisor",
+      'Complete the online application form at www.abcfoundation.bw',
+      'Submit certified copies of your BGCSE certificate and transcript',
+      'Provide a personal statement (800–1200 words) outlining academic goals',
+      'Submit two reference letters from teachers or community leaders',
+      'Attend a shortlisting interview if selected',
+    ],
+    documents: [
+      'Certified BGCSE certificate copy',
+      'National ID or passport copy',
+      'Proof of admission / acceptance letter',
+      'Personal statement (PDF)',
+      'Two reference letters',
     ],
   },
-  "community-service": {
-    id: "community-service",
-    title: "Community Service Award",
-    providerName: "City Education Trust",
-    amount: "P5,000 (Tuition Support)",
-    deadline: "April 28, 2026",
+  'community-service': {
+    id: 'community-service',
+    title: 'Community Service Award',
+    providerName: 'City Education Trust',
+    amount: 'USD 5,000',
+    deadline: 'April 28, 2026',
+    daysLeft: 3,
+    category: 'International',
+    status: 'Deadline Soon',
+    statusVariant: 'warning',
+    description:
+      'Recognises students who have made a significant and sustained positive contribution to their local community. The award celebrates leadership, civic engagement, and a commitment to social impact alongside academic achievement.',
     eligibility: [
-      "Currently enrolled in an undergraduate program",
-      "Academic standing: Minimum 3.0 GPA",
-      "Plan to study abroad for at least one semester",
-      "Demonstrated financial need",
-      "Strong leadership and extracurricular involvement",
+      'Proof of 100+ documented community service hours',
+      'Currently enrolled in a secondary or tertiary institution',
+      'Academic standing of C grade average or above',
+      'Two letters of endorsement from community organisations',
+      'Open to applicants from any country',
     ],
     howToApply: [
-      "Complete the online application form",
-      "Submit a copy of your academic transcript",
-      "Provide a personal statement outlining your study plans and goals",
-      "Submit a letter of recommendation from a professor or advisor",
+      'Register on the City Education Trust portal',
+      'Upload proof of community service hours and activities',
+      'Write a reflective essay on your community impact (500–700 words)',
+      'Request two endorsement letters from recognised organisations',
+      'Submit before the stated deadline — late submissions not accepted',
+    ],
+    documents: [
+      'Community service log (signed)',
+      'Two endorsement letters',
+      'Reflective essay (PDF)',
+      'Student ID or enrolment proof',
+      'Recent transcript',
     ],
   },
 };
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Reusable Components ───────────────────────────────────────────────────────────
-// ──────────────────────────────────────────────────────────────────────────────
+const FALLBACK_ID = 'abc-excellence';
 
-type IconName = keyof typeof Ionicons.glyphMap;
-
-function IconButton({
-  icon,
-  label,
-  onPress,
-  size = 20,
-  color,
-}: {
-  icon: IconName;
-  label: string;
-  onPress: () => void;
-  size?: number;
-  color: string;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint={`Activates ${label.toLowerCase()}`}
-      style={({ pressed }) => [
-        {
-          width: 44,
-          height: 44,
-          borderRadius: radii.md,
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: pressed ? 0.7 : 1,
-          transform: pressed ? [{ scale: 0.96 }] : [],
-        },
-      ]}
-    >
-      <Ionicons name={icon} size={size} color={color} />
-    </Pressable>
-  );
+// ─────────────────────────────────────────────────────────────────────────────
+// Elevation helper
+// ─────────────────────────────────────────────────────────────────────────────
+function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md'): ViewStyle {
+  return useMemo<ViewStyle>(() => {
+    const opacity = 0.28;
+    const radius  = intensity === 'sm' ? 6  : intensity === 'md' ? 14 : 22;
+    const offsetY = intensity === 'sm' ? 2  : intensity === 'md' ? 5  : 10;
+    return (Platform.select({
+      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: offsetY }, shadowOpacity: opacity, shadowRadius: radius },
+      android: { elevation: intensity === 'sm' ? 3 : intensity === 'md' ? 6 : 12 },
+      web:     { boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})` } as any,
+      default: {},
+    }) ?? {}) as ViewStyle;
+  }, [intensity]);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Variant colour helper
+// ─────────────────────────────────────────────────────────────────────────────
+function useVariantColors(variant: ScholarshipDetails['statusVariant']) {
+  const colors = useTheme();
+  switch (variant) {
+    case 'good':    return { bg: `${colors.success}18`, border: `${colors.success}44`, text: colors.success };
+    case 'warning': return { bg: `${colors.warning}18`, border: `${colors.warning}44`, text: colors.warning };
+    case 'info':    return { bg: `${colors.primary}18`, border: `${colors.primary}44`, text: colors.primary };
+    default:        return { bg: colors.surfaceAlt,     border: colors.border,          text: colors.textSecondary };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Card wrapper
+// ─────────────────────────────────────────────────────────────────────────────
 function Card({
   children,
   style,
   intensity = 'md',
+  accentColor,
 }: {
   children: React.ReactNode;
   style?: ViewStyle;
   intensity?: 'sm' | 'md' | 'lg';
+  accentColor?: string;
 }) {
   const elevation = useElevation(intensity);
-  const colors = useThemeColors();
-
+  const colors    = useTheme();
   return (
-    <View
-      style={[
-        {
-          backgroundColor: colors.card,
-          borderRadius: radii.xl,
-          borderWidth: 1,
-          borderColor: colors.border,
-          overflow: 'hidden',
-        },
-        elevation,
-        style,
-      ]}
-    >
+    <View style={[{ backgroundColor: colors.card, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }, elevation, style]}>
+      {accentColor && <View style={{ height: 3, backgroundColor: accentColor }} />}
       {children}
     </View>
   );
 }
 
-function SectionHeader({ title, icon }: { title: string; icon?: IconName }) {
-  const colors = useThemeColors();
+// ─────────────────────────────────────────────────────────────────────────────
+// SectionHeader
+// ─────────────────────────────────────────────────────────────────────────────
+function SectionHeader({ title, icon, label }: { title: string; icon?: IconName; label?: string }) {
+  const colors = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(4) }}>
-      {icon && <Ionicons name={icon} size={20} color={colors.primary} />}
-      <Text style={[typography.section, { color: colors.text }]}>{title}</Text>
-    </View>
-  );
-}
-
-function MetaItem({
-  icon,
-  label,
-  value,
-}: {
-  icon: IconName;
-  label: string;
-  value: string;
-}) {
-  const colors = useThemeColors();
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), paddingVertical: spacing(2) }}>
-      <Ionicons name={icon} size={20} color={colors.primary} />
-      <View style={{ flex: 1 }}>
-        <Text style={[typography.caption, { color: colors.textSecondary }]}>{label}</Text>
-        <Text style={[typography.bodyStrong, { color: colors.text }]}>{value}</Text>
+    <View style={{ marginBottom: spacing(5) }}>
+      {label && (
+        <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(2) }]}>
+          {label.toUpperCase()}
+        </Text>
+      )}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
+        {icon && (
+          <View style={{ width: 36, height: 36, borderRadius: radii.lg, backgroundColor: `${colors.primary}22`, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name={icon} size={18} color={colors.primary} />
+          </View>
+        )}
+        <Text style={[typography.h2, { color: colors.textPrimary }]}>{title}</Text>
       </View>
     </View>
   );
 }
 
-function BulletList({ items }: { items: string[] }) {
-  const colors = useThemeColors();
+// ─────────────────────────────────────────────────────────────────────────────
+// BulletList
+// ─────────────────────────────────────────────────────────────────────────────
+function BulletList({ items, color }: { items: string[]; color?: string }) {
+  const colors = useTheme();
+  const c      = color ?? colors.primary;
   return (
-    <View style={{ gap: spacing(3), marginTop: spacing(3) }}>
-      {items.map((item, index) => (
-        <View key={index} style={{ flexDirection: 'row', gap: spacing(3) }}>
-          <View
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: 3,
-              backgroundColor: colors.primary,
-              marginTop: 9,
-            }}
-          />
-          <Text style={[typography.body, { color: colors.textSecondary, flex: 1 }]}>
-            {item}
-          </Text>
+    <View style={{ gap: spacing(3) }}>
+      {items.map((item, i) => (
+        <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3) }}>
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: c, marginTop: 8, flexShrink: 0 }} />
+          <Text style={[typography.body, { color: colors.textSecondary, flex: 1, lineHeight: 22 }]}>{item}</Text>
         </View>
       ))}
     </View>
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// NumberedList
+// ─────────────────────────────────────────────────────────────────────────────
 function NumberedList({ items }: { items: string[] }) {
-  const colors = useThemeColors();
+  const colors = useTheme();
   return (
-    <View style={{ gap: spacing(4), marginTop: spacing(3) }}>
-      {items.map((item, index) => (
-        <View key={index} style={{ flexDirection: 'row', gap: spacing(3) }}>
-          <View
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: radii.pill,
-              backgroundColor: colors.primarySoft,
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={[typography.label, { color: colors.primaryStrong }]}>
-              {index + 1}
-            </Text>
+    <View style={{ gap: spacing(4) }}>
+      {items.map((item, i) => (
+        <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(4) }}>
+          <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: `${colors.primary}22`, borderWidth: 1, borderColor: `${colors.primary}44`, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+            <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{i + 1}</Text>
           </View>
-          <Text style={[typography.body, { color: colors.textSecondary, flex: 1 }]}>
-            {item}
-          </Text>
+          <Text style={[typography.body, { color: colors.textSecondary, flex: 1, lineHeight: 22 }]}>{item}</Text>
         </View>
       ))}
     </View>
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Main Screen ───────────────────────────────────────────────────────────────────
-// ──────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// DocumentChecklist
+// ─────────────────────────────────────────────────────────────────────────────
+function DocumentChecklist({ items }: { items: string[] }) {
+  const colors = useTheme();
+  const [checked, setChecked] = useState<boolean[]>(Array(items.length).fill(false));
 
-function ScholarshipDetailsContent() {
+  const toggle = (i: number) => {
+    setChecked((prev) => { const c = [...prev]; c[i] = !c[i]; return c; });
+  };
+
+  return (
+    <View style={{ gap: spacing(3) }}>
+      {items.map((item, i) => (
+        <Pressable key={i} onPress={() => toggle(i)} style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(3), padding: spacing(3), borderRadius: radii.lg, backgroundColor: checked[i] ? `${colors.success}14` : colors.surfaceAlt, borderWidth: 1, borderColor: checked[i] ? `${colors.success}33` : colors.border, opacity: pressed ? 0.85 : 1 })}>
+          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: checked[i] ? colors.success : colors.surface, borderWidth: 2, borderColor: checked[i] ? colors.success : colors.border, alignItems: 'center', justifyContent: 'center' }}>
+            {checked[i] && <Ionicons name="checkmark" size={13} color="#fff" />}
+          </View>
+          <Text style={[typography.body, { color: checked[i] ? colors.textPrimary : colors.textSecondary, flex: 1, textDecorationLine: checked[i] ? 'line-through' : 'none' }]}>
+            {item}
+          </Text>
+        </Pressable>
+      ))}
+      <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(1) }]}>
+        {checked.filter(Boolean).length}/{items.length} documents checked off
+      </Text>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Apply Modal
+// ─────────────────────────────────────────────────────────────────────────────
+function ApplyModal({
+  visible,
+  scholarshipTitle,
+  onConfirm,
+  onClose,
+}: {
+  visible: boolean;
+  scholarshipTitle: string;
+  onConfirm: (note: string) => void;
+  onClose: () => void;
+}) {
+  const colors    = useTheme();
+  const elevation = useElevation('lg');
   const { width } = useWindowDimensions();
-  const params = useLocalSearchParams<{ id?: string }>();
-  const { openMenu } = useStudentMenu();
+  const isMobile  = width < 768;
+  const [note, setNote] = useState('');
 
-  const scholarshipId = typeof params.id === 'string' ? params.id : 'abc-excellence';
-  const data = DETAILS_DB[scholarshipId] ?? DETAILS_DB['abc-excellence'];
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: spacing(5) }} onPress={onClose}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%', maxWidth: 520 }}>
+          <Pressable
+            style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }, elevation]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={{ height: 3, backgroundColor: colors.primary }} />
+            <View style={{ padding: isMobile ? spacing(5) : spacing(6), gap: spacing(5) }}>
+              {/* Header */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[typography.h2, { color: colors.textPrimary }]}>Apply Now</Text>
+                  <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={2}>
+                    {scholarshipTitle}
+                  </Text>
+                </View>
+                <Pressable onPress={onClose} style={({ pressed }) => ({ width: 40, height: 40, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center' as const, justifyContent: 'center' as const, opacity: pressed ? 0.7 : 1 })}>
+                  <Ionicons name="close" size={20} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+
+              {/* Info */}
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3), padding: spacing(4), backgroundColor: `${colors.primary}14`, borderRadius: radii.lg, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
+                <Ionicons name="information-circle-outline" size={18} color={colors.primary} style={{ marginTop: 1 }} />
+                <Text style={[typography.caption, { color: colors.textSecondary, flex: 1, lineHeight: 18 }]}>
+                  You will be redirected to the official application portal. Ensure all your documents are ready before proceeding.
+                </Text>
+              </View>
+
+              {/* Optional note */}
+              <View style={{ gap: spacing(2) }}>
+                <Text style={[typography.label, { color: colors.textPrimary }]}>Notes (optional)</Text>
+                <TextInput
+                  value={note}
+                  onChangeText={setNote}
+                  placeholder="e.g. Remind me to attach my reference letters..."
+                  placeholderTextColor={colors.textMuted}
+                  multiline
+                  style={{ minHeight: 100, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, padding: spacing(4), backgroundColor: colors.surfaceAlt, color: colors.textPrimary, textAlignVertical: 'top', fontSize: 15 }}
+                />
+              </View>
+
+              {/* Actions */}
+              <View style={{ flexDirection: 'row', gap: spacing(3) }}>
+                <Pressable onPress={onClose} style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center' as const, justifyContent: 'center' as const, opacity: pressed ? 0.85 : 1 })}>
+                  <Text style={[typography.label, { color: colors.textPrimary }]}>Cancel</Text>
+                </Pressable>
+                <Pressable onPress={() => { onConfirm(note); setNote(''); }} style={({ pressed }) => ({ flex: 2, height: 52, borderRadius: radii.lg, backgroundColor: colors.primary, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: spacing(2), opacity: pressed ? 0.88 : 1 })}>
+                  <Ionicons name="rocket-outline" size={18} color="#fff" />
+                  <Text style={[typography.label, { color: '#fff' }]}>Go to Application Portal</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Desktop Sidebar
+// ─────────────────────────────────────────────────────────────────────────────
+function DesktopSidebar({
+  data,
+  saved,
+  onApply,
+  onToggleSave,
+}: {
+  data: ScholarshipDetails;
+  saved: boolean;
+  onApply: () => void;
+  onToggleSave: () => void;
+}) {
+  const colors    = useTheme();
+  const elevation = useElevation('md');
+  const vc        = useVariantColors(data.statusVariant);
+
+  return (
+    <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
+      {/* CTA card */}
+      <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }, elevation]}>
+        <View style={{ height: 3, backgroundColor: vc.text }} />
+        <View style={{ padding: spacing(6), gap: spacing(3) }}>
+          <Text style={[typography.h2, { color: colors.textPrimary }]}>Take Action</Text>
+
+          <Pressable onPress={onApply} style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: spacing(2), paddingVertical: spacing(4), borderRadius: radii.lg, backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1, transform: pressed ? [{ scale: 0.98 }] : [] })}>
+            <Ionicons name="rocket-outline" size={18} color="#fff" />
+            <Text style={[typography.label, { color: '#fff' }]}>Apply Now</Text>
+          </Pressable>
+
+          <Pressable onPress={onToggleSave} style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: spacing(2), paddingVertical: spacing(3), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.88 : 1 })}>
+            <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={17} color={colors.primary} />
+            <Text style={[typography.label, { color: colors.primary }]}>{saved ? 'Saved' : 'Save for Later'}</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Quick facts */}
+      <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing(6), gap: spacing(4) }, elevation]}>
+        <Text style={[typography.h2, { color: colors.textPrimary }]}>Quick Facts</Text>
+
+        {[
+          { icon: 'cash-outline' as const,     label: 'Award Amount',  value: data.amount },
+          { icon: 'calendar-outline' as const, label: 'Deadline',      value: data.deadline },
+          { icon: 'time-outline' as const,     label: 'Days Remaining', value: data.daysLeft <= 0 ? 'Closed' : `${data.daysLeft} days` },
+          { icon: data.category === 'Local' ? 'location-outline' as const : 'globe-outline' as const, label: 'Category', value: data.category },
+        ].map(({ icon, label, value }) => {
+          const isUrgent = label === 'Days Remaining' && data.daysLeft <= 7 && data.daysLeft > 0;
+          return (
+            <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), paddingVertical: spacing(2), borderBottomWidth: 1, borderBottomColor: colors.divider }}>
+              <View style={{ width: 36, height: 36, borderRadius: radii.md, backgroundColor: isUrgent ? `${colors.danger}14` : `${colors.primary}14`, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name={icon} size={16} color={isUrgent ? colors.danger : colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[typography.caption, { color: colors.textSecondary }]}>{label}</Text>
+                <Text style={[typography.bodyStrong, { color: isUrgent ? colors.danger : colors.textPrimary, marginTop: 2 }]}>{value}</Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+
+      {/* Status badge */}
+      <View style={{ padding: spacing(4), backgroundColor: vc.bg, borderRadius: radii.xl, borderWidth: 1, borderColor: vc.border, flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
+        <Ionicons name="ribbon-outline" size={20} color={vc.text} />
+        <View style={{ flex: 1 }}>
+          <Text style={[typography.caption, { color: colors.textSecondary }]}>Your Status</Text>
+          <Text style={[typography.bodyStrong, { color: vc.text }]}>{data.status}</Text>
+        </View>
+      </View>
+
+      {/* Tip */}
+      <View style={{ padding: spacing(4), backgroundColor: `${colors.primary}14`, borderRadius: radii.xl, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
+        <Text style={[typography.caption, { color: colors.textSecondary, lineHeight: 18 }]}>
+          💡 Prepare all documents early and check eligibility carefully before submitting your application.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main content
+// ─────────────────────────────────────────────────────────────────────────────
+function ScholarshipDetailsContent() {
+  const { width }  = useWindowDimensions();
+  const colors     = useTheme();
+  const elevation  = useElevation('lg');
+  const params     = useLocalSearchParams<{ id?: string }>();
+
+  const scholarshipId = typeof params.id === 'string' ? params.id : FALLBACK_ID;
+  const data          = DETAILS_DB[scholarshipId] ?? DETAILS_DB[FALLBACK_ID];
 
   const breakpoint = useMemo<Breakpoint>(() => {
-    if (width < breakpoints.tablet) return 'mobile';
-    if (width < breakpoints.desktop) return 'tablet';
+    if (width < 768)  return 'mobile';
+    if (width < 1024) return 'tablet';
     return 'desktop';
   }, [width]);
 
-  const isMobile = breakpoint === 'mobile';
+  const isMobile  = breakpoint === 'mobile';
   const isDesktop = breakpoint === 'desktop';
 
-  const contentWidth = isDesktop ? Math.min(MAX_CONTENT_WIDTH, width - spacing(16)) : width;
+  const [saved,       setSaved]       = useState(false);
+  const [applyOpen,   setApplyOpen]   = useState(false);
 
-  const [saved, setSaved] = useState(false);
-  const [applyModalVisible, setApplyModalVisible] = useState(false);
-  const [applyNote, setApplyNote] = useState('');
+  const vc = useVariantColors(data.statusVariant);
 
-  const handleApply = useCallback(() => {
-    setApplyModalVisible(true);
-  }, []);
+  const handleApply = useCallback(() => setApplyOpen(true), []);
 
-  const handleConfirmApply = useCallback(() => {
-    setApplyModalVisible(false);
-    Alert.alert('Application Started', 'Redirecting to application portal (placeholder)');
-    setApplyNote('');
+  const handleConfirmApply = useCallback((_note: string) => {
+    setApplyOpen(false);
+    Alert.alert('Application Started', 'You are being redirected to the application portal.');
   }, []);
 
   const handleToggleSave = useCallback(() => {
-    setSaved((prev) => !prev);
-    Alert.alert(saved ? 'Removed' : 'Saved', 'Scholarship updated (placeholder)');
+    setSaved((p) => !p);
+    Alert.alert(saved ? 'Removed from saved' : 'Saved!', saved ? 'Scholarship removed from your saved list.' : 'Scholarship added to your saved list.');
   }, [saved]);
 
-  const deadlineUrgent = useMemo(() => {
-    return /April|May/i.test(data.deadline);
-  }, [data.deadline]);
+  const isUrgent = data.daysLeft <= 7 && data.daysLeft > 0;
 
-  return (
-    <View style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        {/* Header Bar */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: isDesktop ? spacing(8) : spacing(5),
-            paddingVertical: spacing(4),
-            backgroundColor: useThemeColors().surface,
-            borderBottomWidth: 1,
-            borderBottomColor: useThemeColors().border,
-          }}
-        >
-          <IconButton
-            icon="arrow-back"
-            label="Go back"
-            onPress={() => router.back()}
-            color={useThemeColors().text}
-          />
-
-          <View style={{ flex: 1, marginHorizontal: spacing(5) }}>
-            <Text
-              style={[
-                typography.title,
-                { color: useThemeColors().text, textAlign: isDesktop ? 'center' : 'left' },
-              ]}
-            >
-              Scholarship Details
-            </Text>
-            <Text
-              style={[
-                typography.caption,
-                { color: useThemeColors().textSecondary, marginTop: spacing(1) },
-              ]}
-              numberOfLines={1}
-            >
+  // ── Hero card ──────────────────────────────────────────────────────────────
+  const HeroCard = (
+    <Card intensity="lg" accentColor={vc.text} style={{ marginBottom: spacing(7) }}>
+      <View style={{ padding: isMobile ? spacing(5) : spacing(7), gap: spacing(6) }}>
+        {/* Icon + title */}
+        <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: spacing(5) }}>
+          <View style={{ width: isMobile ? 64 : 76, height: isMobile ? 64 : 76, borderRadius: radii.xl, backgroundColor: vc.bg, borderWidth: 1, borderColor: vc.border, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Ionicons name="ribbon-outline" size={isMobile ? 28 : 34} color={vc.text} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[typography.hero, { color: colors.textPrimary, fontSize: isMobile ? 24 : 32, lineHeight: isMobile ? 30 : 38 }]}>
               {data.title}
             </Text>
-          </View>
-
-          <IconButton
-            icon="grid-outline"
-            label="Open menu"
-            onPress={openMenu}
-            color={useThemeColors().text}
-          />
-        </View>
-
-        <ScrollView
-          contentContainerStyle={{
-            padding: isDesktop ? spacing(8) : spacing(5),
-            paddingBottom: isMobile ? spacing(20) : spacing(10),
-            alignItems: 'center',
-          }}
-        >
-          <View style={{ width: contentWidth, maxWidth: '100%' }}>
-            {/* Hero Card */}
-            <Card intensity="lg" style={{ marginBottom: spacing(8) }}>
-              <View style={{ padding: spacing(8), gap: spacing(6) }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(4) }}>
-                  <View
-                    style={{
-                      width: 72,
-                      height: 72,
-                      borderRadius: radii.lg,
-                      backgroundColor: useThemeColors().primarySoft,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderWidth: 1,
-                      borderColor: useThemeColors().border,
-                    }}
-                  >
-                    <Ionicons name="ribbon-outline" size={36} color={useThemeColors().primaryStrong} />
-                  </View>
-
-                  <View style={{ flex: 1 }}>
-                    <Text style={[typography.hero, { color: useThemeColors().text }]}>
-                      {data.title}
-                    </Text>
-                    <Text
-                      style={[
-                        typography.subtitle,
-                        { color: useThemeColors().textSecondary, marginTop: spacing(1) },
-                      ]}
-                    >
-                      {data.providerName}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(4) }}>
-                  <MetaItem icon="cash-outline" label="Amount" value={data.amount} />
-                  <MetaItem icon="calendar-outline" label="Deadline" value={data.deadline} />
-                </View>
-
-                {deadlineUrgent && (
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: spacing(2),
-                      padding: spacing(3),
-                      backgroundColor: useThemeColors().primarySoft,
-                      borderRadius: radii.lg,
-                      alignSelf: 'flex-start',
-                    }}
-                  >
-                    <Ionicons name="alert-circle-outline" size={18} color={useThemeColors().primaryStrong} />
-                    <Text style={[typography.label, { color: useThemeColors().primaryStrong }]}>
-                      Upcoming Deadline
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </Card>
-
-            {/* Adaptive Layout */}
-            <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: spacing(8) }}>
-              {isDesktop && (
-                <View style={{ width: 360, gap: spacing(6) }}>
-                  <Card>
-                    <View style={{ padding: spacing(6) }}>
-                      <SectionHeader title="Quick Actions" />
-                      <View style={{ marginTop: spacing(4), gap: spacing(3) }}>
-                        <Pressable
-                          onPress={handleApply}
-                          style={({ pressed }) => [
-                            {
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: spacing(3),
-                              padding: spacing(4),
-                              backgroundColor: useThemeColors().primary,
-                              borderRadius: radii.lg,
-                              opacity: pressed ? 0.9 : 1,
-                              transform: pressed ? [{ scale: 0.98 }] : [],
-                            },
-                          ]}
-                        >
-                          <Ionicons name="rocket-outline" size={20} color="#fff" />
-                          <Text style={[typography.label, { color: '#fff' }]}>Apply Now</Text>
-                        </Pressable>
-
-                        <Pressable
-                          onPress={handleToggleSave}
-                          style={({ pressed }) => [
-                            {
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: spacing(3),
-                              padding: spacing(4),
-                              backgroundColor: useThemeColors().surfaceAlt,
-                              borderRadius: radii.lg,
-                              borderWidth: 1,
-                              borderColor: useThemeColors().border,
-                              opacity: pressed ? 0.9 : 1,
-                              transform: pressed ? [{ scale: 0.98 }] : [],
-                            },
-                          ]}
-                        >
-                          <Ionicons
-                            name={saved ? 'bookmark' : 'bookmark-outline'}
-                            size={20}
-                            color={useThemeColors().primary}
-                          />
-                          <Text style={[typography.label, { color: useThemeColors().primary }]}>
-                            {saved ? 'Saved' : 'Save'}
-                          </Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  </Card>
-                </View>
-              )}
-
-              <View style={{ flex: 1, gap: spacing(8) }}>
-                <Card>
-                  <View style={{ padding: spacing(8) }}>
-                    <SectionHeader title="Eligibility Requirements" icon="checkmark-circle-outline" />
-                    <BulletList items={data.eligibility} />
-                  </View>
-                </Card>
-
-                <Card>
-                  <View style={{ padding: spacing(8) }}>
-                    <SectionHeader title="How to Apply" icon="list-outline" />
-                    <NumberedList items={data.howToApply} />
-                  </View>
-                </Card>
-
-                <Card>
-                  <View style={{ padding: spacing(8) }}>
-                    <SectionHeader title="Next Steps" icon="information-circle-outline" />
-                    <Text
-                      style={[
-                        typography.body,
-                        { color: useThemeColors().textSecondary, marginTop: spacing(3) },
-                      ]}
-                    >
-                      Prepare your documents early, verify all eligibility criteria, and submit before the deadline.
-                    </Text>
-                  </View>
-                </Card>
-              </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginTop: spacing(2) }}>
+              <Ionicons name="business-outline" size={14} color={colors.primary} />
+              <Text style={[typography.subtitle, { color: colors.textSecondary }]}>{data.providerName}</Text>
             </View>
           </View>
-        </ScrollView>
+        </View>
 
-        {isMobile && (
-          <View
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              flexDirection: 'row',
-              padding: spacing(5),
-              backgroundColor: useThemeColors().surface,
-              borderTopWidth: 1,
-              borderTopColor: useThemeColors().border,
-              gap: spacing(4),
-            }}
-          >
-            <Pressable
-              onPress={handleToggleSave}
-              style={({ pressed }) => [
-                {
-                  flex: 1,
-                  height: 52,
-                  borderRadius: radii.lg,
-                  backgroundColor: useThemeColors().surfaceAlt,
-                  borderWidth: 1,
-                  borderColor: useThemeColors().border,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <Text style={[typography.label, { color: useThemeColors().text }]}>
-                {saved ? 'Saved' : 'Save'}
-              </Text>
-            </Pressable>
+        {/* Status badges row */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: vc.bg, borderWidth: 1, borderColor: vc.border }}>
+            <Ionicons name="ribbon-outline" size={13} color={vc.text} />
+            <Text style={[typography.caption, { color: vc.text, fontWeight: '700' }]}>{data.status}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: `${colors.primary}14`, borderWidth: 1, borderColor: `${colors.primary}33` }}>
+            <Ionicons name={data.category === 'Local' ? 'location-outline' : 'globe-outline'} size={13} color={colors.primary} />
+            <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{data.category}</Text>
+          </View>
+          {isUrgent && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: `${colors.danger}14`, borderWidth: 1, borderColor: `${colors.danger}33` }}>
+              <Ionicons name="time-outline" size={13} color={colors.danger} />
+              <Text style={[typography.caption, { color: colors.danger, fontWeight: '700' }]}>Deadline in {data.daysLeft} day{data.daysLeft !== 1 ? 's' : ''}!</Text>
+            </View>
+          )}
+        </View>
 
-            <Pressable
-              onPress={handleApply}
-              style={({ pressed }) => [
-                {
-                  flex: 2,
-                  height: 52,
-                  borderRadius: radii.lg,
-                  backgroundColor: useThemeColors().primary,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: pressed ? 0.9 : 1,
-                },
-              ]}
-            >
+        {/* Meta facts grid */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(4), paddingTop: spacing(4), borderTopWidth: 1, borderTopColor: colors.divider }}>
+          {[
+            { icon: 'cash-outline' as const,     label: 'Award Amount',   value: data.amount },
+            { icon: 'calendar-outline' as const, label: 'Deadline',       value: data.deadline },
+            { icon: 'time-outline' as const,     label: 'Days Remaining', value: data.daysLeft <= 0 ? 'Closed' : `${data.daysLeft} days` },
+          ].map(({ icon, label, value }) => (
+            <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), flex: 1, minWidth: 160 }}>
+              <View style={{ width: 38, height: 38, borderRadius: radii.lg, backgroundColor: `${colors.primary}22`, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name={icon} size={17} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[typography.caption, { color: colors.textSecondary }]}>{label}</Text>
+                <Text style={[typography.bodyStrong, { color: colors.textPrimary, marginTop: 2 }]}>{value}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* Description */}
+        <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 24 }]}>{data.description}</Text>
+
+        {/* Tablet inline CTAs */}
+        {!isMobile && !isDesktop && (
+          <View style={{ flexDirection: 'row', gap: spacing(3), paddingTop: spacing(4), borderTopWidth: 1, borderTopColor: colors.divider }}>
+            <Pressable onPress={handleApply} style={({ pressed }) => ({ flex: 2, height: 52, borderRadius: radii.lg, backgroundColor: colors.primary, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: spacing(2), opacity: pressed ? 0.88 : 1 })}>
+              <Ionicons name="rocket-outline" size={18} color="#fff" />
               <Text style={[typography.label, { color: '#fff' }]}>Apply Now</Text>
+            </Pressable>
+            <Pressable onPress={handleToggleSave} style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: spacing(2), opacity: pressed ? 0.88 : 1 })}>
+              <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={17} color={colors.primary} />
+              <Text style={[typography.label, { color: colors.primary }]}>{saved ? 'Saved' : 'Save'}</Text>
             </Pressable>
           </View>
         )}
+      </View>
+    </Card>
+  );
 
-        {/* Apply Confirmation Modal */}
-        <Modal
-          visible={applyModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setApplyModalVisible(false)}
-        >
-          <Pressable
-            style={{
-              flex: 1,
-              backgroundColor: useThemeColors().overlay,
-              justifyContent: 'center',
-              alignItems: 'center',
-              padding: spacing(6),
-            }}
-            onPress={() => setApplyModalVisible(false)}
-          >
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={{ width: '100%', maxWidth: 500 }}
-            >
-              <Pressable
-                style={{
-                  backgroundColor: useThemeColors().surface,
-                  borderRadius: radii.xl,
-                  padding: spacing(6),
-                  gap: spacing(5),
-                }}
-                onPress={(e) => e.stopPropagation()}
-              >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={[typography.section, { color: useThemeColors().text }]}>
-                    Apply to Scholarship
-                  </Text>
-                  <IconButton
-                    icon="close"
-                    label="Close apply modal"
-                    onPress={() => setApplyModalVisible(false)}
-                    color={useThemeColors().textSecondary}
-                  />
-                </View>
+  // ── Eligibility card ───────────────────────────────────────────────────────
+  const EligibilityCard = (
+    <Card style={{ marginBottom: spacing(6) }}>
+      <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
+        <SectionHeader title="Eligibility Requirements" icon="checkmark-circle-outline" label="Requirements" />
+        <BulletList items={data.eligibility} color={colors.success} />
+      </View>
+    </Card>
+  );
 
-                <Text
-                  style={[
-                    typography.body,
-                    { color: useThemeColors().textSecondary, marginBottom: spacing(3) },
-                  ]}
-                >
-                  You are about to proceed to the application portal.
-                </Text>
+  // ── How to apply card ──────────────────────────────────────────────────────
+  const HowToApplyCard = (
+    <Card style={{ marginBottom: spacing(6) }}>
+      <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
+        <SectionHeader title="How to Apply" icon="list-outline" label="Application Steps" />
+        <NumberedList items={data.howToApply} />
+      </View>
+    </Card>
+  );
 
-                <TextInput
-                  value={applyNote}
-                  onChangeText={setApplyNote}
-                  placeholder="Optional note (e.g., documents needed)"
-                  placeholderTextColor={useThemeColors().textSecondary}
-                  style={{
-                    minHeight: 100,
-                    borderRadius: radii.lg,
-                    borderWidth: 1,
-                    borderColor: useThemeColors().border,
-                    padding: spacing(4),
-                    backgroundColor: useThemeColors().surfaceAlt,
-                    color: useThemeColors().text,
-                    textAlignVertical: 'top',
-                  }}
-                  multiline
-                />
+  // ── Document checklist card ────────────────────────────────────────────────
+  const DocumentsCard = (
+    <Card style={{ marginBottom: spacing(6) }}>
+      <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
+        <SectionHeader title="Documents Checklist" icon="document-text-outline" label="Prepare" />
+        <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing(5), lineHeight: 22 }]}>
+          Tap each document below to check it off as you prepare your application.
+        </Text>
+        <DocumentChecklist items={data.documents} />
+      </View>
+    </Card>
+  );
 
-                <View style={{ flexDirection: 'row', gap: spacing(4) }}>
-                  <Pressable
-                    onPress={() => setApplyModalVisible(false)}
-                    style={({ pressed }) => [
-                      {
-                        flex: 1,
-                        height: 52,
-                        borderRadius: radii.lg,
-                        backgroundColor: useThemeColors().surfaceAlt,
-                        borderWidth: 1,
-                        borderColor: useThemeColors().border,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: pressed ? 0.85 : 1,
-                      },
-                    ]}
-                  >
-                    <Text style={[typography.label, { color: useThemeColors().text }]}>Cancel</Text>
-                  </Pressable>
+  // ── Next steps card ────────────────────────────────────────────────────────
+  const NextStepsCard = (
+    <Card>
+      <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
+        <SectionHeader title="Next Steps" icon="arrow-forward-circle-outline" label="What to do now" />
+        <View style={{ gap: spacing(3) }}>
+          {[
+            { icon: 'checkmark-done-outline' as const, text: 'Verify you meet all eligibility criteria above.' },
+            { icon: 'document-outline' as const,        text: 'Gather all required documents before the deadline.' },
+            { icon: 'rocket-outline' as const,          text: 'Click "Apply Now" to proceed to the official portal.' },
+            { icon: 'notifications-outline' as const,   text: 'Set a reminder closer to the deadline date.' },
+          ].map(({ icon, text }) => (
+            <View key={text} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3), padding: spacing(3), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border }}>
+              <Ionicons name={icon} size={18} color={colors.primary} style={{ marginTop: 2 }} />
+              <Text style={[typography.body, { color: colors.textSecondary, flex: 1, lineHeight: 22 }]}>{text}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </Card>
+  );
 
-                  <Pressable
-                    onPress={handleConfirmApply}
-                    style={({ pressed }) => [
-                      {
-                        flex: 1,
-                        height: 52,
-                        borderRadius: radii.lg,
-                        backgroundColor: useThemeColors().primary,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: pressed ? 0.9 : 1,
-                      },
-                    ]}
-                  >
-                    <Text style={[typography.label, { color: '#fff' }]}>Continue</Text>
-                  </Pressable>
-                </View>
-              </Pressable>
-            </KeyboardAvoidingView>
-          </Pressable>
-        </Modal>
-      </SafeAreaView>
+  // ── Mobile sticky bar ──────────────────────────────────────────────────────
+  const MobileStickyBar = isMobile && (
+    <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', padding: spacing(5), paddingBottom: spacing(8), backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing(3) }}>
+      <Pressable onPress={handleToggleSave} style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: spacing(2), opacity: pressed ? 0.85 : 1 })}>
+        <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={18} color={colors.primary} />
+        <Text style={[typography.label, { color: colors.primary }]}>{saved ? 'Saved' : 'Save'}</Text>
+      </Pressable>
+      <Pressable onPress={handleApply} style={({ pressed }) => ({ flex: 2, height: 52, borderRadius: radii.lg, backgroundColor: colors.primary, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: spacing(2), opacity: pressed ? 0.9 : 1 })}>
+        <Ionicons name="rocket-outline" size={18} color="#fff" />
+        <Text style={[typography.label, { color: '#fff' }]}>Apply Now</Text>
+      </Pressable>
     </View>
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
+  return (
+    <>
+      <DashboardLayout
+        title="Scholarship Details"
+        subtitle={data.title}
+        showPointsCard={false}
+      >
+        {/* Back + breadcrumb */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
+          <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Go back" style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(4), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}>
+            <Ionicons name="arrow-back" size={17} color={colors.primary} />
+            <Text style={[typography.label, { color: colors.primary }]}>Back</Text>
+          </Pressable>
+          <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]} numberOfLines={1}>
+            Scholarships › {data.id === FALLBACK_ID ? 'ABC Excellence' : data.providerName}
+          </Text>
+        </View>
+
+        {/* Two-column on desktop, stacked otherwise */}
+        <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: spacing(8), alignItems: 'flex-start' }}>
+          {/* Main column */}
+          <View style={{ flex: 1 }}>
+            {HeroCard}
+            {EligibilityCard}
+            {HowToApplyCard}
+            {DocumentsCard}
+            {NextStepsCard}
+            {isMobile && <View style={{ height: spacing(24) }} />}
+          </View>
+
+          {/* Desktop sidebar */}
+          {isDesktop && (
+            <DesktopSidebar
+              data={data}
+              saved={saved}
+              onApply={handleApply}
+              onToggleSave={handleToggleSave}
+            />
+          )}
+        </View>
+      </DashboardLayout>
+
+      {/* Overlays outside layout scroll */}
+      {MobileStickyBar}
+
+      <ApplyModal
+        visible={applyOpen}
+        scholarshipTitle={data.title}
+        onConfirm={handleConfirmApply}
+        onClose={() => setApplyOpen(false)}
+      />
+    </>
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Exported Screen
+// ─────────────────────────────────────────────────────────────────────────────
 export default function ScholarshipDetailsScreen() {
   return (
     <StudentMenuProvider>

@@ -126,6 +126,7 @@ export default function DashboardLayout({
     { key: 'scholarships', label: 'Scholarships', icon: 'ribbon-outline' as const, href: '/student/scholarships' },
     { key: 'progress', label: 'Progress', icon: 'trending-up-outline' as const, href: '/student/progress' },
     { key: 'applications', label: 'Applications', icon: 'document-text-outline' as const, href: '/student/applications' },
+     { key: 'myCareer', label: 'My Career', icon: 'compass-outline' as const, href: '/student/my-career' },
   ], [openInstitutionModal]);
 
 

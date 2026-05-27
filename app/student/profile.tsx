@@ -3,118 +3,430 @@ import {
   View,
   Text,
   Pressable,
-  StyleSheet,
   Platform,
   ScrollView,
   useWindowDimensions,
   TextInput,
   Alert,
   KeyboardAvoidingView,
-  type PressableStateCallbackType,
-  useColorScheme,
+  ActivityIndicator,
   type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { StudentMenuProvider, useStudentMenu } from '../../components/student/StudentMenu';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Import shared design tokens from DashboardLayout
+// (no DashboardLayout wrapper as per requirement — tokens only)
+// ─────────────────────────────────────────────────────────────────────────────
 import {
-  StudentMenuProvider,
-  useStudentMenu,
-} from '../../components/student/StudentMenu';
+  spacing,
+  typography,
+  radii,
+  useTheme,
+} from '../../components/student/DashboardLayout';
 
 type Breakpoint = 'mobile' | 'tablet' | 'desktop';
 
-type ThemeColors = {
-  appBg: string;
-  surface: string;
-  surfaceMuted: string;
-  card: string;
-  cardAlt: string;
-  primary: string;
-  primarySoft: string;
-  text: string;
-  textMuted: string;
-  textSoft: string;
-  border: string;
-  borderStrong: string;
-  white: string;
-  shadow: string;
-};
-
-const BASE_SPACING = 4;
-const spacing = (n: number) => n * BASE_SPACING;
-
-const radii = {
-  sm: spacing(3),
-  md: spacing(4),
-  lg: spacing(5),
-  xl: spacing(6),
-  pill: 999,
-};
-
-const typography = {
-  hero: { fontSize: 28, lineHeight: 34, fontWeight: '900' as const },
-  title: { fontSize: 22, lineHeight: 28, fontWeight: '800' as const },
-  section: { fontSize: 16, lineHeight: 22, fontWeight: '800' as const },
-  body: { fontSize: 14, lineHeight: 20, fontWeight: '600' as const },
-  label: { fontSize: 13, lineHeight: 18, fontWeight: '700' as const },
-  caption: { fontSize: 12, lineHeight: 16, fontWeight: '700' as const },
-};
-
-const MAX_DESKTOP_WIDTH = 1240;
-const MIN_TAP = 44;
-
-function getBreakpoint(width: number): Breakpoint {
-  if (width < 480) return 'mobile';
-  if (width <= 1024) return 'tablet';
-  return 'desktop';
+// ─────────────────────────────────────────────────────────────────────────────
+// Elevation helper
+// ─────────────────────────────────────────────────────────────────────────────
+function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md'): ViewStyle {
+  return useMemo<ViewStyle>(() => {
+    const opacity = 0.28;
+    const radius  = intensity === 'sm' ? 6 : intensity === 'md' ? 14 : 22;
+    const offsetY = intensity === 'sm' ? 2 : intensity === 'md' ? 5  : 10;
+    return (Platform.select({
+      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: offsetY }, shadowOpacity: opacity, shadowRadius: radius },
+      android: { elevation: intensity === 'sm' ? 3 : intensity === 'md' ? 6 : 12 },
+      web:     { boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})` } as any,
+      default: {},
+    }) ?? {}) as ViewStyle;
+  }, [intensity]);
 }
 
-function getPressableState(state: PressableStateCallbackType) {
-  const hovered = (state as any).hovered === true;
-  return { pressed: state.pressed, hovered };
+// ─────────────────────────────────────────────────────────────────────────────
+// Field
+// ─────────────────────────────────────────────────────────────────────────────
+function Field({
+  label,
+  icon,
+  fullWidth,
+  ...inputProps
+}: React.ComponentProps<typeof TextInput> & {
+  label: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  fullWidth?: boolean;
+}) {
+  const colors    = useTheme();
+  const elevation = useElevation('sm');
+  return (
+    <View style={{ flex: fullWidth ? undefined : 1, minWidth: 0, width: fullWidth ? '100%' : undefined }}>
+      <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(2) }]}>
+        {label.toUpperCase()}
+      </Text>
+      <View
+        style={[
+          {
+            flexDirection: 'row',
+            alignItems: 'center',
+            minHeight: 54,
+            borderWidth: 1,
+            borderRadius: radii.lg,
+            borderColor: colors.border,
+            backgroundColor: colors.surfaceAlt,
+            paddingHorizontal: spacing(4),
+            gap: spacing(3),
+          },
+          elevation,
+        ]}
+      >
+        {icon && <Ionicons name={icon} size={17} color={colors.primary} />}
+        <TextInput
+          {...inputProps}
+          placeholderTextColor={colors.textMuted}
+          style={[typography.body, { flex: 1, color: colors.textPrimary, paddingVertical: spacing(3) }]}
+        />
+      </View>
+    </View>
+  );
 }
 
-function getColors(scheme: 'light' | 'dark'): ThemeColors {
-  const light = scheme === 'light';
-
-  return {
-    appBg: light ? '#F4F8FB' : '#081018',
-    surface: light ? '#FFFFFF' : '#121C26',
-    surfaceMuted: light ? '#EEF4F7' : '#182430',
-    card: light ? '#FFFFFF' : '#16202B',
-    cardAlt: light ? '#F7FBFD' : '#1A2632',
-    primary: '#57AFC2',
-    primarySoft: light ? 'rgba(87,175,194,0.14)' : 'rgba(87,175,194,0.22)',
-    text: light ? '#0B0F12' : '#EAF2F8',
-    textMuted: light ? 'rgba(11,15,18,0.72)' : 'rgba(234,242,248,0.78)',
-    textSoft: light ? 'rgba(11,15,18,0.55)' : 'rgba(234,242,248,0.58)',
-    border: light ? 'rgba(11,15,18,0.08)' : 'rgba(234,242,248,0.12)',
-    borderStrong: light ? 'rgba(11,15,18,0.12)' : 'rgba(234,242,248,0.18)',
-    white: '#FFFFFF',
-    shadow: '#000000',
-  };
+// ─────────────────────────────────────────────────────────────────────────────
+// HeroStat
+// ─────────────────────────────────────────────────────────────────────────────
+function HeroStat({ icon, label, value, accent }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; accent?: string }) {
+  const colors = useTheme();
+  const c      = accent ?? colors.primary;
+  return (
+    <View style={{ flex: 1, minWidth: 90, flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(3), backgroundColor: `${c}0F`, borderRadius: radii.lg, borderWidth: 1, borderColor: `${c}22` }}>
+      <View style={{ width: 32, height: 32, borderRadius: radii.md, backgroundColor: `${c}22`, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Ionicons name={icon} size={15} color={c} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[typography.bodyStrong, { color: colors.textPrimary }]} numberOfLines={1}>{value}</Text>
+        <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 1 }]} numberOfLines={1}>{label}</Text>
+      </View>
+    </View>
+  );
 }
 
-function getElevation(scheme: 'light' | 'dark'): ViewStyle {
-  return Platform.select<ViewStyle>({
-    ios: {
-      shadowColor: '#000',
-      shadowOpacity: scheme === 'light' ? 0.08 : 0.18,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 10 },
-    },
-    android: {
-      elevation: scheme === 'light' ? 3 : 2,
-    },
-    web: {
-      boxShadow:
-        scheme === 'light'
-          ? '0 10px 28px rgba(0,0,0,0.08)'
-          : '0 10px 28px rgba(0,0,0,0.28)',
-    } as any,
-    default: {},
-  }) as ViewStyle;
+// ─────────────────────────────────────────────────────────────────────────────
+// StatusBadge
+// ─────────────────────────────────────────────────────────────────────────────
+function StatusBadge({ label, icon, color }: { label: string; icon: keyof typeof Ionicons.glyphMap; color?: string }) {
+  const colors = useTheme();
+  const c      = color ?? colors.primary;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: `${c}1A`, borderWidth: 1, borderColor: `${c}44` }}>
+      <Ionicons name={icon} size={12} color={c} />
+      <Text style={[typography.caption, { color: c, fontWeight: '700', letterSpacing: 0.4 }]}>{label}</Text>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Avatar
+// ─────────────────────────────────────────────────────────────────────────────
+function Avatar({ initials, onPress, size = 88 }: { initials: string; onPress: () => void; size?: number }) {
+  const colors    = useTheme();
+  const elevation = useElevation('md');
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Change profile photo"
+      style={({ pressed }) => ({
+        width: size, height: size, borderRadius: size / 2,
+        alignItems: 'center' as const, justifyContent: 'center' as const,
+        backgroundColor: `${colors.primary}22`, borderWidth: 2, borderColor: `${colors.primary}44`,
+        opacity: pressed ? 0.85 : 1, transform: pressed ? [{ scale: 0.96 }] : [],
+      })}
+    >
+      <View style={[{ width: size - 10, height: size - 10, borderRadius: (size - 10) / 2, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }, elevation]}>
+        <Text style={{ fontSize: size * 0.27, fontWeight: '900', color: colors.primary, letterSpacing: 1 }}>{initials}</Text>
+      </View>
+      <View style={{ position: 'absolute', right: 2, bottom: 2, width: 26, height: 26, borderRadius: 13, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surface }}>
+        <Ionicons name="camera-outline" size={13} color="#fff" />
+      </View>
+    </Pressable>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ProfileCompletionBar
+// ─────────────────────────────────────────────────────────────────────────────
+function ProfileCompletionBar({ pct }: { pct: number }) {
+  const colors = useTheme();
+  const color  = pct >= 80 ? colors.success : pct >= 50 ? colors.warning : colors.danger;
+  return (
+    <View style={{ gap: spacing(2) }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={[typography.caption, { color: colors.textSecondary }]}>Profile completeness</Text>
+        <Text style={[typography.caption, { color, fontWeight: '700' }]}>{pct}%</Text>
+      </View>
+      <View style={{ height: 6, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden' }}>
+        <View style={{ height: 6, width: `${pct}%` as any, backgroundColor: color, borderRadius: 3 }} />
+      </View>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SidebarAction
+// ─────────────────────────────────────────────────────────────────────────────
+function SidebarAction({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress?: () => void }) {
+  const colors = useTheme();
+  return (
+    <Pressable onPress={onPress}
+      style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(3), paddingHorizontal: spacing(4), paddingVertical: spacing(3), borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, opacity: pressed ? 0.85 : 1, transform: pressed ? [{ scale: 0.98 }] : [] })}>
+      <View style={{ width: 38, height: 38, borderRadius: radii.md, backgroundColor: `${colors.primary}22`, alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={icon} size={18} color={colors.primary} />
+      </View>
+      <Text style={[typography.body, { color: colors.textPrimary, flex: 1 }]}>{label}</Text>
+      <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+    </Pressable>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main screen
+// ─────────────────────────────────────────────────────────────────────────────
+function StudentProfileContent() {
+  const { width }    = useWindowDimensions();
+  const colors       = useTheme();
+  const { openMenu } = useStudentMenu();
+  const elevMd       = useElevation('md');
+  const elevLg       = useElevation('lg');
+  const elevSm       = useElevation('sm');
+
+  const breakpoint = useMemo<Breakpoint>(() => {
+    if (width < 768)  return 'mobile';
+    if (width < 1024) return 'tablet';
+    return 'desktop';
+  }, [width]);
+
+  const isDesktop = breakpoint === 'desktop';
+  const isMobile  = breakpoint === 'mobile';
+  const padX      = isMobile ? spacing(4) : spacing(7);
+
+  const [name,     setName]     = useState('Katlo Monang');
+  const [email]                 = useState('katlo@example.com');
+  const [phone,    setPhone]    = useState('+267 71 234 567');
+  const [school,   setSchool]   = useState('Botswana Accountancy College');
+  const [yearForm, setYearForm] = useState('Form 5');
+  const [bio,      setBio]      = useState('Driven student passionate about technology, innovation, leadership, and academic excellence.');
+  const [saving,   setSaving]   = useState(false);
+
+  const initials = useMemo(() => {
+    const p = name.trim().split(/\s+/).filter(Boolean);
+    return `${p[0]?.[0] ?? 'S'}${p.length > 1 ? p[p.length - 1]?.[0] ?? '' : ''}`.toUpperCase();
+  }, [name]);
+
+  const completeness = useMemo(() => {
+    let s = 0;
+    if (name.trim())     s += 25;
+    if (phone.trim())    s += 15;
+    if (school.trim())   s += 20;
+    if (yearForm.trim()) s += 15;
+    if (bio.trim())      s += 25;
+    return s;
+  }, [name, phone, school, yearForm, bio]);
+
+  const handleSave = useCallback(() => {
+    if (saving) return;
+    if (!name.trim()) { Alert.alert('Missing Name', 'Please enter your full name.'); return; }
+    setSaving(true);
+    setTimeout(() => {
+      setSaving(false);
+      Alert.alert('Profile Updated', 'Your profile has been saved successfully.');
+    }, 1200);
+  }, [name, saving]);
+
+  const handleChangePhoto = useCallback(() => {
+    Alert.alert('Coming Soon', 'Profile photo upload will be available soon.');
+  }, []);
+
+  // ── Top nav bar ────────────────────────────────────────────────────────────
+  const NavBar = (
+    <View style={[{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: padX, paddingVertical: spacing(4), backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border, gap: spacing(3) }, elevMd]}>
+      <Pressable onPress={() => router.back()} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center' as const, justifyContent: 'center' as const, opacity: pressed ? 0.8 : 1 })}>
+        <Ionicons name="arrow-back" size={20} color={colors.primary} />
+      </Pressable>
+
+      <View style={{ flex: 1 }}>
+        <Text style={[typography.h2, { color: colors.textPrimary }]}>Student Profile</Text>
+        {!isMobile && <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>Manage your account and academic identity</Text>}
+      </View>
+
+      {/* Quick save */}
+      <Pressable onPress={handleSave} disabled={saving}
+        style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(4), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: saving ? colors.surfaceAlt : colors.primary, borderWidth: 1, borderColor: saving ? colors.border : colors.primary, opacity: saving ? 0.6 : pressed ? 0.88 : 1 })}>
+        {saving
+          ? <ActivityIndicator color={colors.primary} size="small" />
+          : <Ionicons name="checkmark-circle-outline" size={17} color="#fff" />}
+        {!isMobile && <Text style={[typography.label, { color: saving ? colors.primary : '#fff' }]}>{saving ? 'SAVING…' : 'SAVE'}</Text>}
+      </Pressable>
+
+      {/* Menu */}
+      <Pressable onPress={openMenu} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center' as const, justifyContent: 'center' as const, opacity: pressed ? 0.8 : 1 })}>
+        <Ionicons name="menu" size={22} color={colors.textPrimary} />
+      </Pressable>
+    </View>
+  );
+
+  // ── Profile hero ───────────────────────────────────────────────────────────
+  const ProfileHero = (
+    <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden', marginBottom: spacing(6), width: '100%' }, elevLg]}>
+      <View style={{ height: 3, backgroundColor: colors.primary }} />
+      <View style={{ padding: isMobile ? spacing(5) : spacing(7) }}>
+        {/* Avatar + info */}
+        <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'center' : 'flex-start', gap: spacing(5) }}>
+          <Avatar initials={initials} onPress={handleChangePhoto} size={isMobile ? 80 : 96} />
+
+          <View style={{ flex: isMobile ? undefined : 1, alignItems: isMobile ? 'center' : 'flex-start' }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginBottom: spacing(3), justifyContent: isMobile ? 'center' : 'flex-start' }}>
+              <StatusBadge label="STUDENT"  icon="school-outline"           color={colors.primary}  />
+              <StatusBadge label="ACTIVE"   icon="checkmark-circle-outline" color={colors.success}  />
+              <StatusBadge label="VERIFIED" icon="shield-checkmark-outline" color={colors.warning}  />
+            </View>
+
+            <Text style={{ fontSize: isMobile ? 22 : 26, lineHeight: isMobile ? 28 : 32, fontWeight: '900', color: colors.textPrimary, textAlign: isMobile ? 'center' : 'left' }} numberOfLines={1}>
+              {name}
+            </Text>
+            <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(1), textAlign: isMobile ? 'center' : 'left' }]} numberOfLines={1}>{email}</Text>
+
+            <View style={{ marginTop: spacing(4), width: isMobile ? '100%' : 320 }}>
+              <ProfileCompletionBar pct={completeness} />
+            </View>
+          </View>
+        </View>
+
+        {/* Stats */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3), marginTop: spacing(6) }}>
+          <HeroStat icon="school-outline"           label="Institution" value={school.split(' ').map(w => w[0]).join('').slice(0, 5) || 'BAC'} accent={colors.primary}  />
+          <HeroStat icon="sparkles-outline"         label="Profile"     value={`${completeness}%`}                                               accent={colors.success}  />
+          <HeroStat icon="shield-checkmark-outline" label="Status"      value="Verified"                                                         accent={colors.warning}  />
+          <HeroStat icon="calendar-outline"         label="Year"        value={yearForm || 'Form 5'}                                              accent={colors.primary}  />
+        </View>
+      </View>
+    </View>
+  );
+
+  // ── Form card ──────────────────────────────────────────────────────────────
+  const FormCard = (
+    <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }, elevMd]}>
+      <View style={{ height: 3, backgroundColor: colors.primary }} />
+      <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
+        <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>PERSONAL INFORMATION</Text>
+        <Text style={[typography.h2, { color: colors.textPrimary, marginBottom: spacing(2) }]}>Your Details</Text>
+        <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing(6), lineHeight: 22 }]}>
+          Ensure your information is accurate and professionally presented for university recommendations and scholarships.
+        </Text>
+
+        {/* Two-column on tablet+, stacked on mobile */}
+        {isMobile ? (
+          <View style={{ gap: spacing(4), marginBottom: spacing(5) }}>
+            <Field label="Full Name"     icon="person-outline"   placeholder="Enter your full name"     value={name}     onChangeText={setName}     autoCapitalize="words" fullWidth />
+            <Field label="Phone Number"  icon="call-outline"     placeholder="+267 71 XXX XXX"          value={phone}    onChangeText={setPhone}    keyboardType="phone-pad" fullWidth />
+            <Field label="Institution"   icon="school-outline"   placeholder="Your school or university" value={school}  onChangeText={setSchool}   autoCapitalize="words" fullWidth />
+            <Field label="Year / Form"   icon="calendar-outline" placeholder="e.g. Form 5"              value={yearForm} onChangeText={setYearForm} fullWidth />
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(4), marginBottom: spacing(5) }}>
+            <Field label="Full Name"    icon="person-outline"   placeholder="Enter your full name"      value={name}     onChangeText={setName}     autoCapitalize="words" />
+            <Field label="Phone Number" icon="call-outline"     placeholder="+267 71 XXX XXX"           value={phone}    onChangeText={setPhone}    keyboardType="phone-pad" />
+            <Field label="Institution"  icon="school-outline"   placeholder="Your school or university" value={school}   onChangeText={setSchool}   autoCapitalize="words" />
+            <Field label="Year / Form"  icon="calendar-outline" placeholder="e.g. Form 5"               value={yearForm} onChangeText={setYearForm} />
+          </View>
+        )}
+
+        {/* Bio */}
+        <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(2) }]}>BIO / ABOUT</Text>
+        <View style={[{ borderWidth: 1, borderRadius: radii.lg, borderColor: colors.border, backgroundColor: colors.surfaceAlt, paddingHorizontal: spacing(4), paddingVertical: spacing(3), marginBottom: spacing(6) }, elevSm]}>
+          <TextInput
+            multiline
+            value={bio}
+            onChangeText={setBio}
+            placeholder="Tell us about yourself, your goals, and achievements..."
+            placeholderTextColor={colors.textMuted}
+            style={[typography.body, { color: colors.textPrimary, minHeight: 120, textAlignVertical: 'top', lineHeight: 22 }]}
+          />
+        </View>
+
+        {/* Save button */}
+        <Pressable onPress={handleSave} disabled={saving}
+          style={({ pressed }) => ({ height: 56, borderRadius: radii.xl, backgroundColor: saving ? colors.surfaceAlt : colors.primary, borderWidth: 1, borderColor: saving ? colors.border : colors.primary, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: spacing(2), opacity: saving ? 0.7 : pressed ? 0.88 : 1, transform: pressed && !saving ? [{ scale: 0.98 }] : [] })}>
+          {saving
+            ? <><ActivityIndicator color={colors.primary} size="small" /><Text style={[typography.label, { color: colors.primary, letterSpacing: 0.5 }]}>SAVING…</Text></>
+            : <><Ionicons name="checkmark-circle-outline" size={20} color="#fff" /><Text style={[typography.label, { color: '#fff', letterSpacing: 0.5 }]}>SAVE PROFILE CHANGES</Text></>}
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  // ── Desktop sidebar ────────────────────────────────────────────────────────
+  const Sidebar = isDesktop && (
+    <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
+      <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }, elevMd]}>
+        <View style={{ height: 3, backgroundColor: colors.primary }} />
+        <View style={{ padding: spacing(6), gap: spacing(4) }}>
+          <Text style={[typography.h2, { color: colors.textPrimary }]}>Account</Text>
+          <View style={{ gap: spacing(3) }}>
+            <SidebarAction icon="person-outline"      label="Update Profile"    onPress={handleSave} />
+            <SidebarAction icon="lock-closed-outline" label="Change Password"   onPress={() => router.push('/student/change-password')} />
+            <SidebarAction icon="school-outline"      label="Academic Records"  />
+            <SidebarAction icon="settings-outline"    label="Account Settings"  onPress={() => router.push('/student/settings')} />
+            <SidebarAction icon="help-circle-outline" label="Contact Support"   onPress={() => router.push('/student/contact-support')} />
+          </View>
+          <View style={{ height: 1, backgroundColor: colors.divider }} />
+          <ProfileCompletionBar pct={completeness} />
+          <View style={{ padding: spacing(4), backgroundColor: `${colors.primary}14`, borderRadius: radii.lg, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
+            <Text style={[typography.caption, { color: colors.textSecondary, lineHeight: 18 }]}>
+              💡 Complete profiles receive stronger course and scholarship recommendations across the platform.
+            </Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: spacing(12) }}>
+
+            {NavBar}
+
+            <View style={{ paddingHorizontal: padX, paddingTop: spacing(7), maxWidth: 1280, alignSelf: 'center', width: '100%' }}>
+              {/* Breadcrumb */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
+                <Pressable onPress={() => router.back()}
+                  style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(4), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}>
+                  <Ionicons name="arrow-back" size={16} color={colors.primary} />
+                  <Text style={[typography.label, { color: colors.primary }]}>Back</Text>
+                </Pressable>
+                <Text style={[typography.caption, { color: colors.textMuted }]}>Dashboard › Student Profile</Text>
+              </View>
+
+              {/* Hero */}
+              {ProfileHero}
+
+              {/* Two-column on desktop, stacked otherwise */}
+              <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: spacing(8), alignItems: 'flex-start' }}>
+                <View style={{ flex: 1, minWidth: 0, width: '100%' }}>{FormCard}</View>
+                {Sidebar}
+              </View>
+            </View>
+
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
+  );
 }
 
 export default function StudentProfileScreen() {
@@ -124,1022 +436,3 @@ export default function StudentProfileScreen() {
     </StudentMenuProvider>
   );
 }
-
-function StudentProfileContent() {
-  const { width, height } = useWindowDimensions();
-  const rawScheme = useColorScheme();
-  const scheme: 'light' | 'dark' = rawScheme === 'dark' ? 'dark' : 'light';
-  const colors = useMemo(() => getColors(scheme), [scheme]);
-  const elevation = useMemo(() => getElevation(scheme), [scheme]);
-  const bp = useMemo(() => getBreakpoint(width), [width]);
-  const { openMenu } = useStudentMenu();
-
-  const ui = useMemo(() => {
-    const isMobile = bp === 'mobile';
-    const isTablet = bp === 'tablet';
-    const isDesktop = bp === 'desktop';
-
-    return {
-      isMobile,
-      isTablet,
-      isDesktop,
-      shellWidth: isDesktop ? Math.min(MAX_DESKTOP_WIDTH, width - spacing(8) * 2) : width,
-      shellHeight: isDesktop ? Math.min(980, Math.round(height * 0.92)) : height,
-      shellRadius: isDesktop ? radii.xl : 0,
-      shellPadding: isDesktop ? spacing(7) : 0,
-      padX: isDesktop ? spacing(7) : isTablet ? spacing(6) : spacing(4),
-      padY: isDesktop ? spacing(7) : isTablet ? spacing(6) : spacing(5),
-      gap: isDesktop ? spacing(6) : isTablet ? spacing(5) : spacing(4),
-      railWidth: isDesktop ? 360 : 0,
-      titleSize: isDesktop ? 24 : isTablet ? 22 : 20,
-    };
-  }, [bp, width, height]);
-
-  const [name, setName] = useState('Katlo Monang');
-  const [email] = useState('katlo@example.com');
-  const [phone, setPhone] = useState('');
-  const [school, setSchool] = useState('Botswana Accountancy College');
-  const [yearForm, setYearForm] = useState('Form 5');
-  const [saving, setSaving] = useState(false);
-
-  const onSave = useCallback(() => {
-    if (saving) return;
-
-    if (!name.trim()) {
-      Alert.alert('Missing name', 'Please enter your name to continue.');
-      return;
-    }
-
-    setSaving(true);
-
-    setTimeout(() => {
-      setSaving(false);
-      Alert.alert('Saved', 'Your profile changes have been saved.');
-    }, 650);
-  }, [name, saving]);
-
-  const onConnectParent = useCallback(() => {
-    Alert.alert('Coming soon', 'Connect parent or guardian flow will be added in a later phase.');
-  }, []);
-
-  const onChangeAvatar = useCallback(() => {
-    Alert.alert('Coming soon', 'Profile photo upload will be added next.');
-  }, []);
-
-  const initials = useMemo(() => {
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    const first = parts[0]?.[0] ?? 'S';
-    const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? '' : '';
-    return `${first}${last}`.toUpperCase();
-  }, [name]);
-
-  return (
-    <View style={[styles.page, { backgroundColor: colors.appBg }]}>
-      <View style={[styles.center, { padding: ui.shellPadding }]}>
-        <View
-          style={[
-            styles.shell,
-            {
-              width: ui.shellWidth,
-              height: ui.shellHeight,
-              borderRadius: ui.shellRadius,
-              backgroundColor: colors.surfaceMuted,
-            },
-            ui.isDesktop
-              ? [
-                  styles.shellDesktop,
-                  {
-                    borderColor: colors.border,
-                  },
-                  elevation,
-                ]
-              : null,
-          ]}
-        >
-          <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-            <KeyboardAvoidingView
-              style={{ flex: 1 }}
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 6 : 0}
-            >
-              <View
-                style={[
-                  styles.topBar,
-                  {
-                    paddingHorizontal: ui.padX,
-                    borderBottomColor: colors.border,
-                    backgroundColor: colors.surface,
-                  },
-                ]}
-              >
-                <View style={styles.topBarLeft}>
-                  <HeaderIconButton
-                    icon="menu-outline"
-                    label="Open menu"
-                    colors={colors}
-                    onPress={openMenu}
-                  />
-                  <HeaderIconButton
-                    icon="chevron-back"
-                    label="Go back"
-                    colors={colors}
-                    onPress={() => router.back()}
-                  />
-                </View>
-
-                <View style={styles.headerCenter}>
-                  <Text style={[styles.topTitle, typography.title, { color: colors.text, fontSize: ui.titleSize }]}>
-                    Profile
-                  </Text>
-                  <Text style={[styles.topSubtitle, typography.caption, { color: colors.textMuted }]} numberOfLines={1}>
-                    Manage your personal details and student identity
-                  </Text>
-                </View>
-
-                <HeaderSaveButton colors={colors} saving={saving} onPress={onSave} />
-              </View>
-
-              <ScrollView
-                showsVerticalScrollIndicator={ui.isDesktop}
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={{ paddingBottom: ui.padY }}
-              >
-                <View style={{ paddingHorizontal: ui.padX, marginTop: ui.gap }}>
-                  <View
-                    style={
-                      ui.isDesktop
-                        ? {
-                            flexDirection: 'row',
-                            gap: ui.gap,
-                            alignItems: 'flex-start',
-                          }
-                        : undefined
-                    }
-                  >
-                    {ui.isDesktop ? (
-                      <View style={{ width: ui.railWidth }}>
-                        <SurfaceCard colors={colors} elevation={elevation} style={{ padding: spacing(5) }}>
-                          <Text style={[typography.section, { color: colors.text }]}>Student</Text>
-                          <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(2) }]}>
-                            This is your account summary and quick actions rail.
-                          </Text>
-
-                          <View style={{ marginTop: spacing(5) }}>
-                            <View
-                              style={[
-                                styles.avatarCard,
-                                {
-                                  backgroundColor: colors.cardAlt,
-                                  borderColor: colors.border,
-                                },
-                              ]}
-                            >
-                              <Pressable
-                                onPress={onChangeAvatar}
-                                accessibilityRole="button"
-                                accessibilityLabel="Change profile photo"
-                                style={({ pressed }) => {
-                                  const state = getPressableState({ pressed } as PressableStateCallbackType);
-                                  return [
-                                    styles.avatarButton,
-                                    {
-                                      backgroundColor: colors.primarySoft,
-                                      borderColor: colors.border,
-                                    },
-                                    state.hovered && Platform.OS === 'web' ? styles.hoverLift : null,
-                                    pressed ? styles.pressDown : null,
-                                  ];
-                                }}
-                              >
-                                <View
-                                  style={[
-                                    styles.avatarCircle,
-                                    {
-                                      backgroundColor: colors.surface,
-                                      borderColor: colors.border,
-                                    },
-                                  ]}
-                                >
-                                  <Text style={[styles.avatarInitials, { color: colors.text }]}>{initials}</Text>
-                                </View>
-
-                                <View style={{ flex: 1, minWidth: 0 }}>
-                                  <Text style={[styles.avatarName, { color: colors.text }]} numberOfLines={1}>
-                                    {name}
-                                  </Text>
-                                  <Text
-                                    style={[
-                                      typography.caption,
-                                      {
-                                        color: colors.textMuted,
-                                        marginTop: spacing(1),
-                                      },
-                                    ]}
-                                    numberOfLines={1}
-                                  >
-                                    {email}
-                                  </Text>
-                                </View>
-
-                                <Ionicons name="camera-outline" size={18} color={colors.text} />
-                              </Pressable>
-
-                              <View style={styles.roleRow}>
-                                <RoleChip
-                                  icon="school-outline"
-                                  label="STUDENT"
-                                  colors={colors}
-                                  filled
-                                />
-                                <RoleChip
-                                  icon="shield-checkmark-outline"
-                                  label="BASIC"
-                                  colors={colors}
-                                />
-                              </View>
-                            </View>
-                          </View>
-
-                          <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: spacing(4) }]} />
-
-                          <Text style={[typography.section, { color: colors.text }]}>Quick actions</Text>
-
-                          <View style={{ marginTop: spacing(3), gap: spacing(2) }}>
-                            <ActionButton
-                              icon="menu-outline"
-                              label="Open menu"
-                              tone="neutral"
-                              colors={colors}
-                              onPress={openMenu}
-                            />
-                            <ActionButton
-                              icon="link-outline"
-                              label="Connect parent/guardian"
-                              tone="neutral"
-                              colors={colors}
-                              onPress={onConnectParent}
-                            />
-                            <ActionButton
-                              icon={saving ? 'time-outline' : 'save-outline'}
-                              label={saving ? 'Saving…' : 'Save changes'}
-                              tone="primary"
-                              colors={colors}
-                              onPress={onSave}
-                              disabled={saving}
-                            />
-                          </View>
-
-                          <Text
-                            style={[
-                              typography.caption,
-                              {
-                                color: colors.textSoft,
-                                marginTop: spacing(4),
-                              },
-                            ]}
-                          >
-                            Tip: Keep your phone number updated so schools and guardians can reach you quickly.
-                          </Text>
-                        </SurfaceCard>
-                      </View>
-                    ) : null}
-
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      {!ui.isDesktop ? (
-                        <SurfaceCard colors={colors} elevation={elevation} style={{ padding: spacing(4) }}>
-                          <View style={styles.mobileSummaryTop}>
-                            <Pressable
-                              onPress={onChangeAvatar}
-                              accessibilityRole="button"
-                              accessibilityLabel="Change profile photo"
-                              style={({ pressed }) => {
-                                const state = getPressableState({ pressed } as PressableStateCallbackType);
-                                return [
-                                  styles.mobileAvatarButton,
-                                  state.hovered && Platform.OS === 'web' ? styles.hoverLift : null,
-                                  pressed ? styles.pressDown : null,
-                                ];
-                              }}
-                            >
-                              <View
-                                style={[
-                                  styles.mobileAvatarCircle,
-                                  {
-                                    backgroundColor: colors.primarySoft,
-                                    borderColor: colors.border,
-                                  },
-                                ]}
-                              >
-                                <Text style={[styles.avatarInitials, { color: colors.text }]}>{initials}</Text>
-                              </View>
-                            </Pressable>
-
-                            <View style={{ flex: 1, minWidth: 0 }}>
-                              <Text style={[styles.summaryName, { color: colors.text }]} numberOfLines={1}>
-                                {name}
-                              </Text>
-                              <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(1) }]} numberOfLines={1}>
-                                {email}
-                              </Text>
-
-                              <View style={styles.roleRow}>
-                                <RoleChip
-                                  icon="school-outline"
-                                  label="STUDENT"
-                                  colors={colors}
-                                  filled
-                                />
-                                <RoleChip
-                                  icon="shield-checkmark-outline"
-                                  label="BASIC"
-                                  colors={colors}
-                                />
-                              </View>
-                            </View>
-
-                            <HeaderSaveButton colors={colors} saving={saving} onPress={onSave} compact />
-                          </View>
-
-                          <View style={{ marginTop: spacing(4), gap: spacing(2) }}>
-                            <ActionButton
-                              icon="menu-outline"
-                              label="Open menu"
-                              tone="neutral"
-                              colors={colors}
-                              onPress={openMenu}
-                            />
-                            <ActionButton
-                              icon="link-outline"
-                              label="Connect parent/guardian"
-                              tone="neutral"
-                              colors={colors}
-                              onPress={onConnectParent}
-                            />
-                            <ActionButton
-                              icon={saving ? 'time-outline' : 'save-outline'}
-                              label={saving ? 'Saving…' : 'Save changes'}
-                              tone="primary"
-                              colors={colors}
-                              onPress={onSave}
-                              disabled={saving}
-                            />
-                          </View>
-                        </SurfaceCard>
-                      ) : null}
-
-                      <View style={{ marginTop: ui.isDesktop ? 0 : spacing(5) }}>
-                        <Text style={[typography.section, { color: colors.text }]}>Personal details</Text>
-                        <Text
-                          style={[
-                            typography.caption,
-                            {
-                              color: colors.textMuted,
-                              marginTop: spacing(1),
-                            },
-                          ]}
-                        >
-                          Keep your information accurate for better recommendations and smoother onboarding.
-                        </Text>
-                      </View>
-
-                      <View
-                        style={
-                          ui.isDesktop || ui.isTablet
-                            ? {
-                                flexDirection: 'row',
-                                gap: ui.gap,
-                                alignItems: 'flex-start',
-                              }
-                            : undefined
-                        }
-                      >
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <FieldCard
-                            label="Name"
-                            hint="Use your official full name"
-                            colors={colors}
-                          >
-                            <StyledInput
-                              value={name}
-                              onChangeText={setName}
-                              placeholder="Your name"
-                              colors={colors}
-                              autoCapitalize="words"
-                              autoCorrect={false}
-                              returnKeyType="next"
-                            />
-                          </FieldCard>
-
-                          <FieldCard
-                            label="Phone number"
-                            hint="Optional but recommended"
-                            colors={colors}
-                          >
-                            <StyledInput
-                              value={phone}
-                              onChangeText={setPhone}
-                              placeholder="e.g. +267 7X XXX XXX"
-                              colors={colors}
-                              keyboardType="phone-pad"
-                              returnKeyType="next"
-                            />
-                          </FieldCard>
-                        </View>
-
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <FieldCard
-                            label="School"
-                            hint="Your current institution"
-                            colors={colors}
-                          >
-                            <StyledInput
-                              value={school}
-                              onChangeText={setSchool}
-                              placeholder="Your school"
-                              colors={colors}
-                              returnKeyType="next"
-                            />
-                          </FieldCard>
-
-                          <FieldCard
-                            label="Year / Form"
-                            hint="Example: Form 5"
-                            colors={colors}
-                          >
-                            <StyledInput
-                              value={yearForm}
-                              onChangeText={setYearForm}
-                              placeholder="e.g. Form 5"
-                              colors={colors}
-                              returnKeyType="done"
-                            />
-                          </FieldCard>
-                        </View>
-                      </View>
-
-                      <Pressable
-                        onPress={onConnectParent}
-                        accessibilityRole="button"
-                        accessibilityLabel="Connect parent or guardian"
-                        style={({ pressed }) => [
-                          styles.linkRow,
-                          {
-                            backgroundColor: colors.card,
-                            borderColor: colors.border,
-                          },
-                          pressed ? styles.pressDown : null,
-                        ]}
-                      >
-                        <View
-                          style={[
-                            styles.linkIcon,
-                            {
-                              backgroundColor: colors.primarySoft,
-                              borderColor: colors.border,
-                            },
-                          ]}
-                        >
-                          <Ionicons name="link-outline" size={18} color={colors.text} />
-                        </View>
-
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={[typography.label, { color: colors.text }]} numberOfLines={1}>
-                            Connect parent/guardian
-                          </Text>
-                          <Text
-                            style={[
-                              typography.caption,
-                              {
-                                color: colors.textMuted,
-                                marginTop: spacing(1),
-                              },
-                            ]}
-                            numberOfLines={2}
-                          >
-                            Optional — improves support, visibility, and collaboration.
-                          </Text>
-                        </View>
-
-                        <Ionicons name="chevron-forward" size={18} color={colors.textSoft} />
-                      </Pressable>
-
-                      <View style={{ marginTop: spacing(5) }}>
-                        <Pressable
-                          onPress={onSave}
-                          disabled={saving}
-                          accessibilityRole="button"
-                          accessibilityLabel={saving ? 'Saving changes' : 'Save changes'}
-                          style={({ pressed }) => [
-                            styles.primarySaveButton,
-                            {
-                              backgroundColor: colors.primary,
-                              borderColor: colors.primary,
-                            },
-                            saving ? styles.disabled : null,
-                            pressed && !saving ? styles.pressDown : null,
-                          ]}
-                        >
-                          <Ionicons
-                            name={saving ? 'time-outline' : 'checkmark-circle-outline'}
-                            size={18}
-                            color={colors.white}
-                          />
-                          <Text style={[styles.primarySaveButtonText, { color: colors.white }]}>
-                            {saving ? 'SAVING…' : 'SAVE CHANGES'}
-                          </Text>
-                        </Pressable>
-
-                        <Text
-                          style={[
-                            typography.caption,
-                            {
-                              color: colors.textSoft,
-                              marginTop: spacing(3),
-                              textAlign: 'center',
-                            },
-                          ]}
-                        >
-                          Your details help personalize course, scholarship, and university recommendations.
-                        </Text>
-                      </View>
-
-                      <View style={{ height: spacing(4) }} />
-                    </View>
-                  </View>
-                </View>
-              </ScrollView>
-            </KeyboardAvoidingView>
-          </SafeAreaView>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function SurfaceCard({
-  children,
-  colors,
-  elevation,
-  style,
-}: {
-  children: React.ReactNode;
-  colors: ThemeColors;
-  elevation: ViewStyle;
-  style?: ViewStyle;
-}) {
-  return (
-    <View
-      style={[
-        styles.surfaceCard,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-        },
-        elevation,
-        style,
-      ]}
-    >
-      {children}
-    </View>
-  );
-}
-
-function HeaderIconButton({
-  icon,
-  label,
-  onPress,
-  colors,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-  colors: ThemeColors;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => {
-        const state = getPressableState({ pressed } as PressableStateCallbackType);
-        return [
-          styles.headerIconButton,
-          {
-            backgroundColor: colors.surfaceMuted,
-            borderColor: colors.border,
-          },
-          state.hovered && Platform.OS === 'web' ? styles.hoverLift : null,
-          pressed ? styles.pressDown : null,
-        ];
-      }}
-    >
-      <Ionicons name={icon} size={20} color={colors.text} />
-    </Pressable>
-  );
-}
-
-function HeaderSaveButton({
-  colors,
-  saving,
-  onPress,
-  compact,
-}: {
-  colors: ThemeColors;
-  saving: boolean;
-  onPress: () => void;
-  compact?: boolean;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={saving}
-      accessibilityRole="button"
-      accessibilityLabel={saving ? 'Saving' : 'Save changes'}
-      style={({ pressed }) => [
-        compact ? styles.miniSaveButton : styles.headerSaveButton,
-        {
-          backgroundColor: colors.surfaceMuted,
-          borderColor: colors.border,
-        },
-        saving ? styles.disabled : null,
-        pressed && !saving ? styles.pressDown : null,
-      ]}
-    >
-      <Ionicons name={saving ? 'time-outline' : 'checkmark-outline'} size={18} color={colors.text} />
-    </Pressable>
-  );
-}
-
-function RoleChip({
-  icon,
-  label,
-  colors,
-  filled,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  colors: ThemeColors;
-  filled?: boolean;
-}) {
-  return (
-    <View
-      style={[
-        styles.roleChip,
-        {
-          backgroundColor: filled ? colors.primarySoft : colors.cardAlt,
-          borderColor: colors.border,
-        },
-      ]}
-    >
-      <Ionicons name={icon} size={14} color={colors.text} />
-      <Text style={[styles.roleChipText, { color: colors.text }]}>{label}</Text>
-    </View>
-  );
-}
-
-function ActionButton({
-  icon,
-  label,
-  tone,
-  onPress,
-  disabled,
-  colors,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  tone: 'primary' | 'neutral';
-  onPress: () => void;
-  disabled?: boolean;
-  colors: ThemeColors;
-}) {
-  const isPrimary = tone === 'primary';
-
-  return (
-    <Pressable
-      onPress={disabled ? undefined : onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => [
-        styles.actionButton,
-        {
-          backgroundColor: isPrimary ? colors.primary : colors.surface,
-          borderColor: isPrimary ? colors.primary : colors.border,
-        },
-        disabled ? styles.disabled : null,
-        pressed && !disabled ? styles.pressDown : null,
-      ]}
-    >
-      <Ionicons name={icon} size={18} color={isPrimary ? colors.white : colors.text} />
-      <Text
-        style={[
-          styles.actionButtonText,
-          {
-            color: isPrimary ? colors.white : colors.text,
-          },
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function FieldCard({
-  label,
-  hint,
-  children,
-  colors,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-  colors: ThemeColors;
-}) {
-  return (
-    <View style={{ marginTop: spacing(4) }}>
-      <View style={styles.fieldHeader}>
-        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>{label.toUpperCase()}</Text>
-        {hint ? (
-          <Text style={[styles.fieldHint, { color: colors.textSoft }]} numberOfLines={1}>
-            {hint}
-          </Text>
-        ) : null}
-      </View>
-
-      <View
-        style={[
-          styles.fieldCard,
-          {
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        {children}
-      </View>
-    </View>
-  );
-}
-
-function StyledInput({
-  colors,
-  ...props
-}: React.ComponentProps<typeof TextInput> & { colors: ThemeColors }) {
-  return (
-    <TextInput
-      {...props}
-      placeholderTextColor={colors.textSoft}
-      style={[
-        styles.input,
-        {
-          color: colors.text,
-        },
-      ]}
-    />
-  );
-}
-
-const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shell: {
-    overflow: 'hidden',
-  },
-  shellDesktop: {
-    borderWidth: 1,
-  },
-  safe: {
-    flex: 1,
-  },
-
-  topBar: {
-    minHeight: 72,
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(3),
-    paddingVertical: spacing(3),
-  },
-  topBarLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(2),
-  },
-  headerCenter: {
-    flex: 1,
-    minWidth: 0,
-    alignItems: 'center',
-  },
-  topTitle: {
-    textAlign: 'center',
-  },
-  topSubtitle: {
-    marginTop: spacing(1),
-    textAlign: 'center',
-  },
-
-  headerIconButton: {
-    width: MIN_TAP,
-    height: MIN_TAP,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerSaveButton: {
-    width: 54,
-    height: 40,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  miniSaveButton: {
-    width: 46,
-    height: 46,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  surfaceCard: {
-    borderWidth: 1,
-    borderRadius: radii.xl,
-  },
-
-  avatarCard: {
-    borderWidth: 1,
-    borderRadius: radii.xl,
-    padding: spacing(4),
-  },
-  avatarButton: {
-    minHeight: 72,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    padding: spacing(3),
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(3),
-  },
-  avatarCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mobileAvatarCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitials: {
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  avatarName: {
-    fontSize: 14,
-    fontWeight: '900',
-  },
-
-  roleRow: {
-    marginTop: spacing(3),
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing(2),
-  },
-  roleChip: {
-    minHeight: 34,
-    paddingHorizontal: spacing(3),
-    paddingVertical: spacing(2),
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(2),
-  },
-  roleChipText: {
-    fontSize: 11.5,
-    fontWeight: '900',
-    letterSpacing: 0.2,
-  },
-
-  mobileSummaryTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(3),
-  },
-  mobileAvatarButton: {
-    borderRadius: radii.lg,
-  },
-  summaryName: {
-    fontSize: 15,
-    fontWeight: '900',
-  },
-
-  divider: {
-    height: 1,
-  },
-
-  actionButton: {
-    minHeight: 46,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    paddingHorizontal: spacing(4),
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing(3),
-  },
-  actionButtonText: {
-    fontSize: 12.5,
-    fontWeight: '900',
-    letterSpacing: 0.2,
-  },
-
-  fieldHeader: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: spacing(3),
-  },
-  fieldLabel: {
-    fontSize: 11.5,
-    fontWeight: '900',
-    letterSpacing: 0.2,
-  },
-  fieldHint: {
-    fontSize: 11.5,
-    fontWeight: '800',
-  },
-  fieldCard: {
-    marginTop: spacing(2),
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    paddingHorizontal: spacing(4),
-    paddingVertical: spacing(3),
-  },
-  input: {
-    fontSize: 13.5,
-    fontWeight: '800',
-    paddingVertical: 6,
-  },
-
-  linkRow: {
-    marginTop: spacing(5),
-    minHeight: 58,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    paddingHorizontal: spacing(4),
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(3),
-  },
-  linkIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  primarySaveButton: {
-    minHeight: 54,
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    paddingHorizontal: spacing(5),
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing(3),
-  },
-  primarySaveButtonText: {
-    fontSize: 13.5,
-    fontWeight: '900',
-    letterSpacing: 0.6,
-  },
-
-  hoverLift: {
-    transform: [{ translateY: -1 }],
-  },
-  pressDown: {
-    opacity: 0.96,
-    transform: [{ scale: 0.98 }],
-  },
-  disabled: {
-    opacity: 0.65,
-  },
-});
