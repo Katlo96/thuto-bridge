@@ -1,5 +1,8 @@
 {
-  "plugins": [
-    "expo-router"
-  ]
+  "expo": {
+    "name": "Thuto Bridge",
+    "slug": "thuto-bridge",
+    "version": "1.0.0",
+    "plugins": ["expo-router"]
+  }
 }
