@@ -1,247 +1,236 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+// app/verify-code.tsx
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  Animated,
-  StyleSheet,
-  useWindowDimensions,
-  Platform,
-  KeyboardAvoidingView,
-  ScrollView,
-  ActivityIndicator,
-  useColorScheme,
+  View, Text, TextInput, Pressable, Animated, StyleSheet,
+  useWindowDimensions, Platform, KeyboardAvoidingView, ScrollView,
+  ActivityIndicator, useColorScheme, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { verifyPhoneOTP, sendPhoneOTP, getStoredConfirmation, parseFirebaseError } from '../services/authService';
 
-// ── Design System ──────────────────────────────────────────────────────────────
-const BASE_SPACING = 4;
-const spacing = (n: number) => n * BASE_SPACING;
-
-const typography = {
-  title: { fontSize: 30, lineHeight: 36, fontWeight: '800' as const },
+const sp = (n: number) => n * 4;
+const typo = {
+  title:    { fontSize: 28, lineHeight: 34, fontWeight: '800' as const },
   subtitle: { fontSize: 15, lineHeight: 21, fontWeight: '600' as const },
-  body: { fontSize: 14, lineHeight: 20, fontWeight: '500' as const },
-  caption: { fontSize: 12, lineHeight: 16, fontWeight: '500' as const },
+  body:     { fontSize: 14, lineHeight: 20, fontWeight: '500' as const },
+  label:    { fontSize: 13, lineHeight: 18, fontWeight: '700' as const },
+  caption:  { fontSize: 12, lineHeight: 16, fontWeight: '500' as const },
 };
-
-const radii = {
-  sm: spacing(2),
-  md: spacing(3),
-  lg: spacing(4),
-  xl: spacing(5),
-};
-
-const elevations = Platform.select({
-  ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8 },
-  android: { elevation: 6 },
-  web: { boxShadow: '0 6px 16px rgba(0,0,0,0.1)' },
-  default: {},
-});
-
-const breakpoints = { mobileMax: 479, tabletMax: 1023 };
-const maxContentWidth = 1240;
-const DIGITS = 6; // modern standard is 6 digits
+const radii = { md: 12, lg: 16, xl: 20 };
+const DIGITS = 6;
 
 export default function VerifyCode() {
   const { width } = useWindowDimensions();
-  const { email = '' } = useLocalSearchParams<{ email: string }>();
-  const scheme = useColorScheme() || 'light';
+  const scheme    = useColorScheme() || 'light';
+  const params    = useLocalSearchParams<{ phone: string; fullName: string; mode: string }>();
 
   const colors = useMemo(() => ({
-    background: scheme === 'light' ? '#F8FCFD' : '#0A111A',
-    surface: scheme === 'light' ? '#FFFFFF' : '#1A232E',
-    surfaceAlt: scheme === 'light' ? '#F4F8FA' : '#222B36',
-    textPrimary: scheme === 'light' ? '#0A111A' : '#EAF2F8',
+    background:    scheme === 'light' ? '#F8FCFD' : '#0A111A',
+    surfaceAlt:    scheme === 'light' ? '#F4F8FA' : '#222B36',
+    textPrimary:   scheme === 'light' ? '#0A111A' : '#EAF2F8',
     textSecondary: scheme === 'light' ? '#4A6572' : '#A0B4C0',
-    textMuted: scheme === 'light' ? '#7A919E' : '#7A919E',
-    primary: '#4A9FC6',
-    primaryText: '#FFFFFF',
-    error: '#D32F2F',
-    border: scheme === 'light' ? 'rgba(10,17,26,0.08)' : 'rgba(234,242,248,0.12)',
-    accent: scheme === 'light' ? '#EAF6F8' : '#2A3A48',
+    textMuted:     scheme === 'light' ? '#7A919E' : '#7A919E',
+    primary:       '#4A9FC6',
+    error:         '#D32F2F',
+    border:        scheme === 'light' ? 'rgba(10,17,26,0.08)' : 'rgba(234,242,248,0.12)',
   }), [scheme]);
 
-  const uiMode = useMemo(() => {
-    if (width <= breakpoints.mobileMax) return 'mobile';
-    if (width <= breakpoints.tabletMax) return 'tablet';
-    return 'desktop';
-  }, [width]);
+  const isMobile  = width <= 479;
+  const phone     = params.phone    ?? '';
+  const mode      = params.mode     ?? 'login';
+  const fullName  = params.fullName ?? '';
 
-  const isMobile = uiMode === 'mobile';
-  const isDesktop = uiMode === 'desktop';
-
-  const pagePadding = isMobile ? spacing(5) : spacing(8);
-  const boxSize = isMobile ? 54 : 60;
-
-  const [code, setCode] = useState<string[]>(Array(DIGITS).fill(''));
+  const [code,         setCode]         = useState<string[]>(Array(DIGITS).fill(''));
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isResending,  setIsResending]  = useState(false);
+  const [error,        setError]        = useState<string | null>(null);
+  const [countdown,    setCountdown]    = useState(60);
+  const [canResend,    setCanResend]    = useState(false);
 
-  const inputRefs = useRef<Array<TextInput | null>>([]);
-
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const inputRefs     = useRef<Array<TextInput | null>>([]);
+  const fadeAnim      = useRef(new Animated.Value(0)).current;
   const translateAnim = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.spring(fadeAnim, { toValue: 1, friction: 9, tension: 50, useNativeDriver: true }),
+      Animated.spring(fadeAnim,      { toValue: 1, friction: 9, tension: 50, useNativeDriver: true }),
       Animated.spring(translateAnim, { toValue: 0, friction: 9, tension: 50, useNativeDriver: true }),
     ]).start();
+    // Focus first input
+    setTimeout(() => inputRefs.current[0]?.focus(), 400);
   }, []);
 
-  const codeValue = code.join('');
+  // Countdown timer
+  useEffect(() => {
+    if (countdown <= 0) { setCanResend(true); return; }
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
 
   const handleDigitChange = (index: number, value: string) => {
     const digit = value.replace(/\D/, '').slice(-1);
-    const newCode = [...code];
-    newCode[index] = digit;
-    setCode(newCode);
+    const next  = [...code];
+    next[index] = digit;
+    setCode(next);
     setError(null);
-
-    if (digit && index < DIGITS - 1) {
-      inputRefs.current[index + 1]?.focus();
-    }
+    if (digit && index < DIGITS - 1) inputRefs.current[index + 1]?.focus();
+    // Auto-submit when all 6 digits filled
+    if (next.every((d) => d !== '') && digit) handleVerify(next.join(''));
   };
 
   const handleKeyPress = (index: number, key: string) => {
-    if (key === 'Backspace' && !code[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
+    if (key === 'Backspace' && !code[index] && index > 0) inputRefs.current[index - 1]?.focus();
   };
 
-  const validate = () => {
-    if (codeValue.length !== DIGITS) return `Please enter the ${DIGITS}-digit code.`;
-    return null;
-  };
+  const handleVerify = useCallback(async (codeStr?: string) => {
+    const otpCode = codeStr ?? code.join('');
+    if (otpCode.length !== DIGITS) { setError(`Please enter the full ${DIGITS}-digit code.`); return; }
 
-  const handleVerify = async () => {
-    const err = validate();
-    if (err) {
-      setError(err);
+    // Make sure we still have a confirmation result in the module store
+    if (!getStoredConfirmation()) {
+      setError('Session expired. Please go back and request a new code.');
       return;
     }
 
-    setIsSubmitting(true);
-    setError(null);
+    setIsSubmitting(true); setError(null);
+    try {
+      await verifyPhoneOTP(otpCode, mode === 'signup' ? fullName : undefined);
+      router.replace('/student/dashboard');
+    } catch (e: any) {
+      setError(parseFirebaseError(e));
+      setCode(Array(DIGITS).fill(''));
+      setTimeout(() => inputRefs.current[0]?.focus(), 100);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [code, fullName, mode]);
 
-    // Simulate verification delay
-    await new Promise(r => setTimeout(r, 900));
-
-    setIsSubmitting(false);
-
-    // Navigate to reset-password with email
-    router.push({ pathname: '/reset-password', params: { email } });
-  };
-
-  const handleResend = async () => {
-    setError(null);
-    await new Promise(r => setTimeout(r, 600));
+  const handleResend = useCallback(async () => {
+    if (!phone) return;
+    setIsResending(true); setError(null);
     setCode(Array(DIGITS).fill(''));
-    inputRefs.current[0]?.focus();
-  };
+    try {
+      await sendPhoneOTP(phone);
+      setCountdown(60);
+      setCanResend(false);
+      setTimeout(() => inputRefs.current[0]?.focus(), 100);
+      Alert.alert('Code Sent', `A new verification code has been sent to ${phone}.`);
+    } catch (e: any) {
+      setError(parseFirebaseError(e));
+    } finally {
+      setIsResending(false);
+    }
+  }, [phone]);
+
+  const maskedPhone = phone.length > 6
+    ? `${phone.slice(0, 4)}****${phone.slice(-3)}`
+    : phone;
+
+  const allFilled = code.every((d) => d !== '');
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView
-            contentContainerStyle={[styles.scrollContent, { padding: pagePadding }]}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Animated.View
-              style={[
-                styles.main,
-                {
-                  maxWidth: isDesktop ? maxContentWidth : '100%',
-                  opacity: fadeAnim,
-                  transform: [{ translateY: translateAnim }],
-                },
-              ]}
-            >
-              {isDesktop && (
-                <View style={styles.sidebar}>
-                  <Text style={[typography.title, { color: colors.textPrimary }]}>Verify Your Email</Text>
-                  <Text style={[typography.subtitle, { color: colors.textSecondary, marginTop: spacing(3) }]}>
-                    Enter the code sent to <Text style={{ fontWeight: '700' }}>{email || 'your email'}</Text>
-                  </Text>
+    <View style={[s.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={s.fill} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView style={s.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={[s.scroll, { padding: sp(isMobile ? 5 : 8) }]} keyboardShouldPersistTaps="handled">
+            <Animated.View style={[s.wrap, { maxWidth: 460, opacity: fadeAnim, transform: [{ translateY: translateAnim }] }]}>
+
+              {/* Back button */}
+              <Pressable onPress={() => router.back()}
+                style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: sp(2), marginBottom: sp(6), opacity: pressed ? 0.7 : 1 })}>
+                <Ionicons name="arrow-back" size={20} color={colors.primary} />
+                <Text style={[typo.caption, { color: colors.primary, fontWeight: '700' }]}>Back</Text>
+              </Pressable>
+
+              {/* Icon */}
+              <View style={{ alignItems: 'center', marginBottom: sp(6) }}>
+                <View style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: `${colors.primary}18`, borderWidth: 2, borderColor: `${colors.primary}33`, alignItems: 'center', justifyContent: 'center', marginBottom: sp(4) }}>
+                  <Ionicons name="phone-portrait-outline" size={34} color={colors.primary} />
+                </View>
+                <Text style={[typo.title, { color: colors.textPrimary, textAlign: 'center' }]}>Enter Verification Code</Text>
+                <Text style={[typo.subtitle, { color: colors.textSecondary, textAlign: 'center', marginTop: sp(2), maxWidth: 320, lineHeight: 22 }]}>
+                  We sent a {DIGITS}-digit code to{'\n'}
+                  <Text style={{ color: colors.primary, fontWeight: '700' }}>{maskedPhone}</Text>
+                </Text>
+              </View>
+
+              {/* OTP boxes */}
+              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: sp(3), marginBottom: sp(5) }}>
+                {code.map((digit, i) => (
+                  <TextInput
+                    key={i}
+                    ref={(r) => { inputRefs.current[i] = r; }}
+                    value={digit}
+                    onChangeText={(v) => handleDigitChange(i, v)}
+                    onKeyPress={({ nativeEvent }) => handleKeyPress(i, nativeEvent.key)}
+                    keyboardType="number-pad"
+                    maxLength={1}
+                    style={[
+                      s.otpBox,
+                      { width: isMobile ? 46 : 54, height: isMobile ? 56 : 64 },
+                      digit
+                        ? { borderColor: colors.primary, backgroundColor: `${colors.primary}12` }
+                        : { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
+                    ]}
+                    placeholder="·"
+                    placeholderTextColor={colors.textMuted}
+                    selectionColor={colors.primary}
+                    accessibilityLabel={`Digit ${i + 1}`}
+                  />
+                ))}
+              </View>
+
+              {/* Error */}
+              {error && (
+                <View style={[s.errorBox, { backgroundColor: `${colors.error}10`, borderColor: `${colors.error}22`, marginBottom: sp(4) }]}>
+                  <Ionicons name="alert-circle-outline" size={18} color={colors.error} />
+                  <Text style={[typo.caption, { color: colors.error, marginLeft: sp(2), flex: 1, lineHeight: 18 }]}>{error}</Text>
                 </View>
               )}
 
-              <View style={[styles.formCard, { ...elevations }]}>
-                <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing(2) }]}>
-                  Enter Verification Code
-                </Text>
-                <Text style={[typography.subtitle, { color: colors.textSecondary, marginBottom: spacing(6) }]}>
-                  We sent a {DIGITS}-digit code to <Text style={{ fontWeight: '700' }}>{email || 'your email'}</Text>
-                </Text>
-
-                <View style={styles.codeContainer}>
-                  {code.map((digit, index) => (
-                    <TextInput
-                      key={index}
-                      ref={ref => { inputRefs.current[index] = ref; }}
-                      value={digit}
-                      onChangeText={val => handleDigitChange(index, val)}
-                      onKeyPress={({ nativeEvent }) => handleKeyPress(index, nativeEvent.key)}
-                      keyboardType="number-pad"
-                      maxLength={1}
-                      style={[
-                        styles.codeInput,
-                        { width: boxSize, height: boxSize },
-                        digit && styles.codeInputFilled,
-                      ]}
-                      placeholder="•"
-                      placeholderTextColor={colors.textMuted}
-                      selectionColor={colors.primary}
-                      accessibilityLabel={`Digit ${index + 1}`}
-                    />
-                  ))}
-                </View>
-
-                {error && (
-                  <View style={[styles.errorBox, { borderColor: `${colors.error}30` }]}>
-                    <Ionicons name="alert-circle-outline" size={20} color={colors.error} />
-                    <Text style={[typography.caption, { color: colors.error, marginLeft: spacing(2), flex: 1 }]}>
-                      {error}
-                    </Text>
+              {/* Verify button */}
+              <Pressable
+                onPress={() => handleVerify()}
+                disabled={isSubmitting || !allFilled}
+                style={({ pressed }) => [
+                  s.btn,
+                  { backgroundColor: allFilled ? colors.primary : `${colors.primary}55` },
+                  pressed && { opacity: 0.88, transform: [{ scale: 0.97 }] },
+                  isSubmitting && { opacity: 0.7 },
+                ]}
+              >
+                {isSubmitting ? <ActivityIndicator color="#fff" /> : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp(2) }}>
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                    <Text style={[typo.body, { color: '#fff', fontWeight: '700' }]}>Verify & Continue</Text>
                   </View>
                 )}
+              </Pressable>
 
-                <Pressable
-                  onPress={handleVerify}
-                  disabled={isSubmitting}
-                  style={({ pressed }) => [
-                    styles.primaryButton,
-                    pressed && { transform: [{ scale: 0.96 }], opacity: 0.92 },
-                    isSubmitting && { opacity: 0.6 },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Verify code"
-                >
-                  {isSubmitting ? (
-                    <ActivityIndicator color={colors.primaryText} />
-                  ) : (
-                    <Text style={[typography.body, { color: colors.primaryText, fontWeight: '700' }]}>
-                      Verify Code
-                    </Text>
-                  )}
-                </Pressable>
-
-                <View style={styles.resendRow}>
-                  <Text style={[typography.caption, { color: colors.textMuted }]}>
-                    Didn't receive the code?
-                  </Text>
-                  <Pressable onPress={handleResend} accessibilityRole="button" accessibilityLabel="Resend code">
-                    <Text style={[typography.caption, { color: colors.primary, fontWeight: '700', marginLeft: spacing(1) }]}>
-                      Resend
+              {/* Resend */}
+              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: sp(5), gap: sp(1) }}>
+                <Text style={[typo.caption, { color: colors.textMuted }]}>Didn't receive it?</Text>
+                {canResend ? (
+                  <Pressable onPress={handleResend} disabled={isResending} hitSlop={8}>
+                    <Text style={[typo.caption, { color: colors.primary, fontWeight: '700' }]}>
+                      {isResending ? 'Sending…' : 'Resend Code'}
                     </Text>
                   </Pressable>
-                </View>
+                ) : (
+                  <Text style={[typo.caption, { color: colors.textMuted }]}>Resend in {countdown}s</Text>
+                )}
               </View>
+
+              {/* Info note */}
+              <View style={{ marginTop: sp(5), padding: sp(3), backgroundColor: `${colors.primary}0A`, borderRadius: radii.lg, borderWidth: 1, borderColor: `${colors.primary}18`, flexDirection: 'row', alignItems: 'flex-start', gap: sp(2) }}>
+                <Ionicons name="information-circle-outline" size={14} color={colors.primary} style={{ marginTop: 1 }} />
+                <Text style={[typo.caption, { color: colors.textSecondary, flex: 1, fontSize: 11, lineHeight: 16 }]}>
+                  Standard SMS rates may apply. The code expires in 10 minutes. Make sure your phone number includes the country code (+267 for Botswana).
+                </Text>
+              </View>
+
             </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -250,58 +239,12 @@ export default function VerifyCode() {
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
+  fill:      { flex: 1 },
   container: { flex: 1 },
-  safeArea: { flex: 1 },
-  flex: { flex: 1 },
-  scrollContent: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
-  main: { width: '100%', alignSelf: 'center' },
-  sidebar: { padding: spacing(6), maxWidth: maxContentWidth / 2.5 },
-  formCard: {
-    padding: spacing(6),
-    borderRadius: radii.xl,
-    backgroundColor: 'transparent',
-    ...elevations,
-  },
-  codeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing(3),
-    marginVertical: spacing(6),
-  },
-  codeInput: {
-    borderWidth: 1,
-    borderColor: 'transparent',
-    backgroundColor: 'rgba(74,159,198,0.08)',
-    borderRadius: radii.md,
-    textAlign: 'center',
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#4A9FC6',
-  },
-  codeInputFilled: {
-    borderColor: '#4A9FC6',
-    backgroundColor: 'rgba(74,159,198,0.12)',
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing(3),
-    borderRadius: radii.md,
-    borderWidth: 1,
-    marginTop: spacing(2),
-  },
-  primaryButton: {
-    paddingVertical: spacing(4),
-    paddingHorizontal: spacing(6),
-    borderRadius: radii.md,
-    alignItems: 'center',
-    marginTop: spacing(6),
-  },
-  resendRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: spacing(5),
-  },
+  scroll:    { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
+  wrap:      { width: '100%', alignSelf: 'center' },
+  otpBox:    { borderWidth: 1.5, borderRadius: radii.md, textAlign: 'center', fontSize: 22, fontWeight: '800', color: '#4A9FC6' },
+  errorBox:  { flexDirection: 'row', alignItems: 'flex-start', padding: 12, borderRadius: radii.md, borderWidth: 1 },
+  btn:       { padding: 16, alignItems: 'center', borderRadius: radii.md, minHeight: 52, justifyContent: 'center' },
 });

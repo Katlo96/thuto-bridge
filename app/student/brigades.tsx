@@ -14,6 +14,9 @@ import {
   StudentMenuProvider,
   useStudentMenu,
 } from '../../components/student/StudentMenu';
+import { useEffect } from 'react';
+import { db } from '../../constants/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DashboardLayout & design tokens
@@ -41,50 +44,7 @@ type Brigade = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Data
 // ─────────────────────────────────────────────────────────────────────────────
-const BRIGADES: Brigade[] = [
-  {
-    id: '1',
-    name: 'Gaborone Brigade',
-    location: 'Gaborone',
-    tagline: 'Technical & Vocational Skills',
-    badge: 'GB',
-  },
-  {
-    id: '2',
-    name: 'Francistown Brigade',
-    location: 'Francistown',
-    tagline: 'Hands-on Training Excellence',
-    badge: 'FB',
-  },
-  {
-    id: '3',
-    name: 'Maun Brigade',
-    location: 'Maun',
-    tagline: 'Practical Education for the North',
-    badge: 'MB',
-  },
-  {
-    id: '4',
-    name: 'Serowe Brigade',
-    location: 'Serowe',
-    tagline: 'Community-Centred Vocational Training',
-    badge: 'SB',
-  },
-  {
-    id: '5',
-    name: 'Kanye Brigade',
-    location: 'Kanye',
-    tagline: 'Empowering Southern Botswana',
-    badge: 'KB',
-  },
-  {
-    id: '6',
-    name: 'Molepolole Brigade',
-    location: 'Molepolole',
-    tagline: 'Skills for Life and Industry',
-    badge: 'MLG',
-  },
-];
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Elevation helper (consistent with DashboardLayout approach)
@@ -459,17 +419,66 @@ function BrigadesContent() {
   const isMobile = breakpoint === 'mobile';
 
   const [search, setSearch] = useState('');
+const [brigades, setBrigades] = useState<Brigade[]>([]);
+const [loading, setLoading] = useState(true);
+
+useEffect(() => {
+  const fetchBrigades = async () => {
+    try {
+      setLoading(true);
+
+      const snapshot = await getDocs(collection(db, 'institutions'));
+
+      console.log('TOTAL DOCS:', snapshot.size);
+
+      const brigadesData: Brigade[] = snapshot.docs
+        .filter((doc) => {
+          const data = doc.data();
+
+          return (
+            data.category?.toLowerCase() === 'brigade'
+          );
+        })
+        .map((doc) => {
+          const data = doc.data();
+
+          return {
+            id: doc.id,
+            name: data.name ?? 'Unnamed Brigade',
+            location: data.location ?? 'Botswana',
+            tagline:
+              data.about ??
+              data.tagline ??
+              'No description available.',
+            badge: data.badge ?? 'BRG',
+          };
+        });
+
+      console.log('BRIGADES FOUND:', brigadesData.length);
+
+      setBrigades(brigadesData);
+    } catch (error) {
+      console.error('Failed to load brigades:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchBrigades();
+}, []);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return BRIGADES;
-    const q = search.toLowerCase();
-    return BRIGADES.filter(
+  if (!search.trim()) return brigades;
+
+  const q = search.toLowerCase();
+
+  return brigades.filter(
       (b) =>
         b.name.toLowerCase().includes(q) ||
         b.location.toLowerCase().includes(q) ||
         b.tagline.toLowerCase().includes(q)
     );
-  }, [search]);
+  },  [search, brigades]);
 
   const handleViewBrigade = useCallback((id: string) => {
     router.push({ pathname: '/student/brigade-details', params: { id } });
@@ -499,7 +508,7 @@ function BrigadesContent() {
           <StatPill
             icon="business-outline"
             label="Total Brigades"
-            value={`${BRIGADES.length}`}
+            value={`${brigades.length}`}
           />
           <StatPill
             icon="search-outline"
@@ -684,6 +693,29 @@ function BrigadesContent() {
     </View>
   );
 
+  if (loading) {
+  return (
+    <DashboardLayout
+      title="Brigades"
+      subtitle="Explore brigades across Botswana"
+      showPointsCard={false}
+    >
+      <Text
+        style={[
+          typography.body,
+          {
+            color: colors.textSecondary,
+            textAlign: 'center',
+            marginTop: spacing(10),
+          },
+        ]}
+      >
+        Loading brigades...
+      </Text>
+    </DashboardLayout>
+  );
+}
+
   // ── Grid of cards ────────────────────────────────────────────────────────
   const Grid =
     filtered.length === 0 ? (
@@ -731,7 +763,7 @@ function BrigadesContent() {
       }}
     >
       {[
-        { icon: 'business-outline' as const, label: 'Total', value: `${BRIGADES.length}` },
+        { icon: 'business-outline' as const, label: 'Total', value: `${brigades.length}` },
         { icon: 'search-outline' as const, label: 'Results', value: `${filtered.length}` },
         { icon: 'location-outline' as const, label: 'Coverage', value: 'BW' },
       ].map((s) => (

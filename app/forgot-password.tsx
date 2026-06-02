@@ -1,170 +1,163 @@
+// app/forgot-password.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  Image,
-  TextInput,
-  Pressable,
-  Animated,
-  StyleSheet,
-  useWindowDimensions,
-  Platform,
-  KeyboardAvoidingView,
-  ScrollView,
-  ActivityIndicator,
-  useColorScheme,
+  View, Text, Image, TextInput, Pressable, Animated, StyleSheet,
+  useWindowDimensions, Platform, KeyboardAvoidingView, ScrollView,
+  ActivityIndicator, useColorScheme, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { forgotPassword, parseFirebaseError } from '../services/authService';
 
 const LOGO = require('../assets/images/splash-illustration.png');
-
-// ── Design System ──────────────────────────────────────────────────────────────
-const BASE_SPACING = 4;
-const spacing = (n: number) => n * BASE_SPACING;
-
-const typography = {
-  hero: { fontSize: 38, lineHeight: 44, fontWeight: '900' as const },
-  title: { fontSize: 30, lineHeight: 36, fontWeight: '800' as const },
+const sp = (n: number) => n * 4;
+const typo = {
+  hero:     { fontSize: 38, lineHeight: 44, fontWeight: '900' as const },
+  title:    { fontSize: 30, lineHeight: 36, fontWeight: '800' as const },
   subtitle: { fontSize: 15, lineHeight: 21, fontWeight: '600' as const },
-  body: { fontSize: 14, lineHeight: 20, fontWeight: '500' as const },
-  label: { fontSize: 13, lineHeight: 18, fontWeight: '700' as const },
-  caption: { fontSize: 12, lineHeight: 16, fontWeight: '500' as const },
+  body:     { fontSize: 14, lineHeight: 20, fontWeight: '500' as const },
+  label:    { fontSize: 13, lineHeight: 18, fontWeight: '700' as const },
+  caption:  { fontSize: 12, lineHeight: 16, fontWeight: '500' as const },
 };
-
-const radii = {
-  sm: spacing(2),
-  md: spacing(3),
-  lg: spacing(4),
-  xl: spacing(5),
-  full: 9999,               // or spacing(999) if you prefer scale-based
-};
-
-const elevations = Platform.select({
-  ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8 },
-  android: { elevation: 6 },
-  web: { boxShadow: '0 6px 16px rgba(0,0,0,0.1)' },
-  default: {},
-});
-
-const breakpoints = { mobileMax: 479, tabletMax: 1023 };
-const maxContentWidth = 1240;
-const formMaxWidth = 480;
+const radii = { sm: 8, md: 12, lg: 16, xl: 20, full: 9999 };
 
 export default function ForgotPassword() {
   const { width } = useWindowDimensions();
   const scheme = useColorScheme() || 'light';
 
   const colors = useMemo(() => ({
-    background: scheme === 'light' ? '#F8FCFD' : '#0A111A',
-    surface: scheme === 'light' ? '#FFFFFF' : '#1A232E',
-    surfaceAlt: scheme === 'light' ? '#F4F8FA' : '#222B36',
-    textPrimary: scheme === 'light' ? '#0A111A' : '#EAF2F8',
+    background:    scheme === 'light' ? '#F8FCFD' : '#0A111A',
+    surfaceAlt:    scheme === 'light' ? '#F4F8FA' : '#222B36',
+    surfaceAlt2:   scheme === 'light' ? '#E8F4F8' : '#1E2A36',
+    textPrimary:   scheme === 'light' ? '#0A111A' : '#EAF2F8',
     textSecondary: scheme === 'light' ? '#4A6572' : '#A0B4C0',
-    textMuted: scheme === 'light' ? '#7A919E' : '#7A919E',
-    primary: '#4A9FC6',
-    primaryDark: '#2E89B0',
-    primaryText: '#FFFFFF',
-    error: '#D32F2F',
-    border: scheme === 'light' ? 'rgba(10,17,26,0.08)' : 'rgba(234,242,248,0.12)',
-    accent: scheme === 'light' ? '#EAF6F8' : '#2A3A48',
+    textMuted:     scheme === 'light' ? '#7A919E' : '#7A919E',
+    primary:       '#4A9FC6',
+    error:         '#D32F2F',
+    success:       '#388E3C',
+    border:        scheme === 'light' ? 'rgba(10,17,26,0.08)' : 'rgba(234,242,248,0.12)',
+    borderFocus:   '#4A9FC6',
   }), [scheme]);
 
-  const uiMode = useMemo(() => {
-    if (width <= breakpoints.mobileMax) return 'mobile';
-    if (width <= breakpoints.tabletMax) return 'tablet';
-    return 'desktop';
-  }, [width]);
+  const uiMode = useMemo(() => { if (width <= 479) return 'mobile'; if (width <= 1023) return 'tablet'; return 'desktop'; }, [width]);
+  const isMobile = uiMode === 'mobile'; const isDesktop = uiMode === 'desktop';
 
-  const isMobile = uiMode === 'mobile';
-  const isDesktop = uiMode === 'desktop';
-
-  const pagePadding = isMobile ? spacing(5) : spacing(8);
-  const formWidth = isDesktop ? formMaxWidth : '100%';
-
-  const [email, setEmail] = useState('');
+  const [email, setEmail]           = useState('');
+  const [focused, setFocused]       = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]           = useState<string | null>(null);
+  const [sent, setSent]             = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateAnim = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.spring(fadeAnim, { toValue: 1, friction: 9, tension: 50, useNativeDriver: true }),
+      Animated.spring(fadeAnim,      { toValue: 1, friction: 9, tension: 50, useNativeDriver: true }),
       Animated.spring(translateAnim, { toValue: 0, friction: 9, tension: 50, useNativeDriver: true }),
     ]).start();
   }, []);
 
-  const validate = () => {
+  const handleSend = async () => {
     const trimmed = email.trim();
-    if (!trimmed) return 'Email is required.';
-    if (!/\S+@\S+\.\S+/.test(trimmed)) return 'Please enter a valid email.';
-    return null;
-  };
+    if (!trimmed) { setError('Email is required.'); return; }
+    if (!/\S+@\S+\.\S+/.test(trimmed)) { setError('Please enter a valid email address.'); return; }
 
-  const handleSendCode = async () => {
-    const err = validate();
-    if (err) {
-      setError(err);
-      return;
+    setIsSubmitting(true); setError(null);
+    try {
+      await forgotPassword(trimmed);
+      setSent(true);
+    } catch (e: any) {
+      // Firebase returns auth/user-not-found — we intentionally show a generic
+      // success message anyway to prevent email enumeration attacks.
+      // Only show real errors for non-user-not-found cases.
+      if (e?.code === 'auth/user-not-found') {
+        setSent(true); // Don't reveal if email exists
+      } else {
+        setError(parseFirebaseError(e));
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsSubmitting(true);
-    setError(null);
-
-    // Simulate network delay
-    await new Promise(r => setTimeout(r, 900));
-
-    setIsSubmitting(false);
-
-    // Navigate to verify-code with email param
-    router.push({ pathname: '/verify-code', params: { email: email.trim() } });
   };
+
+  // ── Success state ──────────────────────────────────────────────────────────
+  if (sent) {
+    return (
+      <View style={[s.container, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={s.fill} edges={['top', 'bottom']}>
+          <ScrollView contentContainerStyle={[s.scroll, { padding: sp(isMobile ? 5 : 10) }]}>
+            <Animated.View style={[s.wrap, { maxWidth: 480, opacity: fadeAnim, transform: [{ translateY: translateAnim }] }]}>
+              {/* Success icon */}
+              <View style={{ alignItems: 'center', marginBottom: sp(6) }}>
+                <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: `${colors.success}18`, borderWidth: 2, borderColor: `${colors.success}44`, alignItems: 'center', justifyContent: 'center', marginBottom: sp(4) }}>
+                  <Ionicons name="mail-open-outline" size={36} color={colors.success} />
+                </View>
+                <Text style={[typo.title, { color: colors.textPrimary, textAlign: 'center' }]}>Check Your Inbox</Text>
+                <Text style={[typo.subtitle, { color: colors.textSecondary, textAlign: 'center', marginTop: sp(2), maxWidth: 360, lineHeight: 22 }]}>
+                  If an account exists for <Text style={{ fontWeight: '700', color: colors.primary }}>{email.trim()}</Text>, a password reset link has been sent. Check your inbox and spam folder.
+                </Text>
+              </View>
+
+              {/* Info box */}
+              <View style={{ padding: sp(4), backgroundColor: `${colors.primary}0F`, borderRadius: radii.lg, borderWidth: 1, borderColor: `${colors.primary}22`, marginBottom: sp(6), gap: sp(3) }}>
+                {[
+                  'The link expires after 1 hour.',
+                  'Click the link in the email to set a new password.',
+                  'If you don\'t see it, check your spam or junk folder.',
+                ].map((tip, i) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sp(2) }}>
+                    <Ionicons name="checkmark-circle-outline" size={15} color={colors.primary} style={{ marginTop: 1 }} />
+                    <Text style={[typo.caption, { color: colors.textSecondary, flex: 1, lineHeight: 18 }]}>{tip}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Resend */}
+              <Pressable onPress={() => { setSent(false); setEmail(''); }}
+                style={({ pressed }) => [s.btn, { backgroundColor: colors.primary }, pressed && { opacity: 0.88, transform: [{ scale: 0.97 }] }]}>
+                <Text style={[typo.body, { color: '#fff', fontWeight: '700' }]}>Send Another Link</Text>
+              </Pressable>
+
+              <Pressable onPress={() => router.replace('/login')} style={({ pressed }) => ({ marginTop: sp(4), opacity: pressed ? 0.7 : 1 })}>
+                <Text style={[typo.caption, { color: colors.primary, textAlign: 'center', fontWeight: '700' }]}>Back to Sign In</Text>
+              </Pressable>
+            </Animated.View>
+          </ScrollView>
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView
-            contentContainerStyle={[styles.scrollContent, { padding: pagePadding }]}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Animated.View
-              style={[
-                styles.main,
-                {
-                  maxWidth: isDesktop ? maxContentWidth : '100%',
-                  flexDirection: isDesktop ? 'row' : 'column',
-                  gap: spacing(8),
-                  opacity: fadeAnim,
-                  transform: [{ translateY: translateAnim }],
-                },
-              ]}
-            >
+    <View style={[s.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={s.fill} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView style={s.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={[s.scroll, { padding: sp(isMobile ? 5 : 8) }]} keyboardShouldPersistTaps="handled">
+            <Animated.View style={[s.wrap, { maxWidth: isDesktop ? 1240 : '100%', flexDirection: isDesktop ? 'row' : 'column', gap: sp(8), opacity: fadeAnim, transform: [{ translateY: translateAnim }] }]}>
+
+              {/* Desktop sidebar */}
               {isDesktop && (
-                <View style={styles.sidebar}>
-                  <View style={styles.logoRow}>
-                    <Image source={LOGO} style={styles.logo} resizeMode="contain" />
-                    <Text style={[typography.hero, { color: colors.textPrimary }]}>UniPathway</Text>
+                <View style={[s.side]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp(3), marginBottom: 16 }}>
+                    <Image source={LOGO} style={{ width: 48, height: 48 }} resizeMode="contain" />
+                    <Text style={[typo.hero, { color: colors.textPrimary }]}>THUTO BRIDGE</Text>
                   </View>
-                  <Text style={[typography.subtitle, { color: colors.textSecondary, marginTop: spacing(4) }]}>
-                    Reset your password securely in minutes.
-                  </Text>
-                  <View style={styles.steps}>
+                  <Text style={[typo.subtitle, { color: colors.textSecondary, marginTop: sp(4), marginBottom: sp(6) }]}>Reset your password securely in just one step.</Text>
+                  <View style={{ gap: sp(4) }}>
                     {[
-                      { num: '1', title: 'Enter email', desc: 'We’ll send a verification code' },
-                      { num: '2', title: 'Verify code', desc: 'Confirm ownership of your email' },
-                      { num: '3', title: 'New password', desc: 'Choose a strong new password' },
+                      { num: '1', title: 'Enter your email',          desc: 'We\'ll send a reset link to your inbox' },
+                      { num: '2', title: 'Click the link in the email', desc: 'Opens Firebase\'s secure reset page'    },
+                      { num: '3', title: 'Set your new password',      desc: 'Choose a strong new password and done'  },
                     ].map((step, i) => (
-                      <View key={i} style={styles.step}>
-                        <View style={styles.stepNumber}>
-                          <Text style={styles.stepNumberText}>{step.num}</Text>
+                      <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sp(4) }}>
+                        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: `${colors.primary}18`, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 14 }}>{step.num}</Text>
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={[typography.body, { fontWeight: '700', color: colors.textPrimary }]}>{step.title}</Text>
-                          <Text style={[typography.caption, { color: colors.textMuted }]}>{step.desc}</Text>
+                          <Text style={[typo.body, { fontWeight: '700', color: colors.textPrimary }]}>{step.title}</Text>
+                          <Text style={[typo.caption, { color: colors.textMuted, marginTop: 2 }]}>{step.desc}</Text>
                         </View>
                       </View>
                     ))}
@@ -172,69 +165,60 @@ export default function ForgotPassword() {
                 </View>
               )}
 
-              <View style={[styles.formCard, { width: formWidth }]}>
-                <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing(2) }]}>
-                  Forgot Password
-                </Text>
-                <Text style={[typography.subtitle, { color: colors.textSecondary, marginBottom: spacing(6) }]}>
-                  Enter your email and we’ll send you a reset code.
-                </Text>
+              {/* Form */}
+              <View style={[s.form, { maxWidth: isDesktop ? 480 : '100%', flex: 1 }]}>
+                {!isDesktop && (
+                  <View style={{ alignItems: 'center', marginBottom: sp(5) }}>
+                    <Image source={LOGO} style={{ width: 64, height: 64 }} resizeMode="contain" />
+                    <Text style={[typo.title, { color: colors.textPrimary, marginTop: sp(2) }]}>THUTO BRIDGE</Text>
+                  </View>
+                )}
 
-                <View style={[styles.inputContainer, { borderColor: colors.border }]}>
-                  <Ionicons name="mail-outline" size={20} color={colors.textMuted} style={{ marginRight: spacing(2) }} />
+                <Text style={[typo.title, { color: colors.textPrimary, marginBottom: sp(2), textAlign: isMobile ? 'center' : 'left' }]} accessibilityRole="header">Forgot Password</Text>
+                <Text style={[typo.subtitle, { color: colors.textSecondary, marginBottom: sp(6), textAlign: isMobile ? 'center' : 'left' }]}>Enter your email and we'll send you a reset link.</Text>
+
+                {/* Email input */}
+                <View style={[s.input, { borderColor: focused ? colors.borderFocus : colors.border, borderWidth: focused ? 1.5 : 1, backgroundColor: colors.surfaceAlt }]}>
+                  <Ionicons name="mail-outline" size={20} color={focused ? colors.primary : colors.textMuted} style={{ marginRight: sp(2) }} />
                   <TextInput
                     value={email}
-                    onChangeText={text => { setEmail(text); setError(null); }}
+                    onChangeText={(t) => { setEmail(t); setError(null); }}
+                    onFocus={() => setFocused(true)}
+                    onBlur={() => setFocused(false)}
                     placeholder="Your email address"
                     placeholderTextColor={colors.textMuted}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
-                    style={[typography.body, { flex: 1, color: colors.textPrimary }]}
-                    accessibilityLabel="Email address"
                     returnKeyType="done"
-                    onSubmitEditing={handleSendCode}
+                    onSubmitEditing={handleSend}
+                    style={[typo.body, { flex: 1, color: colors.textPrimary }]}
                   />
+                  {email.length > 0 && <Pressable onPress={() => setEmail('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textMuted} /></Pressable>}
                 </View>
 
+                {/* Error */}
                 {error && (
-                  <View style={[styles.errorBox, { borderColor: `${colors.error}30` }]}>
-                    <Ionicons name="alert-circle-outline" size={20} color={colors.error} />
-                    <Text style={[typography.caption, { color: colors.error, marginLeft: spacing(2), flex: 1 }]}>
-                      {error}
-                    </Text>
+                  <View style={[s.errorBox, { backgroundColor: `${colors.error}10`, borderColor: `${colors.error}22`, marginTop: sp(3) }]}>
+                    <Ionicons name="alert-circle-outline" size={18} color={colors.error} />
+                    <Text style={[typo.caption, { color: colors.error, marginLeft: sp(2), flex: 1, lineHeight: 18 }]}>{error}</Text>
                   </View>
                 )}
 
-                <Pressable
-                  onPress={handleSendCode}
-                  disabled={isSubmitting}
-                  style={({ pressed }) => [
-                    styles.primaryButton,
-                    pressed && { transform: [{ scale: 0.96 }], opacity: 0.92 },
-                    isSubmitting && { opacity: 0.6 },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Send reset code"
-                >
-                  {isSubmitting ? (
-                    <ActivityIndicator color={colors.primaryText} />
-                  ) : (
-                    <Text style={[typography.body, { color: colors.primaryText, fontWeight: '700' }]}>
-                      Send Reset Code
-                    </Text>
+                {/* Submit */}
+                <Pressable onPress={handleSend} disabled={isSubmitting}
+                  style={({ pressed }) => [s.btn, { backgroundColor: colors.primary, marginTop: sp(5) }, pressed && { transform: [{ scale: 0.97 }], opacity: 0.92 }, isSubmitting && { opacity: 0.7 }]}
+                  accessibilityRole="button">
+                  {isSubmitting ? <ActivityIndicator color="#fff" /> : (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp(2) }}>
+                      <Ionicons name="paper-plane-outline" size={17} color="#fff" />
+                      <Text style={[typo.body, { color: '#fff', fontWeight: '700' }]}>Send Reset Link</Text>
+                    </View>
                   )}
                 </Pressable>
 
-                <Pressable
-                  onPress={() => router.back()}
-                  style={({ pressed }) => pressed && { opacity: 0.8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Back to login"
-                >
-                  <Text style={[typography.caption, { color: colors.primary, marginTop: spacing(5), textAlign: 'center' }]}>
-                    Back to Login
-                  </Text>
+                <Pressable onPress={() => router.back()} style={({ pressed }) => ({ marginTop: sp(5), opacity: pressed ? 0.7 : 1 })}>
+                  <Text style={[typo.caption, { color: colors.primary, textAlign: 'center', fontWeight: '700' }]}>Back to Sign In</Text>
                 </Pressable>
               </View>
             </Animated.View>
@@ -245,53 +229,13 @@ export default function ForgotPassword() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  safeArea: { flex: 1 },
-  flex: { flex: 1 },
-  scrollContent: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
-  main: { width: '100%', alignSelf: 'center' },
-  sidebar: { padding: spacing(6), borderRadius: radii.xl },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
-  logo: { width: 48, height: 48 },
-  steps: { marginTop: spacing(6), gap: spacing(4) },
-  step: { flexDirection: 'row', alignItems: 'center', gap: spacing(4) },
-  stepNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.full,
-    backgroundColor: 'rgba(74,159,198,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepNumberText: { color: '#4A9FC6', fontWeight: '700', fontSize: 14 },
-  formCard: {
-    padding: spacing(6),
-    borderRadius: radii.xl,
-    backgroundColor: 'transparent',
-    ...elevations,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing(3.5),
-    borderWidth: 1,
-    borderRadius: radii.md,
-    marginTop: spacing(2),
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing(3),
-    borderRadius: radii.md,
-    borderWidth: 1,
-    marginTop: spacing(3),
-  },
-  primaryButton: {
-    paddingVertical: spacing(4),
-    paddingHorizontal: spacing(6),
-    borderRadius: radii.md,
-    alignItems: 'center',
-    marginTop: spacing(6),
-  },
+const s = StyleSheet.create({
+  fill: { flex: 1 }, container: { flex: 1 },
+  scroll: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
+  wrap:  { width: '100%', alignSelf: 'center' },
+  side:  { padding: 24, flex: 1, maxWidth: 480 },
+  form:  { padding: 24, borderRadius: 20 },
+  input: { flexDirection: 'row', alignItems: 'center', padding: 12, borderWidth: 1, borderRadius: 12, minHeight: 52 },
+  errorBox: { flexDirection: 'row', alignItems: 'flex-start', padding: 12, borderRadius: 12, borderWidth: 1 },
+  btn:   { padding: 16, alignItems: 'center', borderRadius: 12, minHeight: 52, justifyContent: 'center' },
 });

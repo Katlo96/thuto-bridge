@@ -1,340 +1,549 @@
 // app/signup.tsx
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
-  View,
-  Text,
-  Image,
-  TextInput,
-  Pressable,
-  Animated,
-  StyleSheet,
-  useWindowDimensions,
-  Platform,
-  KeyboardAvoidingView,
-  ScrollView,
-  Modal,
-  ActivityIndicator,
-  useColorScheme,
+  View, Text, Image, TextInput, Pressable, Animated, StyleSheet,
+  useWindowDimensions, Platform, KeyboardAvoidingView, ScrollView,
+  ActivityIndicator, useColorScheme, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { signUpWithEmail, sendPhoneOTP, parseFirebaseError } from '../services/authService';
 
 const LOGO = require('../assets/images/splash-illustration.png');
-
-// Design System Constants (internal, consistent across app)
-const BASE_SPACING = 4;
-const spacing = (multiple: number) => multiple * BASE_SPACING; // 4,8,12,16,20,24,32,40,48,64
-
-const typographyScale = {
-  hero: { fontSize: 38, lineHeight: 44, fontWeight: '900' as const }, // Desktop hero
-  title: { fontSize: 30, lineHeight: 36, fontWeight: '800' as const }, // Mobile title
+const sp = (n: number) => n * 4;
+const typo = {
+  hero:     { fontSize: 38, lineHeight: 44, fontWeight: '900' as const },
+  title:    { fontSize: 30, lineHeight: 36, fontWeight: '800' as const },
   subtitle: { fontSize: 15, lineHeight: 21, fontWeight: '600' as const },
-  body: { fontSize: 14, lineHeight: 20, fontWeight: '500' as const },
-  label: { fontSize: 13, lineHeight: 18, fontWeight: '700' as const },
-  caption: { fontSize: 12, lineHeight: 16, fontWeight: '500' as const },
+  body:     { fontSize: 14, lineHeight: 20, fontWeight: '500' as const },
+  label:    { fontSize: 13, lineHeight: 18, fontWeight: '700' as const },
+  caption:  { fontSize: 12, lineHeight: 16, fontWeight: '500' as const },
 };
+const radii = { sm: 8, md: 12, lg: 16, xl: 20, pill: 999 };
 
-const radiusScale = {
-  sm: spacing(2),
-  md: spacing(3),
-  lg: spacing(4),
-  xl: spacing(5),
-  full: 9999, // For badges/pills
-};
-
-const elevationSystem = Platform.select({
-  ios: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-  },
-  android: { elevation: 6 },
-  web: { boxShadow: '0 6px 16px rgba(0,0,0,0.1)' },
-  default: {},
-});
-
-// Breakpoints for responsive logic
-const breakpoints = { mobileMax: 479, tabletMax: 1023 };
-const maxAppWidth = 1240;
-const formMaxWidth = 480;
-
-
-
-export default function Signup() {
-  const { width, height } = useWindowDimensions(); // Include height for adaptive sizing
-  const scheme = useColorScheme() || 'light';
-
-  const colors = useMemo(() => ({
-    background: scheme === 'light' ? '#F8FCFD' : '#0A111A',
-    surface: scheme === 'light' ? '#FFFFFF' : '#1A232E',
-    surfaceAlt: scheme === 'light' ? '#F4F8FA' : '#222B36',
-    textPrimary: scheme === 'light' ? '#0A111A' : '#EAF2F8',
-    textSecondary: scheme === 'light' ? '#4A6572' : '#A0B4C0',
-    textMuted: scheme === 'light' ? '#7A919E' : '#7A919E',
-    primary: '#4A9FC6',
-    primaryDark: '#2E89B0',
-    primaryText: '#FFFFFF',
-    error: '#D32F2F',
-    success: '#388E3C',
-    border: scheme === 'light' ? 'rgba(10,17,26,0.08)' : 'rgba(234,242,248,0.12)',
-    shadow: '#000000',
-    accent: scheme === 'light' ? '#EAF6F8' : '#2A3A48',
-  }), [scheme]);
-
-  const uiMode = useMemo(() => {
-    if (width <= breakpoints.mobileMax) return 'mobile';
-    if (width <= breakpoints.tabletMax) return 'tablet';
-    return 'desktop';
-  }, [width]);
-
-  const isMobile = uiMode === 'mobile';
-  const isTablet = uiMode === 'tablet';
-  const isDesktop = uiMode === 'desktop';
-
-  // Responsive calculations
-  const pagePadding = isMobile ? spacing(4) : spacing(6);
-  const contentMaxWidth = isDesktop ? maxAppWidth : width;
-  const formWidth = isDesktop ? formMaxWidth : isTablet ? Math.min(width * 0.8, 560) : '100%';
-  const titleFont = isMobile ? { ...typographyScale.title } : typographyScale.hero;
-  const heroSize = Math.min(width, height) * (isMobile ? 0.48 : isTablet ? 0.42 : 0.35); // Adaptive illustration size
-
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateAnim = useRef(new Animated.Value(20)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(fadeAnim, { toValue: 1, friction: 9, tension: 50, useNativeDriver: true }),
-      Animated.spring(translateAnim, { toValue: 0, friction: 9, tension: 50, useNativeDriver: true }),
-    ]).start();
-  }, []);
-
-  const validate = () => {
-    if (!email.trim() || !/\S+@\S+\.\S+/.test(email.trim())) return 'Valid email is required.';
-    if (!password.trim() || password.length < 8) return 'Password must be at least 8 characters.';
-    if (password !== confirmPassword) return 'Passwords do not match.';
-    return null;
-  };
-
-  const handleSignup = async () => {
-    const validationError = validate();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-    setIsSubmitting(true);
-    setError(null);
-
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    setIsSubmitting(false);
-    router.replace('/login');
-  };
-
-  
-
-  // Responsive Layout Branching
-  const renderDesktopSidebar = () => (
-    <View style={[styles.sidebar, { maxWidth: contentMaxWidth / 2.5, padding: spacing(6) }]}>
-      <View style={styles.logoWrap}>
-        <Image source={LOGO} style={{ width: spacing(12), height: spacing(12) }} resizeMode="contain" />
-        <Text style={[typographyScale.hero, { color: colors.textPrimary, marginLeft: spacing(3) }]}>UniPathway</Text>
-      </View>
-      <Text style={[typographyScale.subtitle, { color: colors.textSecondary, marginVertical: spacing(4) }]}>
-        Join a platform built for your educational journey.
-      </Text>
-      <View style={styles.benefitsList}>
-        {[
-          { icon: 'sparkles-outline', title: 'Personalized Access', desc: 'Role-based dashboards tailored to you.' },
-          { icon: 'lock-closed-outline', title: 'Secure Signup', desc: 'Quick and safe account creation.' },
-          { icon: 'people-outline', title: 'Community Ready', desc: 'Connect with students, parents, and educators.' },
-        ].map((benefit, idx) => (
-          <View key={idx} style={styles.benefitItem}>
-            <Ionicons name={benefit.icon as any} size={24} color={colors.primary} />
-            <View style={{ marginLeft: spacing(4), flex: 1 }}>
-              <Text style={[typographyScale.body, { fontWeight: '700', color: colors.textPrimary }]}>{benefit.title}</Text>
-              <Text style={[typographyScale.caption, { color: colors.textMuted }]}>{benefit.desc}</Text>
-            </View>
-          </View>
+// ─────────────────────────────────────────────────────────────────────────────
+// Password strength helpers
+// ─────────────────────────────────────────────────────────────────────────────
+type StrengthLevel = 'none' | 'weak' | 'fair' | 'strong' | 'excellent';
+function getStrength(pw: string): StrengthLevel {
+  if (!pw) return 'none';
+  let s = 0;
+  if (pw.length >= 8)           s++;
+  if (pw.length >= 12)          s++;
+  if (/[A-Z]/.test(pw))         s++;
+  if (/[0-9]/.test(pw))         s++;
+  if (/[^A-Za-z0-9]/.test(pw))  s++;
+  if (s <= 1) return 'weak'; if (s === 2) return 'fair'; if (s === 3) return 'strong'; return 'excellent';
+}
+function strengthMeta(l: StrengthLevel) {
+  switch (l) {
+    case 'weak':      return { label: 'Weak',     color: '#EF4444', segments: 1 };
+    case 'fair':      return { label: 'Fair',      color: '#FBBF24', segments: 2 };
+    case 'strong':    return { label: 'Strong',    color: '#34D399', segments: 3 };
+    case 'excellent': return { label: 'Excellent', color: '#60A5FA', segments: 4 };
+    default:          return { label: '',          color: 'transparent', segments: 0 };
+  }
+}
+function StrengthBar({ password, borderColor }: { password: string; borderColor: string }) {
+  const l = getStrength(password); const m = strengthMeta(l);
+  if (l === 'none') return null;
+  return (
+    <View style={{ marginTop: sp(2), gap: sp(1) }}>
+      <View style={{ flexDirection: 'row', gap: sp(1) }}>
+        {[1, 2, 3, 4].map(i => (
+          <View key={i} style={{ flex: 1, height: 3, borderRadius: 2, backgroundColor: i <= m.segments ? m.color : borderColor }} />
         ))}
       </View>
-    </View>
-  );
-
-  const renderForm = () => (
-    <View style={[styles.formContainer, { width: formWidth, ...elevationSystem }]}>
-      <Text style={[titleFont, { color: colors.textPrimary, marginBottom: spacing(2) }]}>Sign Up</Text>
-      <Text style={[typographyScale.subtitle, { color: colors.textSecondary, marginBottom: spacing(6) }]}>
-        Create your account in minutes.
-      </Text>
-    
-      <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.surfaceAlt, marginTop: spacing(3) }]}>
-        <Ionicons name="mail-outline" size={20} color={colors.textMuted} style={{ marginRight: spacing(2) }} />
-        <TextInput
-          value={email}
-          onChangeText={(text) => { setEmail(text); setError(null); }}
-          placeholder="Email"
-          placeholderTextColor={colors.textMuted}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          style={[typographyScale.body, { flex: 1, color: colors.textPrimary }]}
-          accessibilityLabel="Email"
-        />
-      </View>
-      <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.surfaceAlt, marginTop: spacing(3) }]}>
-        <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} style={{ marginRight: spacing(2) }} />
-        <TextInput
-          value={password}
-          onChangeText={(text) => { setPassword(text); setError(null); }}
-          placeholder="Password"
-          placeholderTextColor={colors.textMuted}
-          secureTextEntry={!showPassword}
-          autoCapitalize="none"
-          style={[typographyScale.body, { flex: 1, color: colors.textPrimary }]}
-          accessibilityLabel="Password"
-        />
-        <Pressable onPress={() => setShowPassword(!showPassword)} style={({ pressed }) => pressed && { opacity: 0.8 }}>
-          <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
-        </Pressable>
-      </View>
-      <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.surfaceAlt, marginTop: spacing(3) }]}>
-        <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} style={{ marginRight: spacing(2) }} />
-        <TextInput
-          value={confirmPassword}
-          onChangeText={(text) => { setConfirmPassword(text); setError(null); }}
-          placeholder="Confirm Password"
-          placeholderTextColor={colors.textMuted}
-          secureTextEntry={!showConfirmPassword}
-          autoCapitalize="none"
-          style={[typographyScale.body, { flex: 1, color: colors.textPrimary }]}
-          accessibilityLabel="Confirm Password"
-        />
-        <Pressable onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={({ pressed }) => pressed && { opacity: 0.8 }}>
-          <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
-        </Pressable>
-      </View>
-      {error && (
-        <View style={[styles.errorContainer, { backgroundColor: `${colors.error}10`, borderColor: `${colors.error}20`, marginTop: spacing(3) }]}>
-          <Ionicons name="alert-circle-outline" size={20} color={colors.error} />
-          <Text style={[typographyScale.caption, { color: colors.error, marginLeft: spacing(2), flex: 1 }]}>{error}</Text>
-        </View>
-      )}
-      <Pressable
-        onPress={handleSignup}
-        disabled={isSubmitting}
-        style={({ pressed }) => [
-          styles.button,
-          { backgroundColor: colors.primary, marginTop: spacing(5) },
-          pressed && { transform: [{ scale: 0.96 }], opacity: 0.95 },
-          isSubmitting && { opacity: 0.7 },
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel="Sign Up"
-      >
-        {isSubmitting ? (
-          <ActivityIndicator color={colors.primaryText} />
-        ) : (
-          <Text style={[typographyScale.body, { color: colors.primaryText, fontWeight: '700' }]}>Sign Up</Text>
-        )}
-      </Pressable>
-      <View style={styles.backLink}>
-        <Text style={[typographyScale.caption, { color: colors.textMuted }]}>Already have an account?</Text>
-        <Pressable onPress={() => router.replace('/login')} style={({ pressed }) => pressed && { opacity: 0.85 }}>
-          <Text style={[typographyScale.caption, { color: colors.primary, fontWeight: '700', marginLeft: spacing(1) }]}>Login</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView
-            contentContainerStyle={[styles.scrollContent, { padding: pagePadding }]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <Animated.View
-              style={[
-                styles.mainWrap,
-                {
-                  maxWidth: contentMaxWidth,
-                  alignSelf: 'center',
-                  flexDirection: isDesktop ? 'row' : 'column',
-                  gap: spacing(6),
-                  opacity: fadeAnim,
-                  transform: [{ translateY: translateAnim }],
-                },
-              ]}
-            >
-              {isDesktop && renderDesktopSidebar()}
-              {renderForm()}
-            </Animated.View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-     
+      <Text style={[typo.caption, { color: m.color, fontWeight: '700' }]}>{m.label} password</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
+// ─────────────────────────────────────────────────────────────────────────────
+// Confirmation Modal — works on web AND native
+// ─────────────────────────────────────────────────────────────────────────────
+type ConfirmModalProps = {
+  visible:     boolean;
+  type:        'email' | 'phone';
+  email?:      string;
+  phone?:      string;
+  onPrimary:   () => void;   // main CTA
+  onSecondary?: () => void;  // optional secondary action
+};
+
+function ConfirmModal({ visible, type, email, phone, onPrimary, onSecondary }: ConfirmModalProps) {
+  const scheme = useColorScheme() || 'light';
+  const scaleAnim = useRef(new Animated.Value(0.88)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.spring(scaleAnim,   { toValue: 1,    friction: 8, tension: 60, useNativeDriver: true }),
+        Animated.timing(opacityAnim, { toValue: 1,    duration: 180, useNativeDriver: true }),
+      ]).start();
+    } else {
+      scaleAnim.setValue(0.88);
+      opacityAnim.setValue(0);
+    }
+  }, [visible]);
+
+  const colors = {
+    overlay:    'rgba(0,0,0,0.65)',
+    card:       scheme === 'light' ? '#FFFFFF' : '#1A232E',
+    textPrimary:   scheme === 'light' ? '#0A111A' : '#EAF2F8',
+    textSecondary: scheme === 'light' ? '#4A6572' : '#A0B4C0',
+    textMuted:     scheme === 'light' ? '#7A919E' : '#7A919E',
+    primary:    '#4A9FC6',
+    success:    '#22C55E',
+    border:     scheme === 'light' ? 'rgba(10,17,26,0.08)' : 'rgba(234,242,248,0.12)',
+    divider:    scheme === 'light' ? 'rgba(10,17,26,0.07)' : 'rgba(234,242,248,0.08)',
+  };
+
+  const isEmail = type === 'email';
+  const accentColor = isEmail ? colors.success : colors.primary;
+  const icon        = isEmail ? 'mail-open-outline' : 'phone-portrait-outline';
+
+  const maskedPhone = phone && phone.length > 6
+    ? `${phone.slice(0, 4)}****${phone.slice(-3)}`
+    : phone ?? '';
+
+  return (
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={onPrimary}>
+      <View style={[ms.overlay, { backgroundColor: colors.overlay }]}>
+        <Animated.View style={[ms.card, { backgroundColor: colors.card, opacity: opacityAnim, transform: [{ scale: scaleAnim }] }]}>
+
+          {/* Top accent bar */}
+          <View style={{ height: 4, backgroundColor: accentColor, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl }} />
+
+          <View style={{ padding: sp(6) }}>
+            {/* Icon */}
+            <View style={{ alignItems: 'center', marginBottom: sp(5) }}>
+              <View style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: `${accentColor}18`, borderWidth: 2, borderColor: `${accentColor}33`, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name={icon} size={34} color={accentColor} />
+              </View>
+            </View>
+
+            {/* Title */}
+            <Text style={[typo.title, { color: colors.textPrimary, textAlign: 'center', marginBottom: sp(2), fontSize: 22 }]}>
+              {isEmail ? 'Verify Your Email' : 'One More Step'}
+            </Text>
+
+            {/* Subtitle */}
+            <Text style={[typo.body, { color: colors.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: sp(5) }]}>
+              {isEmail
+                ? `A verification link has been sent to\n`
+                : `A one-time code has been sent to\n`}
+              <Text style={{ color: accentColor, fontWeight: '700' }}>
+                {isEmail ? email : maskedPhone}
+              </Text>
+            </Text>
+
+            {/* Info steps — extracted to typed const to satisfy TypeScript */}
+            {(() => {
+              const steps: { icon: keyof typeof Ionicons.glyphMap; text: string }[] = isEmail
+                ? [
+                    { icon: 'mail-outline',             text: 'Open the email from Thuto Bridge'          },
+                    { icon: 'link-outline',             text: 'Click the verification link inside'        },
+                    { icon: 'checkmark-circle-outline', text: 'Come back and sign in to your account'     },
+                  ]
+                : [
+                    { icon: 'chatbubble-outline',       text: 'Check your SMS for the OTP code'           },
+                    { icon: 'keypad-outline',           text: 'Enter the 6-digit code on the next screen' },
+                    { icon: 'checkmark-circle-outline', text: 'Your account will be created instantly'    },
+                  ];
+              return (
+                <View style={{ gap: sp(3), marginBottom: sp(6), padding: sp(4), backgroundColor: `${accentColor}0D`, borderRadius: radii.lg, borderWidth: 1, borderColor: `${accentColor}22` }}>
+                  {steps.map(({ icon: ico, text }, i) => (
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: sp(3) }}>
+                      <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: `${accentColor}18`, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Ionicons name={ico} size={14} color={accentColor} />
+                      </View>
+                      <Text style={[typo.caption, { color: colors.textSecondary, flex: 1, lineHeight: 18 }]}>{text}</Text>
+                    </View>
+                  ))}
+                </View>
+              );
+            })()}
+
+            {/* Extra note for email */}
+            {isEmail && (
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sp(2), marginBottom: sp(5), padding: sp(3), backgroundColor: `${colors.primary}0A`, borderRadius: radii.md, borderWidth: 1, borderColor: `${colors.primary}18` }}>
+                <Ionicons name="information-circle-outline" size={14} color={colors.primary} style={{ marginTop: 1 }} />
+                <Text style={[typo.caption, { color: colors.textSecondary, flex: 1, fontSize: 11, lineHeight: 16 }]}>
+                  Can't find it? Check your spam or junk folder. The link expires in 24 hours.
+                </Text>
+              </View>
+            )}
+
+            {/* Divider */}
+            <View style={{ height: 1, backgroundColor: colors.divider, marginBottom: sp(5) }} />
+
+            {/* Primary CTA */}
+            <Pressable onPress={onPrimary}
+              style={({ pressed }) => ({ backgroundColor: accentColor, paddingVertical: sp(4), borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: sp(2), opacity: pressed ? 0.88 : 1, transform: pressed ? [{ scale: 0.97 }] : [] })}>
+              <Ionicons name={isEmail ? 'log-in-outline' : 'arrow-forward-outline'} size={18} color="#fff" />
+              <Text style={[typo.body, { color: '#fff', fontWeight: '700' }]}>
+                {isEmail ? 'Go to Sign In' : 'Enter OTP Code'}
+              </Text>
+            </Pressable>
+
+            {/* Secondary action */}
+            {onSecondary && (
+              <Pressable onPress={onSecondary} style={({ pressed }) => ({ marginTop: sp(3), opacity: pressed ? 0.7 : 1 })}>
+                <Text style={[typo.caption, { color: colors.textMuted, textAlign: 'center', fontWeight: '600' }]}>
+                  {isEmail ? 'I\'ll verify later' : 'Change phone number'}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Signup screen
+// ─────────────────────────────────────────────────────────────────────────────
+export default function Signup() {
+  const { width } = useWindowDimensions();
+  const scheme = useColorScheme() || 'light';
+
+  const colors = useMemo(() => ({
+    background:    scheme === 'light' ? '#F8FCFD' : '#0A111A',
+    surfaceAlt:    scheme === 'light' ? '#F4F8FA' : '#222B36',
+    surfaceAlt2:   scheme === 'light' ? '#E8F4F8' : '#1E2A36',
+    textPrimary:   scheme === 'light' ? '#0A111A' : '#EAF2F8',
+    textSecondary: scheme === 'light' ? '#4A6572' : '#A0B4C0',
+    textMuted:     scheme === 'light' ? '#7A919E' : '#7A919E',
+    primary:       '#4A9FC6',
+    error:         '#D32F2F',
+    border:        scheme === 'light' ? 'rgba(10,17,26,0.08)' : 'rgba(234,242,248,0.12)',
+    borderFocus:   '#4A9FC6',
+  }), [scheme]);
+
+  const uiMode = useMemo(() => {
+    if (width <= 479) return 'mobile'; if (width <= 1023) return 'tablet'; return 'desktop';
+  }, [width]);
+  const isMobile = uiMode === 'mobile'; const isDesktop = uiMode === 'desktop';
+
+  // Form state
+  const [inputMode,       setInputMode]       = useState<'email' | 'phone'>('email');
+  const [identifier,      setIdentifier]      = useState('');
+  const [fullName,        setFullName]        = useState('');
+  const [password,        setPassword]        = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPw,          setShowPw]          = useState(false);
+  const [showConfirm,     setShowConfirm]     = useState(false);
+  const [focused,         setFocused]         = useState<string | null>(null);
+  const [isSubmitting,    setIsSubmitting]    = useState(false);
+  const [error,           setError]           = useState<string | null>(null);
+
+  // Modal state
+  const [modalVisible,     setModalVisible]     = useState(false);
+  const [modalType,        setModalType]        = useState<'email' | 'phone'>('email');
+  const [pendingPhone,     setPendingPhone]     = useState('');
+  const [pendingVerifId,   setPendingVerifId]   = useState('');
+  const [pendingEmail,     setPendingEmail]     = useState('');
+
+  // Animations
+  const fadeAnim      = useRef(new Animated.Value(0)).current;
+  const translateAnim = useRef(new Animated.Value(24)).current;
+  const tabSlide      = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(fadeAnim,      { toValue: 1, friction: 9, tension: 50, useNativeDriver: true }),
+      Animated.spring(translateAnim, { toValue: 0, friction: 9, tension: 50, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const switchMode = useCallback((mode: 'email' | 'phone') => {
+    setInputMode(mode); setIdentifier(''); setError(null);
+    Animated.spring(tabSlide, { toValue: mode === 'email' ? 0 : 1, friction: 8, tension: 60, useNativeDriver: false }).start();
+  }, [tabSlide]);
+
+  const tabLeft = tabSlide.interpolate({ inputRange: [0, 1], outputRange: ['2%', '51%'] });
+  const matchState = !confirmPassword ? 'idle' : password === confirmPassword ? 'match' : 'mismatch';
+
+  const validate = useCallback(() => {
+    if (!fullName.trim() || fullName.trim().length < 2)   return 'Please enter your full name.';
+    if (inputMode === 'email') {
+      if (!identifier.trim() || !/\S+@\S+\.\S+/.test(identifier.trim())) return 'Please enter a valid email address.';
+    } else {
+      if (identifier.replace(/\D/g, '').length < 7)       return 'Please enter a valid phone number.';
+    }
+    if (!password.trim() || password.length < 8)          return 'Password must be at least 8 characters.';
+    if (password !== confirmPassword)                      return 'Passwords do not match.';
+    return null;
+  }, [fullName, inputMode, identifier, password, confirmPassword]);
+
+  // ── Submit ─────────────────────────────────────────────────────────────────
+  const handleSignup = useCallback(async () => {
+    const err = validate();
+    if (err) { setError(err); return; }
+    setIsSubmitting(true); setError(null);
+
+    try {
+      if (inputMode === 'email') {
+        // Create account + send verification email
+        await signUpWithEmail(identifier.trim(), password, fullName.trim());
+        setPendingEmail(identifier.trim());
+        setModalType('email');
+        setModalVisible(true);
+      } else {
+        // Send OTP for phone signup
+        const result = await sendPhoneOTP(identifier.trim());
+        setPendingPhone(identifier.trim());
+        setPendingVerifId((result as any).verificationId ?? '');
+        setModalType('phone');
+        setModalVisible(true);
+      }
+    } catch (e: any) {
+      setError(parseFirebaseError(e));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [validate, inputMode, identifier, password, fullName]);
+
+  // ── Modal primary action ───────────────────────────────────────────────────
+  const handleModalPrimary = useCallback(() => {
+    setModalVisible(false);
+    if (modalType === 'email') {
+      router.replace('/login');
+    } else {
+      router.push({
+        pathname: '/verify-code',
+        params: {
+          phone:          pendingPhone,
+          verificationId: pendingVerifId,
+          fullName:       fullName.trim(),
+          mode:           'signup',
+        },
+      });
+    }
+  }, [modalType, pendingPhone, pendingVerifId, fullName]);
+
+  // ── Input helpers ──────────────────────────────────────────────────────────
+  const inp = useCallback((field: string) => ({
+    borderColor:     focused === field ? colors.borderFocus : colors.border,
+    borderWidth:     focused === field ? 1.5 : 1,
+    backgroundColor: colors.surfaceAlt,
+  }), [focused, colors]);
+  const ic = useCallback((field: string) => focused === field ? colors.primary : colors.textMuted, [focused, colors]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
+  return (
+    <View style={[s.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={s.fill} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView style={s.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={[s.scroll, { padding: sp(isDesktop ? 10 : 5) }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <Animated.View style={[s.wrap, { maxWidth: isDesktop ? 1240 : '100%', flexDirection: isDesktop ? 'row' : 'column', gap: sp(6), opacity: fadeAnim, transform: [{ translateY: translateAnim }] }]}>
+
+              {/* ── Desktop sidebar ── */}
+              {isDesktop && (
+                <View style={[s.side, { flex: 1, maxWidth: 520 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                    <Image source={LOGO} style={{ width: 48, height: 48 }} resizeMode="contain" />
+                    <Text style={[typo.hero, { color: colors.textPrimary, marginLeft: sp(3) }]}>THUTO BRIDGE</Text>
+                  </View>
+                  <Text style={[typo.subtitle, { color: colors.textSecondary, marginBottom: sp(5) }]}>
+                    Join a platform built for your educational journey across Botswana.
+                  </Text>
+                  <View style={{ gap: sp(3) }}>
+                    {[
+                      { icon: 'sparkles-outline',    title: 'Personalised Access',       desc: 'Role-based dashboards tailored to you.'             },
+                      { icon: 'lock-closed-outline', title: 'Secure Signup',             desc: 'Quick and safe account creation.'                   },
+                      { icon: 'school-outline',      title: 'University & Course Match', desc: 'Find the right institution for your BGCSE results.' },
+                      { icon: 'ribbon-outline',      title: 'Scholarship Discovery',     desc: 'Bursaries and sponsorships matched to your profile.' },
+                    ].map((b, i) => (
+                      <View key={i} style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: radii.lg, borderWidth: 1, backgroundColor: colors.surfaceAlt2, borderColor: colors.border }}>
+                        <View style={{ width: 38, height: 38, borderRadius: radii.md, backgroundColor: `${colors.primary}22`, alignItems: 'center', justifyContent: 'center' }}>
+                          <Ionicons name={b.icon as any} size={18} color={colors.primary} />
+                        </View>
+                        <View style={{ marginLeft: sp(3), flex: 1 }}>
+                          <Text style={[typo.label, { color: colors.textPrimary }]}>{b.title}</Text>
+                          <Text style={[typo.caption, { color: colors.textMuted, marginTop: 2 }]}>{b.desc}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* ── Form ── */}
+              <View style={[s.form, { flex: 1, maxWidth: isDesktop ? 480 : '100%' }]}>
+                {!isDesktop && (
+                  <View style={{ alignItems: 'center', marginBottom: sp(5) }}>
+                    <Image source={LOGO} style={{ width: 64, height: 64 }} resizeMode="contain" />
+                    <Text style={[typo.title, { color: colors.textPrimary, marginTop: sp(2) }]}>THUTO BRIDGE</Text>
+                  </View>
+                )}
+
+                <Text style={[typo.title, { color: colors.textPrimary, marginBottom: sp(1), textAlign: isMobile ? 'center' : 'left' }]} accessibilityRole="header">
+                  Create Account
+                </Text>
+                <Text style={[typo.subtitle, { color: colors.textSecondary, marginBottom: sp(5), textAlign: isMobile ? 'center' : 'left' }]}>
+                  Start your journey with Thuto Bridge
+                </Text>
+
+                {/* Tabs */}
+                <View style={[s.tabWrap, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                  <Animated.View style={[s.tabBar, { left: tabLeft, width: '48%', backgroundColor: colors.primary }]} />
+                  {(['email', 'phone'] as const).map((m) => (
+                    <Pressable key={m} onPress={() => switchMode(m)} style={s.tab} accessibilityRole="tab">
+                      <Ionicons name={m === 'email' ? 'mail-outline' : 'call-outline'} size={15} color={inputMode === m ? '#fff' : colors.textMuted} />
+                      <Text style={[typo.label, { color: inputMode === m ? '#fff' : colors.textMuted, marginLeft: sp(2), fontSize: 13 }]}>
+                        {m === 'email' ? 'Email' : 'Phone'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                {/* Full name */}
+                <View style={[s.input, { marginTop: sp(4) }, inp('name')]}>
+                  <Ionicons name="person-outline" size={20} color={ic('name')} style={{ marginRight: sp(2) }} />
+                  <TextInput value={fullName} onChangeText={(t) => { setFullName(t); setError(null); }} onFocus={() => setFocused('name')} onBlur={() => setFocused(null)}
+                    placeholder="Full name" placeholderTextColor={colors.textMuted} autoCapitalize="words" autoCorrect={false}
+                    style={[typo.body, { flex: 1, color: colors.textPrimary }]} />
+                  {fullName.length > 0 && <Pressable onPress={() => setFullName('')} hitSlop={8}><Ionicons name="close-circle" size={17} color={colors.textMuted} /></Pressable>}
+                </View>
+
+                {/* Email / Phone identifier */}
+                <View style={[s.input, { marginTop: sp(3) }, inp('id')]}>
+                  <Ionicons name={inputMode === 'email' ? 'mail-outline' : 'call-outline'} size={20} color={ic('id')} style={{ marginRight: sp(2) }} />
+                  <TextInput value={identifier} onChangeText={(t) => { setIdentifier(t); setError(null); }} onFocus={() => setFocused('id')} onBlur={() => setFocused(null)}
+                    placeholder={inputMode === 'email' ? 'Email address' : '71 234 567  or  +267 71 234 567'}
+                    placeholderTextColor={colors.textMuted} keyboardType={inputMode === 'email' ? 'email-address' : 'phone-pad'}
+                    autoCapitalize="none" autoCorrect={false} style={[typo.body, { flex: 1, color: colors.textPrimary }]} />
+                  {identifier.length > 0 && <Pressable onPress={() => setIdentifier('')} hitSlop={8}><Ionicons name="close-circle" size={17} color={colors.textMuted} /></Pressable>}
+                </View>
+
+                {inputMode === 'phone' && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp(2), marginTop: sp(2), paddingHorizontal: sp(1) }}>
+                    <Ionicons name="information-circle-outline" size={13} color={colors.textMuted} />
+                    <Text style={[typo.caption, { color: colors.textMuted, fontSize: 11 }]}>You can enter just the number (71 234 567) — we'll add +267 automatically</Text>
+                  </View>
+                )}
+
+                {/* Password */}
+                <View style={[s.input, { marginTop: sp(3) }, inp('pw')]}>
+                  <Ionicons name="lock-closed-outline" size={20} color={ic('pw')} style={{ marginRight: sp(2) }} />
+                  <TextInput value={password} onChangeText={(t) => { setPassword(t); setError(null); }} onFocus={() => setFocused('pw')} onBlur={() => setFocused(null)}
+                    placeholder="Password" placeholderTextColor={colors.textMuted} secureTextEntry={!showPw} autoCapitalize="none" autoCorrect={false}
+                    style={[typo.body, { flex: 1, color: colors.textPrimary }]} />
+                  <Pressable onPress={() => setShowPw((p) => !p)} hitSlop={8}>
+                    <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
+                  </Pressable>
+                </View>
+                {password.length > 0 && (
+                  <View style={{ paddingHorizontal: sp(1), marginTop: sp(1) }}>
+                    <StrengthBar password={password} borderColor={colors.border} />
+                  </View>
+                )}
+
+                {/* Confirm password */}
+                <View style={[s.input, { marginTop: sp(3), borderColor: matchState === 'match' ? '#34D399' : matchState === 'mismatch' ? colors.error : focused === 'confirm' ? colors.borderFocus : colors.border, borderWidth: focused === 'confirm' || matchState !== 'idle' ? 1.5 : 1, backgroundColor: colors.surfaceAlt }]}>
+                  <Ionicons name="lock-closed-outline" size={20} color={matchState === 'match' ? '#34D399' : matchState === 'mismatch' ? colors.error : ic('confirm')} style={{ marginRight: sp(2) }} />
+                  <TextInput value={confirmPassword} onChangeText={(t) => { setConfirmPassword(t); setError(null); }} onFocus={() => setFocused('confirm')} onBlur={() => setFocused(null)}
+                    placeholder="Confirm password" placeholderTextColor={colors.textMuted} secureTextEntry={!showConfirm} autoCapitalize="none" autoCorrect={false}
+                    style={[typo.body, { flex: 1, color: colors.textPrimary }]} />
+                  {matchState !== 'idle' && <Ionicons name={matchState === 'match' ? 'checkmark-circle' : 'close-circle'} size={18} color={matchState === 'match' ? '#34D399' : colors.error} style={{ marginRight: sp(1) }} />}
+                  <Pressable onPress={() => setShowConfirm((p) => !p)} hitSlop={8}>
+                    <Ionicons name={showConfirm ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
+                  </Pressable>
+                </View>
+                {matchState === 'mismatch' && <Text style={[typo.caption, { color: colors.error,   marginTop: sp(1), paddingHorizontal: sp(1) }]}>Passwords do not match</Text>}
+                {matchState === 'match'    && <Text style={[typo.caption, { color: '#34D399', marginTop: sp(1), paddingHorizontal: sp(1) }]}>Passwords match ✓</Text>}
+
+                {/* Error */}
+                {error && (
+                  <View style={[s.errorBox, { backgroundColor: `${colors.error}10`, borderColor: `${colors.error}22`, marginTop: sp(3) }]}>
+                    <Ionicons name="alert-circle-outline" size={18} color={colors.error} />
+                    <Text style={[typo.caption, { color: colors.error, marginLeft: sp(2), flex: 1, lineHeight: 18 }]}>{error}</Text>
+                  </View>
+                )}
+
+                {/* Terms */}
+                <Text style={[typo.caption, { color: colors.textMuted, textAlign: 'center', marginTop: sp(4), lineHeight: 17, paddingHorizontal: sp(2) }]}>
+                  By signing up you agree to our{' '}
+                  <Text style={{ color: colors.primary, fontWeight: '700' }}>Terms of Service</Text>
+                  {' '}and{' '}
+                  <Text style={{ color: colors.primary, fontWeight: '700' }}>Privacy Policy</Text>
+                </Text>
+
+                {/* Submit */}
+                <Pressable onPress={handleSignup} disabled={isSubmitting}
+                  style={({ pressed }) => [s.btn, { backgroundColor: colors.primary, marginTop: sp(4) }, pressed && { transform: [{ scale: 0.97 }], opacity: 0.92 }, isSubmitting && { opacity: 0.7 }]}
+                  accessibilityRole="button">
+                  {isSubmitting ? <ActivityIndicator color="#fff" /> : (
+                    <Text style={[typo.body, { color: '#fff', fontWeight: '700' }]}>
+                      {inputMode === 'phone' ? 'Send OTP Code' : 'Create Account'}
+                    </Text>
+                  )}
+                </Pressable>
+
+                {/* Login link */}
+                <View style={[s.footer, { marginTop: sp(4) }]}>
+                  <Text style={[typo.caption, { color: colors.textMuted }]}>Already have an account?</Text>
+                  <Pressable onPress={() => router.replace('/login')} hitSlop={8}>
+                    <Text style={[typo.caption, { color: colors.primary, fontWeight: '700', marginLeft: sp(1) }]}>Sign In</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+
+      {/* ── Confirmation Modal ── */}
+      <ConfirmModal
+        visible={modalVisible}
+        type={modalType}
+        email={pendingEmail}
+        phone={pendingPhone}
+        onPrimary={handleModalPrimary}
+        onSecondary={() => setModalVisible(false)}
+      />
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  fill:    { flex: 1 },
   container: { flex: 1 },
-  safeArea: { flex: 1 },
-  scrollContent: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
-  mainWrap: { width: '100%' },
-  sidebar: { padding: spacing(6), borderRadius: radiusScale.xl, backgroundColor: 'transparent' },
-  logoWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
-  benefitsList: { gap: spacing(4) },
-  benefitItem: { flexDirection: 'row', alignItems: 'center', padding: spacing(3), borderRadius: radiusScale.md, backgroundColor: 'rgba(255,255,255,0.05)' },
-  formContainer: { padding: spacing(6), borderRadius: radiusScale.xl, backgroundColor: 'transparent' },
-  inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing(3),
-    borderWidth: 1,
-    borderRadius: radiusScale.md,
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing(3),
-    borderRadius: radiusScale.md,
-    borderWidth: 1,
-    marginTop: spacing(3),
-  },
-  button: {
-    padding: spacing(4),
-    alignItems: 'center',
-    borderRadius: radiusScale.md,
-  },
-  backLink: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: spacing(4) },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing(5),
-  },
-  modalContent: { width: '90%', maxWidth: 400, padding: spacing(5), borderRadius: radiusScale.xl, borderWidth: 1, gap: spacing(2) },
-  roleItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing(4),
-    borderWidth: 1,
-    borderRadius: radiusScale.md,
+  scroll:  { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
+  wrap:    { width: '100%', alignSelf: 'center' },
+  side:    { padding: 24, borderRadius: 20 },
+  form:    { padding: 24, borderRadius: 20 },
+  tabWrap: { flexDirection: 'row', borderRadius: 999, borderWidth: 1, padding: 3, position: 'relative', overflow: 'hidden', height: 48 },
+  tabBar:  { position: 'absolute', top: 3, bottom: 3, borderRadius: 999, zIndex: 0 },
+  tab:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', zIndex: 1, borderRadius: 999 },
+  input:   { flexDirection: 'row', alignItems: 'center', padding: 12, borderWidth: 1, borderRadius: 12, minHeight: 52 },
+  errorBox:{ flexDirection: 'row', alignItems: 'flex-start', padding: 12, borderRadius: 12, borderWidth: 1 },
+  btn:     { padding: 16, alignItems: 'center', borderRadius: 12, minHeight: 52, justifyContent: 'center' },
+  footer:  { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+});
+
+const ms = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  card: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: radii.xl,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.35, shadowRadius: 24 },
+      android: { elevation: 16 },
+      web:     { boxShadow: '0 12px 40px rgba(0,0,0,0.35)' } as any,
+      default: {},
+    }),
   },
 });

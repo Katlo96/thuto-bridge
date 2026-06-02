@@ -3,6 +3,17 @@
     "name": "Thuto Bridge",
     "slug": "thuto-bridge",
     "version": "1.0.0",
-    "plugins": ["expo-router"]
+    "plugins": [
+      "expo-router",
+      "expo-local-authentication"
+    ],
+    "android": {
+      "googleServicesFile": "./google-services.json",
+      "package": "com.katlo96.thutobridge"
+    },
+    "ios": {
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "bundleIdentifier": "com.katlo96.thutobridge"
+    }
   }
 }

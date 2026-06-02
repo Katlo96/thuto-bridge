@@ -11,6 +11,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -34,23 +35,26 @@ const DATA: ApplicationItem[] = [
   { id: '1', university: 'University of Botswana', program: 'Computer Science Program', date: '24 Apr 2026', status: 'Accepted' },
   { id: '2', university: 'University of Botswana', program: 'Computer Science Program', date: '24 Apr 2026', status: 'Rejected' },
   { id: '3', university: 'University of Botswana', program: 'Computer Science Program', date: '24 Apr 2026', status: 'Submitted' },
-  { id: '4', university: 'Botho University', program: 'Computer Science Program', date: '24 Apr 2026', status: 'Under review' },
-  { id: '5', university: 'BAC', program: 'Computer Science Program', date: '24 Apr 2026', status: 'Draft' },
+  { id: '4', university: 'Botho University',        program: 'Computer Science Program', date: '24 Apr 2026', status: 'Under review' },
+  { id: '5', university: 'BAC',                     program: 'Computer Science Program', date: '24 Apr 2026', status: 'Draft' },
 ];
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Main Screen
 // ──────────────────────────────────────────────────────────────────────────────
 function ApplicationsContent() {
-  const colors = useTheme();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [newUniversity, setNewUniversity] = useState('');
-  const [newProgram, setNewProgram] = useState('');
-  const [newDate, setNewDate] = useState('');
+  const colors        = useTheme();
+  const { width }     = useWindowDimensions();
+  const isMobile      = width < 768;
 
-  const selected = useMemo(() => 
-    DATA.find((item) => item.id === selectedId) || null, 
+  const [selectedId,     setSelectedId]     = useState<string | null>(null);
+  const [modalVisible,   setModalVisible]   = useState(false);
+  const [newUniversity,  setNewUniversity]  = useState('');
+  const [newProgram,     setNewProgram]     = useState('');
+  const [newDate,        setNewDate]        = useState('');
+
+  const selected = useMemo(() =>
+    DATA.find((item) => item.id === selectedId) || null,
     [selectedId]
   );
 
@@ -62,11 +66,11 @@ function ApplicationsContent() {
   }, []);
 
   const statusConfig: Record<AppStatus, { bg: string; text: string }> = {
-    Accepted: { bg: 'rgba(52,211,153,0.15)', text: '#34D399' },
-    Rejected: { bg: 'rgba(239,68,68,0.15)', text: '#EF4444' },
-    Submitted: { bg: 'rgba(59,130,246,0.15)', text: '#3B82F6' },
-    'Under review': { bg: 'rgba(251,191,36,0.15)', text: '#FBBF24' },
-    Draft: { bg: 'rgba(107,114,128,0.15)', text: '#6B7280' },
+    Accepted:      { bg: 'rgba(52,211,153,0.15)',  text: '#34D399' },
+    Rejected:      { bg: 'rgba(239,68,68,0.15)',   text: '#EF4444' },
+    Submitted:     { bg: 'rgba(59,130,246,0.15)',  text: '#3B82F6' },
+    'Under review':{ bg: 'rgba(251,191,36,0.15)',  text: '#FBBF24' },
+    Draft:         { bg: 'rgba(107,114,128,0.15)', text: '#6B7280' },
   };
 
   const handleSelect = (id: string) => {
@@ -76,27 +80,26 @@ function ApplicationsContent() {
   const handleViewDetails = (item: ApplicationItem) => {
     router.push({
       pathname: '/student/application-details',
-      params: { 
-        id: item.id,
+      params: {
+        id:         item.id,
         university: item.university,
-        program: item.program,
-        date: item.date,
-        status: item.status,
+        program:    item.program,
+        date:       item.date,
+        status:     item.status,
       },
     });
   };
 
-  const handleNewApplication = () => setModalVisible(true);
+  const handleNewApplication  = () => setModalVisible(true);
+  const closeModal             = () => setModalVisible(false);
 
   const handleSaveApplication = () => {
     Alert.alert('Application Started', 'Your new application has been created (placeholder)');
-    setModalVisible(false);
+    closeModal();
     setNewUniversity('');
     setNewProgram('');
     setNewDate('');
   };
-
-  const closeModal = () => setModalVisible(false);
 
   return (
     <DashboardLayout
@@ -105,17 +108,45 @@ function ApplicationsContent() {
       showPointsCard={false}
     >
       <ScrollView contentContainerStyle={{ paddingBottom: spacing(12) }}>
-        <View style={{ gap: spacing(8) }}>
+        <View style={{ gap: spacing(6) }}>
 
-          {/* Status Chips */}
-          <ScrollView 
-            horizontal 
+          {/* ── Back + breadcrumb ── */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
+            <Pressable
+              onPress={() => router.back()}
+              accessibilityRole="button"
+              style={({ pressed }) => ({
+                flexDirection:   'row'    as const,
+                alignItems:      'center' as const,
+                gap:             spacing(2),
+                paddingHorizontal: spacing(isMobile ? 3 : 4),
+                paddingVertical: spacing(2),
+                borderRadius:    radii.lg,
+                backgroundColor: colors.surfaceAlt,
+                borderWidth:     1,
+                borderColor:     colors.border,
+                opacity:         pressed ? 0.8 : 1,
+              })}
+            >
+              <Ionicons name="arrow-back" size={isMobile ? 15 : 17} color={colors.primary} />
+              <Text style={[typography.label, { color: colors.primary, fontSize: isMobile ? 12 : undefined }]}>
+                Back
+              </Text>
+            </Pressable>
+            <Text style={[typography.caption, { color: colors.textMuted, fontSize: isMobile ? 11 : undefined }]} numberOfLines={1}>
+              Dashboard › Applications
+            </Text>
+          </View>
+
+          {/* ── Status Chips ── */}
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: spacing(3), paddingVertical: spacing(2) }}
           >
             {Object.entries(statusCounts).map(([status, count]) => (
-              <View 
-                key={status} 
+              <View
+                key={status}
                 style={[styles.chip, { backgroundColor: statusConfig[status as AppStatus].bg, borderColor: colors.border }]}
               >
                 <Text style={[typography.label, { color: statusConfig[status as AppStatus].text, fontWeight: '600' }]}>
@@ -125,60 +156,103 @@ function ApplicationsContent() {
             ))}
           </ScrollView>
 
-          {/* Applications Grid */}
-          <View style={styles.grid}>
+          {/* ── Section label ── */}
+          <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, fontSize: isMobile ? 10 : undefined }]}>
+            ALL APPLICATIONS · {DATA.length} FOUND
+          </Text>
+
+          {/* ── 2-column card grid — 48% width works on web & native ── */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3) }}>
             {DATA.map((item) => (
-              <View key={item.id} style={styles.gridItem}>
-                <Pressable
-                  onPress={() => handleSelect(item.id)}
-                  style={({ pressed }) => [
-                    styles.card,
-                    { backgroundColor: colors.surface, borderColor: colors.border },
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <View style={styles.cardHeader}>
-                    <Text style={[typography.bodyStrong, { color: colors.textPrimary, flex: 1 }]} numberOfLines={1}>
+              <Pressable
+                key={item.id}
+                onPress={() => handleSelect(item.id)}
+                style={({ pressed }) => ({
+                  // 48% + flexWrap = 2 columns on every screen size
+                  width:           '48%' as any,
+                  backgroundColor: colors.surface,
+                  borderColor:     selectedId === item.id ? colors.primary : colors.border,
+                  borderWidth:     selectedId === item.id ? 2 : 1,
+                  borderRadius:    radii.xl,
+                  overflow:        'hidden' as const,
+                  opacity:         pressed ? 0.92 : 1,
+                  transform:       pressed ? [{ scale: 0.98 }] : [],
+                  // elevation / shadow
+                  ...Platform.select({
+                    ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 10 },
+                    android: { elevation: 5 },
+                    web:     { boxShadow: '0 4px 16px rgba(0,0,0,0.22)' } as any,
+                    default: {},
+                  }),
+                })}
+              >
+                {/* Status accent bar */}
+                <View style={{ height: 3, backgroundColor: statusConfig[item.status].text }} />
+
+                <View style={{ padding: isMobile ? spacing(3) : spacing(5), gap: isMobile ? spacing(2) : spacing(3) }}>
+                  {/* University + status badge */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing(2) }}>
+                    <Text
+                      style={[typography.bodyStrong, { color: colors.textPrimary, flex: 1, fontSize: isMobile ? 12 : undefined, lineHeight: isMobile ? 17 : undefined }]}
+                      numberOfLines={2}
+                    >
                       {item.university}
                     </Text>
                     <View style={[styles.statusBadge, { backgroundColor: statusConfig[item.status].bg }]}>
-                      <Text style={[typography.caption, { color: statusConfig[item.status].text }]}>
+                      <Text style={[typography.caption, { color: statusConfig[item.status].text, fontSize: isMobile ? 9 : undefined }]}>
                         {item.status}
                       </Text>
                     </View>
                   </View>
 
-                  <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(1) }]} numberOfLines={2}>
+                  {/* Program */}
+                  <Text
+                    style={[typography.body, { color: colors.textSecondary, fontSize: isMobile ? 11 : undefined, lineHeight: isMobile ? 16 : undefined }]}
+                    numberOfLines={2}
+                  >
                     {item.program}
                   </Text>
 
-                  <View style={styles.cardFooter}>
-                    <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
-                    <Text style={[typography.caption, { color: colors.textMuted, marginLeft: spacing(2) }]}>
+                  {/* Date */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1) }}>
+                    <Ionicons name="calendar-outline" size={isMobile ? 11 : 14} color={colors.textMuted} />
+                    <Text style={[typography.caption, { color: colors.textMuted, fontSize: isMobile ? 10 : undefined }]}>
                       {item.date}
                     </Text>
                   </View>
 
+                  {/* View details footer */}
                   <Pressable
                     onPress={() => handleViewDetails(item)}
-                    style={({ pressed }) => [styles.detailsButton, pressed && styles.pressed]}
+                    style={({ pressed }) => ({
+                      flexDirection:  'row'    as const,
+                      alignItems:     'center' as const,
+                      justifyContent: 'space-between' as const,
+                      paddingTop:     spacing(2),
+                      borderTopWidth: 1,
+                      borderTopColor: colors.divider,
+                      opacity:        pressed ? 0.75 : 1,
+                    })}
                   >
-                    <Text style={[typography.label, { color: colors.primary }]}>View Details</Text>
-                    <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                    <Text style={[typography.label, { color: colors.primary, fontSize: isMobile ? 11 : undefined }]}>
+                      View Details
+                    </Text>
+                    <Ionicons name="chevron-forward" size={isMobile ? 13 : 16} color={colors.primary} />
                   </Pressable>
-                </Pressable>
-              </View>
+                </View>
+              </Pressable>
             ))}
           </View>
+
         </View>
       </ScrollView>
 
-      {/* Floating New Button */}
+      {/* ── Floating New Button ── */}
       <Pressable onPress={handleNewApplication} style={styles.floatingButton}>
         <Ionicons name="add" size={24} color="#FFFFFF" />
       </Pressable>
 
-      {/* New Application Modal */}
+      {/* ── New Application Modal ── */}
       <Modal
         visible={modalVisible}
         transparent
@@ -188,7 +262,7 @@ function ApplicationsContent() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <Pressable style={modalStyles.overlay} onPress={closeModal}>
             <Pressable style={[modalStyles.container, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
-              <View style={modalStyles.header}>
+              <View style={[modalStyles.header, { borderBottomColor: colors.divider }]}>
                 <Text style={[typography.h2, { color: colors.textPrimary }]}>New Application</Text>
                 <Pressable onPress={closeModal}>
                   <Ionicons name="close" size={24} color={colors.textSecondary} />
@@ -199,7 +273,7 @@ function ApplicationsContent() {
                 <View style={modalStyles.inputGroup}>
                   <Text style={[typography.label, { color: colors.textSecondary }]}>University / Institution</Text>
                   <TextInput
-                    style={[modalStyles.input, { color: colors.textPrimary, backgroundColor: colors.surfaceAlt }]}
+                    style={[modalStyles.input, { color: colors.textPrimary, backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
                     value={newUniversity}
                     onChangeText={setNewUniversity}
                     placeholder="e.g. University of Botswana"
@@ -210,7 +284,7 @@ function ApplicationsContent() {
                 <View style={modalStyles.inputGroup}>
                   <Text style={[typography.label, { color: colors.textSecondary }]}>Program / Course</Text>
                   <TextInput
-                    style={[modalStyles.input, { color: colors.textPrimary, backgroundColor: colors.surfaceAlt }]}
+                    style={[modalStyles.input, { color: colors.textPrimary, backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
                     value={newProgram}
                     onChangeText={setNewProgram}
                     placeholder="e.g. BSc Computer Science"
@@ -221,7 +295,7 @@ function ApplicationsContent() {
                 <View style={modalStyles.inputGroup}>
                   <Text style={[typography.label, { color: colors.textSecondary }]}>Application Date</Text>
                   <TextInput
-                    style={[modalStyles.input, { color: colors.textPrimary, backgroundColor: colors.surfaceAlt }]}
+                    style={[modalStyles.input, { color: colors.textPrimary, backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
                     value={newDate}
                     onChangeText={setNewDate}
                     placeholder="e.g. 15/05/2026"
@@ -230,8 +304,8 @@ function ApplicationsContent() {
                 </View>
               </View>
 
-              <View style={modalStyles.footer}>
-                <Pressable style={modalStyles.cancelButton} onPress={closeModal}>
+              <View style={[modalStyles.footer, { borderTopColor: colors.divider }]}>
+                <Pressable style={[modalStyles.cancelButton, { backgroundColor: colors.surfaceAlt }]} onPress={closeModal}>
                   <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>Cancel</Text>
                 </Pressable>
                 <Pressable style={modalStyles.saveButton} onPress={handleSaveApplication}>
@@ -250,130 +324,90 @@ function ApplicationsContent() {
 // Styles
 // ──────────────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing(4),
-  },
-  gridItem: {
-    flexBasis: '100%',
-    minWidth: 0,
-  },
   chip: {
     paddingHorizontal: spacing(4),
-    paddingVertical: spacing(2),
-    borderRadius: radii.pill,
-    borderWidth: 1,
-  },
-  card: {
-    padding: spacing(6),
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  pressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.98 }],
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing(2),
+    paddingVertical:   spacing(2),
+    borderRadius:      radii.pill,
+    borderWidth:       1,
   },
   statusBadge: {
-    paddingHorizontal: spacing(3),
-    paddingVertical: spacing(1),
-    borderRadius: radii.pill,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing(4),
-  },
-  detailsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing(5),
-    paddingVertical: spacing(3),
+    paddingHorizontal: spacing(2),
+    paddingVertical:   spacing(1),
+    borderRadius:      radii.pill,
+    flexShrink:        0,
   },
   floatingButton: {
-    position: 'absolute',
-    bottom: spacing(8),
-    right: spacing(8),
-    width: 56,
-    height: 56,
-    borderRadius: 9999,
+    position:        'absolute',
+    bottom:          spacing(8),
+    right:           spacing(8),
+    width:           56,
+    height:          56,
+    borderRadius:    9999,
     backgroundColor: '#3B82F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    alignItems:      'center',
+    justifyContent:  'center',
+    shadowColor:     '#000',
+    shadowOffset:    { width: 0, height: 4 },
+    shadowOpacity:   0.3,
+    shadowRadius:    8,
+    elevation:       8,
   },
 });
 
 const modalStyles = StyleSheet.create({
   overlay: {
-    flex: 1,
+    flex:            1,
     backgroundColor: 'rgba(0,0,0,0.75)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing(6),
+    justifyContent:  'center',
+    alignItems:      'center',
+    padding:         spacing(6),
   },
   container: {
-    width: '90%',
-    maxWidth: 460,
+    width:        '90%',
+    maxWidth:     460,
     borderRadius: radii.xxl,
-    overflow: 'hidden',
+    overflow:     'hidden',
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing(7),
+    flexDirection:     'row',
+    justifyContent:    'space-between',
+    alignItems:        'center',
+    padding:           spacing(7),
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   form: {
     padding: spacing(7),
-    gap: spacing(6),
+    gap:     spacing(6),
   },
   inputGroup: {
     gap: spacing(2),
   },
   input: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderWidth:  1,
     borderRadius: radii.lg,
-    padding: spacing(5),
-    fontSize: 16,
+    padding:      spacing(5),
+    fontSize:     16,
   },
   footer: {
-    flexDirection: 'row',
-    padding: spacing(7),
-    gap: spacing(4),
+    flexDirection:  'row',
+    padding:        spacing(7),
+    gap:            spacing(4),
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
   },
   cancelButton: {
-    flex: 1,
-    height: 52,
-    borderRadius: radii.lg,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
+    flex:           1,
+    height:         52,
+    borderRadius:   radii.lg,
+    alignItems:     'center',
     justifyContent: 'center',
   },
   saveButton: {
-    flex: 1,
-    height: 52,
-    borderRadius: radii.lg,
+    flex:            1,
+    height:          52,
+    borderRadius:    radii.lg,
     backgroundColor: '#3B82F6',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems:      'center',
+    justifyContent:  'center',
   },
 });
 

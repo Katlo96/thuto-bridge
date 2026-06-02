@@ -1,4 +1,7 @@
 import React, { useMemo, useState, useCallback } from 'react';
+import { useEffect } from 'react';
+import { db } from '../../constants/firebase';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import {
   View,
   Text,
@@ -41,50 +44,7 @@ type College = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Data
 // ─────────────────────────────────────────────────────────────────────────────
-const COLLEGES: College[] = [
-  {
-    id: '1',
-    name: 'Botswana Accountancy College',
-    location: 'Gaborone',
-    tagline: 'Excellence in Business Education',
-    badge: 'BAC',
-  },
-  {
-    id: '2',
-    name: 'Gaborone Universal College',
-    location: 'Gaborone',
-    tagline: 'Accessible Quality Education',
-    badge: 'GUC',
-  },
-  {
-    id: '3',
-    name: 'ABM University College',
-    location: 'Gaborone',
-    tagline: 'Professional & Vocational Training',
-    badge: 'ABM',
-  },
-  {
-    id: '4',
-    name: 'Francistown College of Education',
-    location: 'Francistown',
-    tagline: 'Shaping Educators of Tomorrow',
-    badge: 'FCE',
-  },
-  {
-    id: '5',
-    name: 'Lobatse Technical College',
-    location: 'Lobatse',
-    tagline: 'Technical Skills for Modern Industry',
-    badge: 'LTC',
-  },
-  {
-    id: '6',
-    name: 'Selebi-Phikwe College',
-    location: 'Selebi-Phikwe',
-    tagline: 'Community-Focused Higher Learning',
-    badge: 'SPC',
-  },
-];
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Elevation helper
@@ -456,21 +416,80 @@ function CollegesContent() {
   const isMobile = breakpoint === 'mobile';
 
   const [search, setSearch] = useState('');
+const [colleges, setColleges] = useState<College[]>([]);
+const [loading, setLoading] = useState(true);
+
+useEffect(() => {
+  const fetchColleges = async () => {
+    try {
+      setLoading(true);
+
+      const snapshot = await getDocs(collection(db, 'institutions'));
+
+      console.log('TOTAL DOCS:', snapshot.size);
+
+      snapshot.forEach((doc) => {
+        console.log(doc.id, doc.data());
+      });
+
+      const collegesData: College[] = snapshot.docs
+        .filter((doc) => {
+          const data = doc.data();
+
+          return (
+            data.category?.toLowerCase() === 'college'
+          );
+        })
+        .map((doc) => {
+          const data = doc.data();
+
+          return {
+            id: doc.id,
+            name: data.name ?? 'Unnamed College',
+            location: data.location ?? 'Botswana',
+            tagline:
+              data.about ??
+              data.tagline ??
+              'No description available.',
+            badge: data.badge ?? 'COL',
+          };
+        });
+
+      console.log('COLLEGES FOUND:', collegesData.length);
+
+      setColleges(collegesData);
+    } catch (error) {
+      console.error('Failed to load colleges:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchColleges();
+}, []);
+
+
+
+
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return COLLEGES;
-    const q = search.toLowerCase();
-    return COLLEGES.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.location.toLowerCase().includes(q) ||
-        c.tagline.toLowerCase().includes(q)
-    );
-  }, [search]);
+  if (!search.trim()) return colleges;
+
+  const q = search.toLowerCase();
+
+  return colleges.filter(
+    (c) =>
+      c.name.toLowerCase().includes(q) ||
+      c.location.toLowerCase().includes(q) ||
+      c.tagline.toLowerCase().includes(q)
+  );
+}, [search, colleges]);
 
   const handleViewCollege = useCallback((id: string) => {
     router.push({ pathname: '/student/college-details', params: { id } });
   }, []);
+
+  
 
   // ── Desktop Sidebar ────────────────────────────────────────────────────────
   const Sidebar = isDesktop && (
@@ -496,7 +515,7 @@ function CollegesContent() {
           <StatPill
             icon="business-outline"
             label="Total Colleges"
-            value={`${COLLEGES.length}`}
+            value={`${colleges.length}`}
           />
           <StatPill
             icon="search-outline"
@@ -630,7 +649,7 @@ function CollegesContent() {
       }}
     >
       {[
-        { icon: 'business-outline' as const, label: 'Total', value: `${COLLEGES.length}` },
+        { icon: 'business-outline' as const, label: 'Total', value: `${colleges.length}` },
         { icon: 'search-outline' as const, label: 'Results', value: `${filtered.length}` },
         { icon: 'location-outline' as const, label: 'Coverage', value: 'BW' },
       ].map((s) => (

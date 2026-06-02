@@ -1,0 +1,112 @@
+module.exports = [
+  {
+    id: 'uni-001',
+    name: 'University of Batswana',
+    ownership: 'Public',
+    badge: 'UOB',
+    location: 'Gaborone, Botswana',
+    established: 1982,
+    website: 'https://www.uob.ac.bw',
+    about:
+      'Leading national university focused on academic excellence, innovation, research and graduate success.',
+  },
+  {
+    id: 'uni-002',
+    name: 'Kalahari State University',
+    ownership: 'Public',
+    badge: 'KSU',
+    location: 'Ghanzi, Botswana',
+    established: 1994,
+    website: 'https://www.ksu.ac.bw',
+    about:
+      'Premier institution specialising in environmental sciences, agriculture and sustainable development.',
+  },
+  {
+    id: 'uni-003',
+    name: 'Botswana International University',
+    ownership: 'Private',
+    badge: 'BIU',
+    location: 'Gaborone, Botswana',
+    established: 2005,
+    website: 'https://www.biu.ac.bw',
+    about:
+      'Modern private university delivering globally recognised programmes and research opportunities.',
+  },
+  {
+    id: 'uni-004',
+    name: 'Okavango University',
+    ownership: 'Public',
+    badge: 'OU',
+    location: 'Maun, Botswana',
+    established: 1998,
+    website: 'https://www.ou.ac.bw',
+    about:
+      'Known for tourism, conservation, biodiversity and environmental management studies.',
+  },
+  {
+    id: 'uni-005',
+    name: 'Southern Botswana University',
+    ownership: 'Public',
+    badge: 'SBU',
+    location: 'Lobatse, Botswana',
+    established: 1990,
+    website: 'https://www.sbu.ac.bw',
+    about:
+      'Strong reputation in law, public administration and social sciences.',
+  },
+  {
+    id: 'uni-006',
+    name: 'Francicity University',
+    ownership: 'Private',
+    badge: 'FU',
+    location: 'Francistown, Botswana',
+    established: 2008,
+    website: 'https://www.fu.ac.bw',
+    about:
+      'Technology-driven institution focused on digital innovation and entrepreneurship.',
+  },
+  {
+    id: 'uni-007',
+    name: 'Northern Plains University',
+    ownership: 'Public',
+    badge: 'NPU',
+    location: 'Kasane, Botswana',
+    established: 1996,
+    website: 'https://www.npu.ac.bw',
+    about:
+      'Research-intensive university with strengths in ecology and natural resources.',
+  },
+  {
+    id: 'uni-008',
+    name: 'Pioneer University of Botswana',
+    ownership: 'Private',
+    badge: 'PUB',
+    location: 'Gaborone, Botswana',
+    established: 2012,
+    website: 'https://www.pub.ac.bw',
+    about:
+      'Career-focused university delivering industry-aligned academic programmes.',
+  },
+  {
+    id: 'uni-009',
+    name: 'Diamond Valley University',
+    ownership: 'Public',
+    badge: 'DVU',
+    location: 'Jwaneng, Botswana',
+    established: 2001,
+    website: 'https://www.dvu.ac.bw',
+    about:
+      'Specialised institution focused on engineering, mining and industrial sciences.',
+  },
+  {
+    id: 'uni-010',
+    name: 'Thuto National University',
+    ownership: 'Public',
+    badge: 'TNU',
+    location: 'Palapye, Botswana',
+    established: 1988,
+    website: 'https://www.tnu.ac.bw',
+    about:
+      'Comprehensive university offering programmes across multiple academic disciplines.',
+  },
+];

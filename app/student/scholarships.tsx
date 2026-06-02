@@ -192,9 +192,17 @@ function StatPill({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ScholarshipCard
+// ScholarshipCard — uses 48% width for reliable 2-column layout on web + native
 // ─────────────────────────────────────────────────────────────────────────────
-function ScholarshipCard({ scholarship, onPress }: { scholarship: Scholarship; onPress: () => void }) {
+function ScholarshipCard({
+  scholarship,
+  onPress,
+  compact = false,
+}: {
+  scholarship: Scholarship;
+  onPress: () => void;
+  compact?: boolean;
+}) {
   const colors    = useTheme();
   const elevation = useElevation('md');
   const vc        = variantColors(scholarship.variant, colors);
@@ -205,98 +213,109 @@ function ScholarshipCard({ scholarship, onPress }: { scholarship: Scholarship; o
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`View ${scholarship.title}`}
-      style={({ pressed }) => ([
-        {
-          flex: 1,
-          minWidth: 280,
-          backgroundColor: colors.card,
-          borderRadius: radii.xxl,
-          borderWidth: 1,
-          borderColor: colors.border,
-          overflow: 'hidden' as const,
-          opacity: pressed ? 0.9 : 1,
-          transform: pressed ? [{ scale: 0.985 }] : [],
-        },
-        elevation,
-      ])}
+      style={({ pressed }): ViewStyle => ({
+        // 48% width + flexWrap on container = reliable 2-col on web & native
+        width: '48%' as any,
+        ...elevation,
+        backgroundColor: colors.card,
+        borderRadius: radii.xxl,
+        borderWidth: 1,
+        borderColor: colors.border,
+        overflow: 'hidden',
+        opacity: pressed ? 0.9 : 1,
+        transform: pressed ? [{ scale: 0.985 }] : [],
+      })}
     >
       {/* Top accent */}
       <View style={{ height: 3, backgroundColor: vc.text }} />
 
-      <View style={{ padding: spacing(5), gap: spacing(4) }}>
+      <View style={{ padding: compact ? spacing(3) : spacing(5), gap: compact ? spacing(2) : spacing(4) }}>
         {/* Header row */}
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3) }}>
-          {/* Icon bubble */}
-          <View style={{ width: 48, height: 48, borderRadius: radii.xl, backgroundColor: vc.bg, borderWidth: 1, borderColor: vc.border, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Ionicons name={STATUS_ICONS[scholarship.status]} size={22} color={vc.text} />
-          </View>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(2) }}>
+          {/* Icon bubble — hidden on compact to save space */}
+          {!compact && (
+            <View style={{ width: 44, height: 44, borderRadius: radii.xl, backgroundColor: vc.bg, borderWidth: 1, borderColor: vc.border, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Ionicons name={STATUS_ICONS[scholarship.status]} size={20} color={vc.text} />
+            </View>
+          )}
 
           <View style={{ flex: 1 }}>
-            <Text style={[typography.bodyStrong, { color: colors.textPrimary, lineHeight: 22 }]} numberOfLines={2}>
+            <Text
+              style={[typography.bodyStrong, { color: colors.textPrimary, lineHeight: compact ? 17 : 22, fontSize: compact ? 12 : undefined }]}
+              numberOfLines={2}
+            >
               {scholarship.title}
             </Text>
-            <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing(1) }]}>
+            <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing(1), fontSize: compact ? 10 : undefined }]}>
               {scholarship.provider}
             </Text>
           </View>
-
-          {/* Status badge */}
-          <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: vc.bg, borderWidth: 1, borderColor: vc.border, alignSelf: 'flex-start' }}>
-            <Text style={[typography.caption, { color: vc.text, fontWeight: '700', fontSize: 11 }]}>
-              {scholarship.status}
-            </Text>
-          </View>
         </View>
 
-        {/* Description */}
-        <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 20 }]} numberOfLines={2}>
-          {scholarship.description}
-        </Text>
+        {/* Status badge */}
+        <View style={{ alignSelf: 'flex-start', paddingHorizontal: spacing(2), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: vc.bg, borderWidth: 1, borderColor: vc.border }}>
+          <Text style={[typography.caption, { color: vc.text, fontWeight: '700', fontSize: compact ? 9 : 11 }]}>
+            {scholarship.status}
+          </Text>
+        </View>
+
+        {/* Description — hidden on compact */}
+        {!compact && (
+          <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 20 }]} numberOfLines={2}>
+            {scholarship.description}
+          </Text>
+        )}
 
         {/* Meta pills */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: `${colors.primary}14`, borderWidth: 1, borderColor: `${colors.primary}33` }}>
-            <Ionicons name={scholarship.category === 'Local' ? 'location-outline' : 'globe-outline'} size={13} color={colors.primary} />
-            <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{scholarship.category}</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(1) }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1), paddingHorizontal: compact ? spacing(2) : spacing(3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: `${colors.primary}14`, borderWidth: 1, borderColor: `${colors.primary}33` }}>
+            <Ionicons name={scholarship.category === 'Local' ? 'location-outline' : 'globe-outline'} size={compact ? 10 : 13} color={colors.primary} />
+            <Text style={[typography.caption, { color: colors.primary, fontWeight: '700', fontSize: compact ? 9 : undefined }]}>{scholarship.category}</Text>
           </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: isUrgent ? `${colors.danger}14` : colors.surfaceAlt, borderWidth: 1, borderColor: isUrgent ? `${colors.danger}33` : colors.border }}>
-            <Ionicons name="time-outline" size={13} color={isUrgent ? colors.danger : colors.textSecondary} />
-            <Text style={[typography.caption, { color: isUrgent ? colors.danger : colors.textSecondary, fontWeight: '700' }]}>
-              {scholarship.daysLeft <= 0 ? 'Closed' : `${scholarship.daysLeft}d left`}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1), paddingHorizontal: compact ? spacing(2) : spacing(3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: isUrgent ? `${colors.danger}14` : colors.surfaceAlt, borderWidth: 1, borderColor: isUrgent ? `${colors.danger}33` : colors.border }}>
+            <Ionicons name="time-outline" size={compact ? 10 : 13} color={isUrgent ? colors.danger : colors.textSecondary} />
+            <Text style={[typography.caption, { color: isUrgent ? colors.danger : colors.textSecondary, fontWeight: '700', fontSize: compact ? 9 : undefined }]}>
+              {scholarship.daysLeft <= 0 ? 'Closed' : `${scholarship.daysLeft}d`}
             </Text>
           </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: `${colors.success}14`, borderWidth: 1, borderColor: `${colors.success}33` }}>
-            <Ionicons name="cash-outline" size={13} color={colors.success} />
-            <Text style={[typography.caption, { color: colors.success, fontWeight: '700' }]}>{scholarship.amount}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1), paddingHorizontal: compact ? spacing(2) : spacing(3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: `${colors.success}14`, borderWidth: 1, borderColor: `${colors.success}33` }}>
+            <Ionicons name="cash-outline" size={compact ? 10 : 13} color={colors.success} />
+            <Text style={[typography.caption, { color: colors.success, fontWeight: '700', fontSize: compact ? 9 : undefined }]} numberOfLines={1}>
+              {scholarship.amount}
+            </Text>
           </View>
         </View>
 
-        {/* Requirements preview */}
-        <View style={{ gap: spacing(2) }}>
-          {scholarship.requirements.slice(0, 2).map((req, i) => (
+        {/* Requirements preview — show only 1 on compact */}
+        <View style={{ gap: spacing(1) }}>
+          {scholarship.requirements.slice(0, compact ? 1 : 2).map((req, i) => (
             <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(2) }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: vc.text, marginTop: 7, flexShrink: 0 }} />
-              <Text style={[typography.caption, { color: colors.textSecondary, flex: 1, lineHeight: 17 }]}>{req}</Text>
+              <View style={{ width: compact ? 5 : 6, height: compact ? 5 : 6, borderRadius: 3, backgroundColor: vc.text, marginTop: compact ? 6 : 7, flexShrink: 0 }} />
+              <Text style={[typography.caption, { color: colors.textSecondary, flex: 1, lineHeight: compact ? 15 : 17, fontSize: compact ? 10 : undefined }]} numberOfLines={2}>
+                {req}
+              </Text>
             </View>
           ))}
-          {scholarship.requirements.length > 2 && (
-            <Text style={[typography.caption, { color: colors.textMuted }]}>
-              +{scholarship.requirements.length - 2} more requirement{scholarship.requirements.length - 2 > 1 ? 's' : ''}
+          {scholarship.requirements.length > (compact ? 1 : 2) && (
+            <Text style={[typography.caption, { color: colors.textMuted, fontSize: compact ? 9 : undefined }]}>
+              +{scholarship.requirements.length - (compact ? 1 : 2)} more
             </Text>
           )}
         </View>
 
         {/* Footer */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: spacing(3), borderTopWidth: 1, borderTopColor: colors.divider }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
-            <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
-            <Text style={[typography.caption, { color: colors.textMuted }]}>Due {scholarship.deadline}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: spacing(2), borderTopWidth: 1, borderTopColor: colors.divider }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1) }}>
+            <Ionicons name="calendar-outline" size={compact ? 11 : 14} color={colors.textMuted} />
+            <Text style={[typography.caption, { color: colors.textMuted, fontSize: compact ? 9 : undefined }]} numberOfLines={1}>
+              {compact ? scholarship.deadline.split(',')[0] : `Due ${scholarship.deadline}`}
+            </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1) }}>
-            <Text style={[typography.label, { color: colors.primary }]}>View details</Text>
-            <Ionicons name="arrow-forward" size={14} color={colors.primary} />
+            <Text style={[typography.label, { color: colors.primary, fontSize: compact ? 10 : undefined }]}>Details</Text>
+            <Ionicons name="arrow-forward" size={compact ? 11 : 14} color={colors.primary} />
           </View>
         </View>
       </View>
@@ -344,9 +363,9 @@ function SidebarPanel({
   const colors    = useTheme();
   const elevation = useElevation('md');
 
-  const localCount  = scholarships.filter((s) => s.category === 'Local').length;
-  const intlCount   = scholarships.filter((s) => s.category === 'International').length;
-  const urgentCount = scholarships.filter((s) => s.daysLeft <= 7).length;
+  const localCount   = scholarships.filter((s) => s.category === 'Local').length;
+  const intlCount    = scholarships.filter((s) => s.category === 'International').length;
+  const urgentCount  = scholarships.filter((s) => s.daysLeft <= 7).length;
   const qualifyCount = scholarships.filter((s) => s.status === 'You May Qualify').length;
 
   return (
@@ -358,27 +377,19 @@ function SidebarPanel({
           <Text style={[typography.h2, { color: colors.textPrimary }]}>Overview</Text>
 
           <View style={{ gap: spacing(3) }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing(3), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
-                <Ionicons name="ribbon-outline" size={16} color={colors.primary} />
-                <Text style={[typography.body, { color: colors.textSecondary }]}>Total</Text>
+            {[
+              { icon: 'ribbon-outline' as const,           label: 'Total',           value: `${scholarships.length}`, color: colors.primary },
+              { icon: 'checkmark-circle-outline' as const, label: 'You May Qualify', value: `${qualifyCount}`,        color: colors.success },
+              { icon: 'time-outline' as const,             label: 'Urgent',          value: `${urgentCount}`,         color: colors.danger  },
+            ].map(({ icon, label, value, color }) => (
+              <View key={label} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing(3), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
+                  <Ionicons name={icon} size={16} color={color} />
+                  <Text style={[typography.body, { color: colors.textSecondary }]}>{label}</Text>
+                </View>
+                <Text style={[typography.bodyStrong, { color }]}>{value}</Text>
               </View>
-              <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>{scholarships.length}</Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing(3), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
-                <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
-                <Text style={[typography.body, { color: colors.textSecondary }]}>You May Qualify</Text>
-              </View>
-              <Text style={[typography.bodyStrong, { color: colors.success }]}>{qualifyCount}</Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing(3), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
-                <Ionicons name="time-outline" size={16} color={colors.danger} />
-                <Text style={[typography.body, { color: colors.textSecondary }]}>Urgent</Text>
-              </View>
-              <Text style={[typography.bodyStrong, { color: colors.danger }]}>{urgentCount}</Text>
-            </View>
+            ))}
           </View>
 
           <View style={{ height: 1, backgroundColor: colors.divider }} />
@@ -444,27 +455,27 @@ function ScholarshipsContent() {
     router.push('/student/scholarship-details');
   }, []);
 
-  const urgentCount   = SCHOLARSHIPS.filter((s) => s.daysLeft <= 7).length;
-  const qualifyCount  = SCHOLARSHIPS.filter((s) => s.status === 'You May Qualify').length;
-  const localCount    = SCHOLARSHIPS.filter((s) => s.category === 'Local').length;
-  const intlCount     = SCHOLARSHIPS.filter((s) => s.category === 'International').length;
+  const urgentCount  = SCHOLARSHIPS.filter((s) => s.daysLeft <= 7).length;
+  const qualifyCount = SCHOLARSHIPS.filter((s) => s.status === 'You May Qualify').length;
+  const localCount   = SCHOLARSHIPS.filter((s) => s.category === 'Local').length;
+  const intlCount    = SCHOLARSHIPS.filter((s) => s.category === 'International').length;
 
   // ── Hero banner ────────────────────────────────────────────────────────────
   const HeroBanner = (
     <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden', marginBottom: spacing(6) }, elevation]}>
       <View style={{ height: 3, backgroundColor: colors.primary }} />
-      <View style={{ padding: isMobile ? spacing(5) : spacing(7) }}>
+      <View style={{ padding: isMobile ? spacing(4) : spacing(7) }}>
         <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'space-between', gap: spacing(4) }}>
           <View style={{ flex: 1 }}>
             {/* Badge */}
-            <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: `${colors.primary}22`, borderWidth: 1, borderColor: `${colors.primary}44`, marginBottom: spacing(4) }}>
+            <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: `${colors.primary}22`, borderWidth: 1, borderColor: `${colors.primary}44`, marginBottom: spacing(3) }}>
               <Ionicons name="ribbon-outline" size={13} color={colors.primary} />
               <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>SCHOLARSHIPS</Text>
             </View>
-            <Text style={[typography.hero, { color: colors.textPrimary }]}>
+            <Text style={[typography.hero, { color: colors.textPrimary, fontSize: isMobile ? 20 : undefined, lineHeight: isMobile ? 26 : undefined }]}>
               Funding Opportunities
             </Text>
-            <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2), maxWidth: 480, lineHeight: 24 }]}>
+            <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2), maxWidth: 480, lineHeight: 22, fontSize: isMobile ? 13 : undefined }]}>
               Discover scholarships and bursaries suited to your profile. Stay on top of deadlines and explore every opportunity available to you.
             </Text>
           </View>
@@ -479,10 +490,10 @@ function ScholarshipsContent() {
 
         {/* Stats strip */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3), marginTop: spacing(5) }}>
-          <StatPill icon="apps-outline"           label="Total"           value={`${SCHOLARSHIPS.length}`}  color={colors.primary}  />
-          <StatPill icon="checkmark-circle-outline" label="You Qualify"  value={`${qualifyCount}`}          color={colors.success}  />
-          <StatPill icon="time-outline"            label="Urgent"         value={`${urgentCount}`}           color={colors.danger}   />
-          <StatPill icon="location-outline"        label="Local"          value={`${localCount}`}            color={colors.warning}  />
+          <StatPill icon="apps-outline"              label="Total"       value={`${SCHOLARSHIPS.length}`} color={colors.primary} />
+          <StatPill icon="checkmark-circle-outline"  label="You Qualify" value={`${qualifyCount}`}        color={colors.success} />
+          <StatPill icon="time-outline"              label="Urgent"      value={`${urgentCount}`}          color={colors.danger}  />
+          <StatPill icon="location-outline"          label="Local"       value={`${localCount}`}           color={colors.warning} />
         </View>
       </View>
     </View>
@@ -490,7 +501,7 @@ function ScholarshipsContent() {
 
   // ── Category filter strip (mobile/tablet) ──────────────────────────────────
   const FilterStrip = !isDesktop && (
-    <View style={{ flexDirection: 'row', gap: spacing(3), marginBottom: spacing(6), flexWrap: 'wrap' }}>
+    <View style={{ flexDirection: 'row', gap: spacing(2), marginBottom: spacing(5), flexWrap: 'wrap' }}>
       {([
         { key: 'ALL',           label: 'All',           icon: 'apps-outline' as const },
         { key: 'Local',         label: 'Local',         icon: 'location-outline' as const },
@@ -498,30 +509,32 @@ function ScholarshipsContent() {
       ] as { key: Category; label: string; icon: keyof typeof Ionicons.glyphMap }[]).map(({ key, label, icon }) => {
         const active = category === key;
         return (
-          <Pressable key={key} onPress={() => setCategory(key)} style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(4), paddingVertical: spacing(2), borderRadius: radii.pill, borderWidth: 1, borderColor: active ? colors.primary : colors.border, backgroundColor: active ? colors.primary : colors.surfaceAlt, opacity: pressed ? 0.85 : 1 })}>
-            <Ionicons name={icon} size={14} color={active ? '#fff' : colors.textSecondary} />
-            <Text style={[typography.caption, { color: active ? '#fff' : colors.textSecondary, fontWeight: '700' }]}>{label}</Text>
+          <Pressable key={key} onPress={() => setCategory(key)} style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, borderWidth: 1, borderColor: active ? colors.primary : colors.border, backgroundColor: active ? colors.primary : colors.surfaceAlt, opacity: pressed ? 0.85 : 1 })}>
+            <Ionicons name={icon} size={13} color={active ? '#fff' : colors.textSecondary} />
+            <Text style={[typography.caption, { color: active ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: isMobile ? 11 : undefined }]}>{label}</Text>
           </Pressable>
         );
       })}
     </View>
   );
 
-  // ── Card grid ──────────────────────────────────────────────────────────────
+  // ── Card grid — 2 columns on ALL screen sizes via 48% width ───────────────
   const CardGrid = filtered.length === 0
     ? <EmptyState onReset={() => setCategory('ALL')} />
     : (
       <View>
-        <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>
+        <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3), fontSize: isMobile ? 10 : undefined }]}>
           {category === 'ALL' ? 'ALL SCHOLARSHIPS' : category.toUpperCase()}
           {' '}· {filtered.length} FOUND
         </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(4) }}>
+        {/* flexWrap + 48% width = 2-col grid on web & native without measuring */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3) }}>
           {filtered.map((sch) => (
             <ScholarshipCard
               key={sch.id}
               scholarship={sch}
               onPress={() => handleViewScholarship(sch.id)}
+              compact={isMobile}
             />
           ))}
         </View>
@@ -529,8 +542,7 @@ function ScholarshipsContent() {
     );
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Render — DashboardLayout owns: SafeAreaView, scroll, header, sidebar nav,
-  // dark blue theme, and menu button.
+  // Render
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <DashboardLayout
@@ -539,17 +551,17 @@ function ScholarshipsContent() {
       showPointsCard={false}
     >
       {/* Back navigation + breadcrumb */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(5) }}>
         <Pressable
           onPress={() => router.back()}
           accessibilityRole="button"
           accessibilityLabel="Go back"
-          style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(4), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}
+          style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(isMobile ? 3 : 4), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}
         >
-          <Ionicons name="arrow-back" size={17} color={colors.primary} />
-          <Text style={[typography.label, { color: colors.primary }]}>Back</Text>
+          <Ionicons name="arrow-back" size={isMobile ? 15 : 17} color={colors.primary} />
+          <Text style={[typography.label, { color: colors.primary, fontSize: isMobile ? 12 : undefined }]}>Back</Text>
         </Pressable>
-        <Text style={[typography.caption, { color: colors.textMuted }]}>
+        <Text style={[typography.caption, { color: colors.textMuted, fontSize: isMobile ? 11 : undefined }]} numberOfLines={1}>
           Dashboard › Scholarships
         </Text>
       </View>
@@ -557,7 +569,7 @@ function ScholarshipsContent() {
       {/* Desktop two-column; mobile/tablet stacked */}
       <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: spacing(8), alignItems: 'flex-start' }}>
         {/* Main column */}
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           {HeroBanner}
           {FilterStrip}
           {CardGrid}
