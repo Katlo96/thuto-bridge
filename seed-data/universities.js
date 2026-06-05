@@ -7,8 +7,7 @@ module.exports = [
     location: 'Gaborone, Botswana',
     established: 1982,
     website: 'https://www.uob.ac.bw',
-    about:
-      'Leading national university focused on academic excellence, innovation, research and graduate success.',
+    about: 'Leading national university focused on academic excellence, innovation, research and graduate success.',
   },
   {
     id: 'uni-002',
@@ -18,8 +17,7 @@ module.exports = [
     location: 'Ghanzi, Botswana',
     established: 1994,
     website: 'https://www.ksu.ac.bw',
-    about:
-      'Premier institution specialising in environmental sciences, agriculture and sustainable development.',
+    about: 'Premier institution specialising in environmental sciences, agriculture and sustainable development.',
   },
   {
     id: 'uni-003',
@@ -29,8 +27,7 @@ module.exports = [
     location: 'Gaborone, Botswana',
     established: 2005,
     website: 'https://www.biu.ac.bw',
-    about:
-      'Modern private university delivering globally recognised programmes and research opportunities.',
+    about: 'Modern private university delivering globally recognised programmes and research opportunities.',
   },
   {
     id: 'uni-004',
@@ -40,8 +37,7 @@ module.exports = [
     location: 'Maun, Botswana',
     established: 1998,
     website: 'https://www.ou.ac.bw',
-    about:
-      'Known for tourism, conservation, biodiversity and environmental management studies.',
+    about: 'Known for tourism, conservation, biodiversity and environmental management studies.',
   },
   {
     id: 'uni-005',
@@ -51,8 +47,7 @@ module.exports = [
     location: 'Lobatse, Botswana',
     established: 1990,
     website: 'https://www.sbu.ac.bw',
-    about:
-      'Strong reputation in law, public administration and social sciences.',
+    about: 'Strong reputation in law, public administration and social sciences.',
   },
   {
     id: 'uni-006',
@@ -62,8 +57,7 @@ module.exports = [
     location: 'Francistown, Botswana',
     established: 2008,
     website: 'https://www.fu.ac.bw',
-    about:
-      'Technology-driven institution focused on digital innovation and entrepreneurship.',
+    about: 'Technology-driven institution focused on digital innovation and entrepreneurship.',
   },
   {
     id: 'uni-007',
@@ -73,8 +67,7 @@ module.exports = [
     location: 'Kasane, Botswana',
     established: 1996,
     website: 'https://www.npu.ac.bw',
-    about:
-      'Research-intensive university with strengths in ecology and natural resources.',
+    about: 'Research-intensive university with strengths in ecology and natural resources.',
   },
   {
     id: 'uni-008',
@@ -84,8 +77,7 @@ module.exports = [
     location: 'Gaborone, Botswana',
     established: 2012,
     website: 'https://www.pub.ac.bw',
-    about:
-      'Career-focused university delivering industry-aligned academic programmes.',
+    about: 'Career-focused university delivering industry-aligned academic programmes.',
   },
   {
     id: 'uni-009',
@@ -95,8 +87,7 @@ module.exports = [
     location: 'Jwaneng, Botswana',
     established: 2001,
     website: 'https://www.dvu.ac.bw',
-    about:
-      'Specialised institution focused on engineering, mining and industrial sciences.',
+    about: 'Specialised institution focused on engineering, mining and industrial sciences.',
   },
   {
     id: 'uni-010',
@@ -106,7 +97,6 @@ module.exports = [
     location: 'Palapye, Botswana',
     established: 1988,
     website: 'https://www.tnu.ac.bw',
-    about:
-      'Comprehensive university offering programmes across multiple academic disciplines.',
+    about: 'Comprehensive university offering programmes across multiple academic disciplines.',
   },
 ];

@@ -1,270 +1,108 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  useWindowDimensions,
-  Platform,
-  ScrollView,
-  Alert,
-  Modal,
-  TextInput,
-  KeyboardAvoidingView,
-  useColorScheme,
-  type ViewStyle,
-  type TextStyle,
+View,
+Text,
+Pressable,
+useWindowDimensions,
+Platform,
+Alert,
+Modal,
+TextInput,
+KeyboardAvoidingView,
+type ViewStyle,
+ActivityIndicator,
+ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import {
-  StudentMenuProvider,
-  useStudentMenu,
-} from '../../components/student/StudentMenu';
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Design System ────────────────────────────────────────────────────────────────
-// ──────────────────────────────────────────────────────────────────────────────
-
-const BASE_SPACING = 4;
-const spacing = (n: number) => n * BASE_SPACING;
-
-const typography = {
-  hero: { fontSize: 32, lineHeight: 38, fontWeight: '900' as const },
-  title: { fontSize: 24, lineHeight: 30, fontWeight: '800' as const },
-  section: { fontSize: 18, lineHeight: 24, fontWeight: '800' as const },
-  subtitle: { fontSize: 15, lineHeight: 20, fontWeight: '600' as const },
-  body: { fontSize: 15, lineHeight: 22, fontWeight: '500' as const },
-  bodyStrong: { fontSize: 15, lineHeight: 22, fontWeight: '700' as const },
-  label: { fontSize: 13, lineHeight: 18, fontWeight: '700' as const },
-  caption: { fontSize: 12, lineHeight: 16, fontWeight: '600' as const },
-} satisfies Record<string, TextStyle>;
-
-const radii = {
-  xs: spacing(1),
-  sm: spacing(2),
-  md: spacing(3),
-  lg: spacing(4),
-  xl: spacing(6),
-  xxl: spacing(8),
-  pill: 9999,
-};
-
+import { StudentMenuProvider } from '../../components/student/StudentMenu';
+// ─────────────────────────────────────────────────────────────────────────────
+// DashboardLayout & design tokens
+// ─────────────────────────────────────────────────────────────────────────────
+import DashboardLayout, {
+spacing,
+typography,
+radii,
+useTheme,
+} from '../../components/student/DashboardLayout';
+// ─────────────────────────────────────────────────────────────────────────────
+// Firebase
+// ─────────────────────────────────────────────────────────────────────────────
+import { db } from '../../constants/firebase';
+import { doc, getDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 type Breakpoint = 'mobile' | 'tablet' | 'desktop';
+type IconName = keyof typeof Ionicons.glyphMap;
 
-const breakpoints = {
-  mobile: 0,
-  tablet: 480,
-  desktop: 1024,
-} as const;
-
-const MAX_CONTENT_WIDTH = 1240;
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Theme & Elevation ─────────────────────────────────────────────────────────────
-// ──────────────────────────────────────────────────────────────────────────────
-
-type ThemeColors = {
-  background: string;
-  surface: string;
-  surfaceAlt: string;
-  card: string;
-  cardHover: string;
-  primary: string;
-  primaryStrong: string;
-  primarySoft: string;
-  successSoft: string;
-  text: string;
-  textSecondary: string;
-  textTertiary: string;
-  border: string;
-  borderStrong: string;
-  overlay: string;
+type Faculty = {
+  id: string;
+  name: string;
+  institutionId: string;
 };
 
-function useThemeColors() {
-  const scheme = useColorScheme() ?? 'light';
-  return useMemo<ThemeColors>(() => {
-    const isDark = scheme === 'dark';
-    return {
-      background: isDark ? '#0A0F14' : '#F8FAFC',
-      surface: isDark ? '#11181F' : '#FFFFFF',
-      surfaceAlt: isDark ? '#17232F' : '#F1F5F9',
-      card: isDark ? '#15212C' : '#FFFFFF',
-      cardHover: isDark ? '#1E2A38' : '#F8FAFC',
-      primary: '#4FA8C8',
-      primaryStrong: isDark ? '#6BC8E8' : '#2A8BB2',
-      primarySoft: isDark ? 'rgba(79,168,200,0.18)' : 'rgba(79,168,200,0.12)',
-      successSoft: isDark ? 'rgba(52,211,153,0.18)' : 'rgba(52,211,153,0.10)',
-      text: isDark ? '#E2E8F0' : '#0F172A',
-      textSecondary: isDark ? '#94A3B8' : '#475569',
-      textTertiary: isDark ? '#64748B' : '#64748B',
-      border: isDark ? 'rgba(226,232,240,0.08)' : 'rgba(15,23,42,0.08)',
-      borderStrong: isDark ? 'rgba(226,232,240,0.14)' : 'rgba(15,23,42,0.12)',
-      overlay: 'rgba(0,0,0,0.40)',
-    };
-  }, [scheme]);
-}
+type Course = {
+  id: string;
+  title: string;
+  qualificationLevel: string;
+  duration: string;
+  requiredPoints: number;
+  facultyId: string;
+  facultyName?: string;
+};
 
-function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md') {
-  const scheme = useColorScheme() ?? 'light';
-  const isDark = scheme === 'dark';
-
-  return useMemo<ViewStyle>(() => {
-    const opacity = isDark ? 0.35 : 0.12;
-    const radius = intensity === 'sm' ? 6 : intensity === 'md' ? 12 : 20;
-    const offsetY = intensity === 'sm' ? 2 : intensity === 'md' ? 4 : 8;
-
-    return Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: offsetY },
-        shadowOpacity: opacity,
-        shadowRadius: radius,
-      },
-      android: {
-        elevation: intensity === 'sm' ? 3 : intensity === 'md' ? 6 : 12,
-      },
-      web: {
-        boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})`,
-      },
-      default: {},
-    });
-  }, [intensity, isDark]);
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Data ──────────────────────────────────────────────────────────────────────────
-// ──────────────────────────────────────────────────────────────────────────────
-
-type UniCourse = { id: string; title: string; points: number };
-
-type UniversityDetails = {
+type University = {
   id: string;
   name: string;
   location: string;
   website: string;
   badge: string;
   about: string;
-  popularCourses: UniCourse[];
-  scholarships: string[];
+  ownership: string;
+  established: string;
+  accentColor: string;
 };
 
-const UNIVERSITY_DB: Record<string, UniversityDetails> = {
-  ub: {
-    id: 'ub',
-    name: 'University of Botswana',
-    location: 'Gaborone, Botswana',
-    website: 'www.ub.bw',
-    badge: 'UB',
-    about:
-      'The University of Botswana is the premier institution of higher education in Botswana, known for leading in engineering, business, and social sciences.',
-    popularCourses: [
-      { id: 'cs-ub', title: 'BSc Computer Science', points: 36 },
-      { id: 'acct-botho', title: 'Bachelor of Accounting', points: 34 },
-      { id: 'design-luct', title: 'BA Journalism', points: 31 },
-    ],
-    scholarships: ['Government Sponsorship', 'UB Academic Merit Scholarship'],
-  },
-  botho: {
-    id: 'botho',
-    name: 'Botho University',
-    location: 'Gaborone, Botswana',
-    website: 'www.bothouniversity.com',
-    badge: 'BU',
-    about:
-      'Botho University delivers industry-relevant programs with a strong focus on innovation and employability.',
-    popularCourses: [
-      { id: 'acct-botho', title: 'Bachelor of Accounting', points: 34 },
-      { id: 'cs-ub', title: 'BSc Computer Science', points: 36 },
-    ],
-    scholarships: ['Institutional Bursary (varies)', 'Merit-based scholarships'],
-  },
-  biust: {
-    id: 'biust',
-    name: 'BIUST',
-    location: 'Palapye, Botswana',
-    website: 'www.biust.ac.bw',
-    badge: 'BIUST',
-    about:
-      'BIUST focuses on science and technology, with advanced programs in engineering and research-driven innovation.',
-    popularCourses: [{ id: 'eng-biust', title: 'Mechanical Engineering', points: 38 }],
-    scholarships: ['Government Sponsorship'],
-  },
-  limkokwing: {
-    id: 'limkokwing',
-    name: 'Limkokwing University',
-    location: 'Gaborone, Botswana',
-    website: 'www.limkokwing.net',
-    badge: 'LUCT',
-    about:
-      'Limkokwing is known for creative and media programs, combining innovation and practical skills development.',
-    popularCourses: [{ id: 'design-luct', title: 'Digital Media & Design', points: 30 }],
-    scholarships: ['Institutional scholarships (limited)'],
-  },
-};
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Reusable Components ───────────────────────────────────────────────────────────
-// ──────────────────────────────────────────────────────────────────────────────
-
-type IconName = keyof typeof Ionicons.glyphMap;
-
-function IconButton({
-  icon,
-  label,
-  onPress,
-  size = 20,
-  color,
-}: {
-  icon: IconName;
-  label: string;
-  onPress: () => void;
-  size?: number;
-  color: string;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint={`Activates ${label.toLowerCase()}`}
-      style={({ pressed }) => [
-        {
-          width: 44,
-          height: 44,
-          borderRadius: radii.md,
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: pressed ? 0.7 : 1,
-          transform: pressed ? [{ scale: 0.96 }] : [],
-        },
-      ]}
-    >
-      <Ionicons name={icon} size={size} color={color} />
-    </Pressable>
-  );
+// ─────────────────────────────────────────────────────────────────────────────
+// Elevation helper
+// ─────────────────────────────────────────────────────────────────────────────
+function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md'): ViewStyle {
+  return useMemo<ViewStyle>(() => {
+    const opacity = 0.28;
+    const radius = intensity === 'sm' ? 6 : intensity === 'md' ? 14 : 22;
+    const offsetY = intensity === 'sm' ? 2 : intensity === 'md' ? 5 : 10;
+    return (Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: offsetY }, shadowOpacity: opacity, shadowRadius: radius },
+      android: { elevation: intensity === 'sm' ? 3 : intensity === 'md' ? 6 : 12 },
+      web: { boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})` } as any,
+      default: {},
+    }) ?? {}) as ViewStyle;
+  }, [intensity]);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Card
+// ─────────────────────────────────────────────────────────────────────────────
 function Card({
   children,
   style,
   intensity = 'md',
+  accentColor,
 }: {
   children: React.ReactNode;
   style?: ViewStyle;
   intensity?: 'sm' | 'md' | 'lg';
+  accentColor?: string;
 }) {
   const elevation = useElevation(intensity);
-  const colors = useThemeColors();
-
+  const colors = useTheme();
   return (
     <View
       style={[
         {
           backgroundColor: colors.card,
-          borderRadius: radii.xl,
+          borderRadius: radii.xxl,
           borderWidth: 1,
           borderColor: colors.border,
           overflow: 'hidden',
@@ -273,529 +111,646 @@ function Card({
         style,
       ]}
     >
+      {accentColor && <View style={{ height: 3, backgroundColor: accentColor }} />}
       {children}
     </View>
   );
 }
 
-function SectionHeader({ title, icon }: { title: string; icon?: IconName }) {
-  const colors = useThemeColors();
+// ─────────────────────────────────────────────────────────────────────────────
+// SectionLabel + SectionTitle
+// ─────────────────────────────────────────────────────────────────────────────
+function SectionLabel({ title }: { title: string }) {
+  const colors = useTheme();
+  return (
+    <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>
+      {title.toUpperCase()}
+    </Text>
+  );
+}
+
+function SectionTitle({ title, icon }: { title: string; icon?: IconName }) {
+  const colors = useTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(4) }}>
-      {icon && <Ionicons name={icon} size={20} color={colors.primary} />}
-      <Text style={[typography.section, { color: colors.text }]}>{title}</Text>
+      {icon && (
+        <View style={{ width: 36, height: 36, borderRadius: radii.lg, backgroundColor: `${colors.primary}22`, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name={icon} size={18} color={colors.primary} />
+        </View>
+      )}
+      <Text style={[typography.h2, { color: colors.textPrimary }]}>{title}</Text>
     </View>
   );
 }
 
-function MetaItem({
-  icon,
-  label,
-  value,
-}: {
-  icon: IconName;
-  label: string;
-  value: string;
-}) {
-  const colors = useThemeColors();
+// ─────────────────────────────────────────────────────────────────────────────
+// MetaItem
+// ─────────────────────────────────────────────────────────────────────────────
+function MetaItem({ icon, label, value }: { icon: IconName; label: string; value: string }) {
+  const colors = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), paddingVertical: spacing(2) }}>
-      <Ionicons name={icon} size={20} color={colors.primary} />
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), paddingVertical: spacing(2), flex: 1, minWidth: 180 }}>
+      <View style={{ width: 38, height: 38, borderRadius: radii.lg, backgroundColor: `${colors.primary}22`, alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={icon} size={17} color={colors.primary} />
+      </View>
       <View style={{ flex: 1 }}>
         <Text style={[typography.caption, { color: colors.textSecondary }]}>{label}</Text>
-        <Text style={[typography.bodyStrong, { color: colors.text }]}>{value}</Text>
+        <Text style={[typography.bodyStrong, { color: colors.textPrimary, marginTop: 2 }]}>{value}</Text>
       </View>
     </View>
   );
 }
 
-function CourseRow({
-  course,
-  onPress,
-}: {
-  course: { id: string; title: string; points: number };
-  onPress: () => void;
-}) {
-  const colors = useThemeColors();
+// ─────────────────────────────────────────────────────────────────────────────
+// CourseRow
+// ─────────────────────────────────────────────────────────────────────────────
+function CourseRow({ course, onPress }: { course: Course; onPress: () => void }) {
+  const colors = useTheme();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`View ${course.title}`}
-      style={({ pressed }) => [
-        {
-          flexDirection: 'row',
-          alignItems: 'center',
-          padding: spacing(4),
-          backgroundColor: colors.surfaceAlt,
-          borderRadius: radii.lg,
-          borderWidth: 1,
-          borderColor: colors.border,
-          marginBottom: spacing(2),
-          opacity: pressed ? 0.85 : 1,
-          transform: pressed ? [{ scale: 0.98 }] : [],
-        },
-      ]}
+      style={({ pressed }) => ({
+        flexDirection: 'row' as const,
+        alignItems: 'center' as const,
+        padding: spacing(4),
+        backgroundColor: colors.surfaceAlt,
+        borderRadius: radii.lg,
+        borderWidth: 1,
+        borderColor: colors.border,
+        marginBottom: spacing(2),
+        opacity: pressed ? 0.85 : 1,
+        transform: pressed ? [{ scale: 0.98 }] : [],
+      })}
     >
+      <View style={{ width: 40, height: 40, borderRadius: radii.md, backgroundColor: `${colors.primary}22`, alignItems: 'center', justifyContent: 'center', marginRight: spacing(4) }}>
+        <Ionicons name="book-outline" size={18} color={colors.primary} />
+      </View>
       <View style={{ flex: 1 }}>
-        <Text style={[typography.bodyStrong, { color: colors.text }]}>{course.title}</Text>
+        <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>{course.title}</Text>
         <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing(1) }]}>
-          Required points: {course.points}
+          {course.qualificationLevel} • {course.duration} • {course.requiredPoints} points
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+      <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: `${colors.primary}22` }}>
+        <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{course.requiredPoints}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: spacing(3) }} />
     </Pressable>
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Main Screen ───────────────────────────────────────────────────────────────────
-// ──────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Faculty Chip
+// ─────────────────────────────────────────────────────────────────────────────
+function FacultyChip({ name, isActive, onPress }: { name: string; isActive: boolean; onPress: () => void }) {
+  const colors = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        paddingHorizontal: spacing(4),
+        paddingVertical: spacing(2.5),
+        borderRadius: radii.pill,
+        backgroundColor: isActive ? colors.primary : colors.surfaceAlt,
+        borderWidth: 1,
+        borderColor: isActive ? colors.primary : colors.border,
+        opacity: pressed ? 0.9 : 1,
+        marginRight: spacing(2),
+      })}
+    >
+      <Text style={[typography.label, { color: isActive ? '#fff' : colors.textPrimary, fontWeight: isActive ? '700' : '600' }]}>
+        {name}
+      </Text>
+    </Pressable>
+  );
+}
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Note Modal
+// ─────────────────────────────────────────────────────────────────────────────
+function NoteModal({
+  visible,
+  noteText,
+  onChangeText,
+  onClose,
+  onSave,
+}: {
+  visible: boolean;
+  noteText: string;
+  onChangeText: (t: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const colors = useTheme();
+  const elevation = useElevation('lg');
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: spacing(5) }}
+        onPress={onClose}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%', maxWidth: 500 }}>
+          <Pressable
+            style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }, elevation]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={{ height: 3, backgroundColor: colors.primary }} />
+            <View style={{ padding: spacing(6), gap: spacing(5) }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[typography.h2, { color: colors.textPrimary }]}>Add Quick Note</Text>
+                <Pressable onPress={onClose} style={({ pressed }) => ({ width: 40, height: 40, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center' as const, justifyContent: 'center' as const, opacity: pressed ? 0.7 : 1 })}>
+                  <Ionicons name="close" size={20} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+              <TextInput
+                value={noteText}
+                onChangeText={onChangeText}
+                placeholder="e.g. Strong engineering faculty. Compare points with my results..."
+                placeholderTextColor={colors.textMuted}
+                style={{ minHeight: 120, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, padding: spacing(4), backgroundColor: colors.surfaceAlt, color: colors.textPrimary, textAlignVertical: 'top', fontSize: 15 }}
+                multiline
+              />
+              <View style={{ flexDirection: 'row', gap: spacing(3) }}>
+                <Pressable onPress={onClose} style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center' as const, justifyContent: 'center' as const, opacity: pressed ? 0.85 : 1 })}>
+                  <Text style={[typography.label, { color: colors.textPrimary }]}>Cancel</Text>
+                </Pressable>
+                <Pressable onPress={onSave} style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: radii.lg, backgroundColor: colors.primary, alignItems: 'center' as const, justifyContent: 'center' as const, opacity: pressed ? 0.9 : 1 })}>
+                  <Text style={[typography.label, { color: '#fff' }]}>Save Note</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Desktop Sidebar
+// ─────────────────────────────────────────────────────────────────────────────
+function DesktopSidebar({
+  uni,
+  onVisitWebsite,
+  onAddNote,
+}: {
+  uni: University;
+  onVisitWebsite: () => void;
+  onAddNote: () => void;
+}) {
+  const colors = useTheme();
+  const elevation = useElevation('md');
+  return (
+    <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
+      {/* Quick actions card */}
+      <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }, elevation]}>
+        <View style={{ height: 3, backgroundColor: uni.accentColor }} />
+        <View style={{ padding: spacing(6), gap: spacing(3) }}>
+          <SectionLabel title="Actions" />
+          <SectionTitle title="Quick Actions" />
+          <Pressable onPress={onVisitWebsite} style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(3), padding: spacing(4), backgroundColor: colors.primary, borderRadius: radii.lg, opacity: pressed ? 0.9 : 1, transform: pressed ? [{ scale: 0.98 }] : [] })}>
+            <Ionicons name="open-outline" size={18} color="#fff" />
+            <Text style={[typography.label, { color: '#fff' }]}>Visit Website</Text>
+          </Pressable>
+          <Pressable onPress={onAddNote} style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(3), padding: spacing(4), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.9 : 1, transform: pressed ? [{ scale: 0.98 }] : [] })}>
+            <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
+            <Text style={[typography.label, { color: colors.textSecondary }]}>Add Note</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Quick facts */}
+      <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing(6), gap: spacing(1) }, elevation]}>
+        <SectionLabel title="Overview" />
+        <SectionTitle title="Quick Facts" />
+        <MetaItem icon="calendar-outline" label="Established" value={`Est. ${uni.established}`} />
+        <View style={{ height: 1, backgroundColor: colors.divider }} />
+        <MetaItem icon={uni.ownership === 'Public' ? 'business-outline' : 'lock-closed-outline'} label="Institution Type" value={uni.ownership} />
+        <View style={{ height: 1, backgroundColor: colors.divider }} />
+        <MetaItem icon="location-outline" label="Location" value={uni.location} />
+      </View>
+
+      {/* Tip */}
+      <View style={{ padding: spacing(4), backgroundColor: `${colors.primary}14`, borderRadius: radii.xl, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
+        <Text style={[typography.caption, { color: colors.textSecondary, lineHeight: 18 }]}>
+          💡 Tap any course to view detailed entry requirements, career paths, and sponsorship options.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main screen content
+// ─────────────────────────────────────────────────────────────────────────────
 function UniversityDetailsContent() {
   const { width } = useWindowDimensions();
+  const colors = useTheme();
   const params = useLocalSearchParams<{ id?: string }>();
-  const { openMenu } = useStudentMenu();
+  const uniId = typeof params.id === 'string' ? params.id : '';
 
-  // Dynamic id from route: /student/university-details? id=ub or /student/university-details/ub
-  const uniId = typeof params.id === 'string' ? params.id : 'ub';
-  const uni = UNIVERSITY_DB[uniId] ?? UNIVERSITY_DB['ub'];
+  const [university, setUniversity] = useState<University | null>(null);
+  const [faculties, setFaculties] = useState<Faculty[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedFacultyId, setSelectedFacultyId] = useState<string | null>(null);
+  const [noteModalVisible, setNoteModalVisible] = useState(false);
+  const [noteText, setNoteText] = useState('');
 
   const breakpoint = useMemo<Breakpoint>(() => {
-    if (width < breakpoints.tablet) return 'mobile';
-    if (width < breakpoints.desktop) return 'tablet';
+    if (width < 768) return 'mobile';
+    if (width < 1024) return 'tablet';
     return 'desktop';
   }, [width]);
 
   const isMobile = breakpoint === 'mobile';
   const isDesktop = breakpoint === 'desktop';
 
-  const contentWidth = isDesktop ? Math.min(MAX_CONTENT_WIDTH, width - spacing(16)) : width;
+  // Fetch University + Faculties + Courses
+  useEffect(() => {
+    if (!uniId) {
+      setError("University ID not found");
+      setLoading(false);
+      return;
+    }
 
-  const [noteModalVisible, setNoteModalVisible] = useState(false);
-  const [noteText, setNoteText] = useState('');
+    const fetchUniversityData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch University
+        const uniDoc = await getDoc(doc(db, 'institutions', uniId));
+        if (!uniDoc.exists()) {
+          setError("University not found");
+          return;
+        }
+
+        const uniData = uniDoc.data();
+        const accentColor = uniData.ownership === 'Private' ? '#34D399' : '#60A5FA';
+
+        const uni: University = {
+          id: uniDoc.id,
+          name: uniData.name,
+          location: uniData.location,
+          website: uniData.website || '',
+          badge: uniData.badge || 'UNI',
+          about: uniData.about || '',
+          ownership: uniData.ownership || 'Public',
+          established: String(uniData.established || 'N/A'),
+          accentColor,
+        };
+
+        setUniversity(uni);
+
+        // Fetch Faculties
+        const facultiesQuery = query(
+  collection(db, 'faculties'),
+  where('institutionId', '==', uniId)
+);
+        const facultiesSnap = await getDocs(facultiesQuery);
+        const fetchedFaculties = facultiesSnap.docs
+  .map(doc => ({
+    id: doc.id,
+    name: doc.data().name,
+    institutionId: doc.data().institutionId,
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name));
+        setFaculties(fetchedFaculties);
+
+        // Fetch Courses
+        const coursesQuery = query(
+  collection(db, 'courses'),
+  where('institutionId', '==', uniId)
+);
+        const coursesSnap = await getDocs(coursesQuery);
+        const fetchedCourses = coursesSnap.docs
+  .map(doc => {
+    const data = doc.data();
+
+    return {
+      id: doc.id,
+      title: data.title,
+      qualificationLevel: data.qualificationLevel || 'Bachelor Degree',
+      duration: data.duration || '4 Years',
+      requiredPoints: data.requiredPoints || 0,
+      facultyId: data.facultyId,
+    };
+  })
+  .sort((a, b) => a.title.localeCompare(b.title));
+
+  setCourses(fetchedCourses);
+
+  
+
+      } catch (err: any) {
+  console.error('UNIVERSITY DETAILS ERROR:', err);
+
+  setError(
+    err?.message ||
+    JSON.stringify(err) ||
+    'Unknown error'
+  );
+} finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUniversityData();
+  }, [uniId]);
+
+  
+
+  
+
+  const filteredCourses = useMemo(() => {
+    if (!selectedFacultyId) return courses;
+    return courses.filter(course => course.facultyId === selectedFacultyId);
+  }, [courses, selectedFacultyId]);
 
   const handleVisitWebsite = useCallback(() => {
-    Alert.alert('Visit Website', `Would open: ${uni.website}`);
-  }, [uni.website]);
-
-  const handleViewAllCourses = useCallback(() => {
-    router.push('/student/courses');
-  }, []);
+    if (university?.website) {
+      Alert.alert('Visit Website', `Would open: ${university.website}`);
+    } else {
+      Alert.alert('No website available');
+    }
+  }, [university]);
 
   const handleOpenCourse = useCallback((courseId: string) => {
     router.push({ pathname: '/student/course-details', params: { id: courseId } });
   }, []);
 
   const handleSaveNote = useCallback(() => {
-    Alert.alert('Note Saved', 'Your note has been saved (placeholder)');
+    Alert.alert('Note Saved', 'Your note has been saved successfully.');
     setNoteModalVisible(false);
+    setNoteText('');
   }, []);
 
+  const clearFacultyFilter = () => setSelectedFacultyId(null);
+
+  // Loading State
+  if (loading) {
+    return (
+      <DashboardLayout title="University Details" subtitle="Loading..." showPointsCard={false}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing(10) }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(4) }]}>Loading university information...</Text>
+        </View>
+      </DashboardLayout>
+    );
+  }
+
+  if (error || !university) {
+    return (
+      <DashboardLayout title="University Details" subtitle="Error" showPointsCard={false}>
+        <View style={{ padding: spacing(8), alignItems: 'center' }}>
+          <Ionicons name="alert-circle-outline" size={64} color={colors.danger} />
+          <Text style={[typography.h2, { color: colors.textPrimary, marginTop: spacing(4), textAlign: 'center' }]}>{error || 'Failed to load university'}</Text>
+          <Pressable onPress={() => router.back()} style={{ marginTop: spacing(6), paddingHorizontal: spacing(6), paddingVertical: spacing(3), backgroundColor: colors.primary, borderRadius: radii.lg }}>
+            <Text style={[typography.label, { color: '#fff' }]}>Go Back</Text>
+          </Pressable>
+        </View>
+      </DashboardLayout>
+    );
+  }
+
   return (
-    <View style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        {/* Header Bar */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: isDesktop ? spacing(8) : spacing(5),
-            paddingVertical: spacing(4),
-            backgroundColor: useThemeColors().surface,
-            borderBottomWidth: 1,
-            borderBottomColor: useThemeColors().border,
-          }}
-        >
-          <IconButton
-            icon="arrow-back"
-            label="Go back"
+    <>
+      <DashboardLayout
+        title="University Details"
+        subtitle={university.name}
+        showPointsCard={false}
+      >
+        {/* Back + breadcrumb */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
+          <Pressable
             onPress={() => router.back()}
-            color={useThemeColors().text}
-          />
-
-          <View style={{ flex: 1, marginHorizontal: spacing(5) }}>
-            <Text
-              style={[
-                typography.title,
-                { color: useThemeColors().text, textAlign: isDesktop ? 'center' : 'left' },
-              ]}
-            >
-              University Details
-            </Text>
-            <Text
-              style={[
-                typography.caption,
-                { color: useThemeColors().textSecondary, marginTop: spacing(1) },
-              ]}
-              numberOfLines={1}
-            >
-              {uni.name}
-            </Text>
-          </View>
-
-          <IconButton
-            icon="grid-outline"
-            label="Open menu"
-            onPress={openMenu}
-            color={useThemeColors().text}
-          />
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            style={({ pressed }) => ({
+              flexDirection: 'row' as const,
+              alignItems: 'center' as const,
+              gap: spacing(2),
+              paddingHorizontal: spacing(4),
+              paddingVertical: spacing(2),
+              borderRadius: radii.lg,
+              backgroundColor: colors.surfaceAlt,
+              borderWidth: 1,
+              borderColor: colors.border,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Ionicons name="arrow-back" size={17} color={colors.primary} />
+            <Text style={[typography.label, { color: colors.primary }]}>Back</Text>
+          </Pressable>
+          <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]} numberOfLines={1}>
+            Institutions › Universities › {university.badge}
+          </Text>
         </View>
 
-        <ScrollView
-          contentContainerStyle={{
-            padding: isDesktop ? spacing(8) : spacing(5),
-            paddingBottom: isMobile ? spacing(20) : spacing(10),
-            alignItems: 'center',
-          }}
-        >
-          <View style={{ width: contentWidth, maxWidth: '100%' }}>
-            {/* Hero / University Overview Card */}
-            <Card intensity="lg" style={{ marginBottom: spacing(8) }}>
-              <View style={{ padding: spacing(8), gap: spacing(6) }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(4) }}>
-                  <View
-                    style={{
-                      width: 72,
-                      height: 72,
-                      borderRadius: radii.lg,
-                      backgroundColor: useThemeColors().primarySoft,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderWidth: 1,
-                      borderColor: useThemeColors().border,
-                    }}
-                  >
-                    <Text
-                      style={[
-                        typography.hero,
-                        { color: useThemeColors().primaryStrong, fontSize: 32 },
-                      ]}
-                    >
-                      {uni.badge}
-                    </Text>
+        <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: spacing(8), alignItems: 'flex-start' }}>
+          {/* Main Content */}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            {/* Hero Card */}
+            <Card intensity="lg" accentColor={university.accentColor} style={{ marginBottom: spacing(7) }}>
+              <View style={{ padding: isMobile ? spacing(5) : spacing(7), gap: spacing(5) }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) }}>
+                  <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: `${university.accentColor}1A`, borderWidth: 1, borderColor: `${university.accentColor}44` }}>
+                    <Text style={[typography.label, { color: university.accentColor, letterSpacing: 0.4 }]}>{university.badge}</Text>
                   </View>
-
-                  <View style={{ flex: 1 }}>
-                    <Text style={[typography.hero, { color: useThemeColors().text }]}>
-                      {uni.name}
-                    </Text>
-                    <Text
-                      style={[
-                        typography.subtitle,
-                        { color: useThemeColors().textSecondary, marginTop: spacing(1) },
-                      ]}
-                    >
-                      {uni.location}
+                  <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border }}>
+                    <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>
+                      {university.ownership} · Est. {university.established}
                     </Text>
                   </View>
                 </View>
 
-                <Text style={[typography.body, { color: useThemeColors().textSecondary }]}>
-                  {uni.about}
-                </Text>
+                <View>
+                  <Text style={[typography.hero, { color: colors.textPrimary, fontSize: isMobile ? 24 : 32, lineHeight: isMobile ? 30 : 38 }]}>
+                    {university.name}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginTop: spacing(2) }}>
+                    <Ionicons name="location-outline" size={14} color={university.accentColor} />
+                    <Text style={[typography.subtitle, { color: colors.textSecondary }]}>{university.location}</Text>
+                  </View>
+                </View>
 
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(4) }}>
-                  <MetaItem icon="location-outline" label="Location" value={uni.location} />
-                  <MetaItem icon="globe-outline" label="Website" value={uni.website} />
+                <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 24 }]}>{university.about}</Text>
+
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(4), paddingTop: spacing(4), borderTopWidth: 1, borderTopColor: colors.divider }}>
+                  <MetaItem icon="location-outline" label="Location" value={university.location} />
+                  <MetaItem icon="globe-outline" label="Website" value={university.website || 'N/A'} />
                 </View>
               </View>
             </Card>
 
-            {/* Adaptive Layout: Desktop sidebar + main / Mobile stacked */}
-            <View
-              style={{
-                flexDirection: isDesktop ? 'row' : 'column',
-                gap: spacing(8),
-              }}
-            >
-              {/* Sidebar (desktop only) */}
-              {isDesktop && (
-                <View style={{ width: 360, gap: spacing(6) }}>
-                  <Card>
-                    <View style={{ padding: spacing(6) }}>
-                      <SectionHeader title="Quick Actions" />
-                      <View style={{ marginTop: spacing(4), gap: spacing(3) }}>
-                        <Pressable
-                          onPress={handleVisitWebsite}
-                          style={({ pressed }) => [
-                            {
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: spacing(3),
-                              padding: spacing(4),
-                              backgroundColor: useThemeColors().primary,
-                              borderRadius: radii.lg,
-                              opacity: pressed ? 0.9 : 1,
-                              transform: pressed ? [{ scale: 0.98 }] : [],
-                            },
-                          ]}
-                        >
-                          <Ionicons name="open-outline" size={20} color="#fff" />
-                          <Text style={[typography.label, { color: '#fff' }]}>Visit Website</Text>
-                        </Pressable>
+            {/* Faculties Filter */}
+            <Card style={{ marginBottom: spacing(6) }}>
+              <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
+                <SectionLabel title="Faculties" />
+                <SectionTitle title="Browse by Faculty" icon="layers-outline" />
 
-                        <Pressable
-                          onPress={handleViewAllCourses}
-                          style={({ pressed }) => [
-                            {
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: spacing(3),
-                              padding: spacing(4),
-                              backgroundColor: useThemeColors().surfaceAlt,
-                              borderRadius: radii.lg,
-                              borderWidth: 1,
-                              borderColor: useThemeColors().border,
-                              opacity: pressed ? 0.9 : 1,
-                              transform: pressed ? [{ scale: 0.98 }] : [],
-                            },
-                          ]}
-                        >
-                          <Ionicons name="school-outline" size={20} color={useThemeColors().primary} />
-                          <Text style={[typography.label, { color: useThemeColors().primary }]}>
-                            View All Courses
-                          </Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  </Card>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: spacing(2) }}
+                >
+                  <FacultyChip
+                    name="All Faculties"
+                    isActive={selectedFacultyId === null}
+                    onPress={clearFacultyFilter}
+                  />
+                  {faculties.map((faculty) => (
+                    <FacultyChip
+                      key={faculty.id}
+                      name={faculty.name}
+                      isActive={selectedFacultyId === faculty.id}
+                      onPress={() => setSelectedFacultyId(faculty.id)}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            </Card>
 
-                  <Card>
-                    <View style={{ padding: spacing(6) }}>
-                      <SectionHeader title="Scholarships" icon="ribbon-outline" />
-                      <View style={{ marginTop: spacing(4), gap: spacing(3) }}>
-                        {uni.scholarships.map((s, i) => (
-                          <Text key={i} style={[typography.body, { color: useThemeColors().textSecondary }]}>
-                            • {s}
-                          </Text>
-                        ))}
-                      </View>
-                    </View>
-                  </Card>
-                </View>
-              )}
+            {/* Courses Section */}
+            <Card style={{ marginBottom: spacing(6) }}>
+              <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
+                <SectionLabel title="Programmes" />
+                <SectionTitle title="Courses" icon="school-outline" />
 
-              {/* Main Content */}
-              <View style={{ flex: 1, gap: spacing(8) }}>
-                <Card>
-                  <View style={{ padding: spacing(8) }}>
-                    <SectionHeader title="Popular Courses" icon="flame-outline" />
-                    <View style={{ marginTop: spacing(4), gap: spacing(3) }}>
-                      {uni.popularCourses.map((course) => (
-                        <CourseRow
-                          key={course.id}
-                          course={course}
-                          onPress={() => handleOpenCourse(course.id)}
-                        />
-                      ))}
-                    </View>
+                <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing(4) }]}>
+                  {filteredCourses.length} course{filteredCourses.length !== 1 ? 's' : ''} found
+                </Text>
+
+                {filteredCourses.length === 0 ? (
+                  <View style={{ padding: spacing(8), alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radii.xl }}>
+                    <Ionicons name="book-outline" size={48} color={colors.textMuted} />
+                    <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(3), textAlign: 'center' }]}>
+                      No courses found in this faculty.
+                    </Text>
                   </View>
-                </Card>
-
-                {!isMobile && (
-                  <Card>
-                    <View style={{ padding: spacing(8) }}>
-                      <SectionHeader title="Quick Note" icon="create-outline" />
-                      <Text
-                        style={[
-                          typography.body,
-                          { color: useThemeColors().textSecondary, marginTop: spacing(3) },
-                        ]}
-                      >
-                        Add a short note to remember important details about this university.
-                      </Text>
-                      <Pressable
-                        onPress={() => setNoteModalVisible(true)}
-                        style={({ pressed }) => [
-                          {
-                            marginTop: spacing(4),
-                            padding: spacing(4),
-                            backgroundColor: useThemeColors().surfaceAlt,
-                            borderRadius: radii.lg,
-                            borderWidth: 1,
-                            borderColor: useThemeColors().border,
-                            alignItems: 'center',
-                            opacity: pressed ? 0.9 : 1,
-                          },
-                        ]}
-                      >
-                        <Text style={[typography.label, { color: useThemeColors().primary }]}>
-                          Add Note
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </Card>
+                ) : (
+                  <View style={{ gap: spacing(2) }}>
+                    {filteredCourses.map((course) => (
+                      <CourseRow
+                        key={course.id}
+                        course={course}
+                        onPress={() => handleOpenCourse(course.id)}
+                      />
+                    ))}
+                  </View>
                 )}
               </View>
-            </View>
-          </View>
-        </ScrollView>
+            </Card>
 
-        {/* Mobile Sticky Bar */}
-        {isMobile && (
-          <View
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              flexDirection: 'row',
-              padding: spacing(5),
-              backgroundColor: useThemeColors().surface,
-              borderTopWidth: 1,
-              borderTopColor: useThemeColors().border,
-              gap: spacing(4),
-            }}
-          >
-            <Pressable
-              onPress={handleVisitWebsite}
-              style={({ pressed }) => [
-                {
-                  flex: 1,
-                  height: 52,
-                  borderRadius: radii.lg,
-                  backgroundColor: useThemeColors().surfaceAlt,
-                  borderWidth: 1,
-                  borderColor: useThemeColors().border,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <Text style={[typography.label, { color: useThemeColors().text }]}>Website</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={handleViewAllCourses}
-              style={({ pressed }) => [
-                {
-                  flex: 2,
-                  height: 52,
-                  borderRadius: radii.lg,
-                  backgroundColor: useThemeColors().primary,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: pressed ? 0.9 : 1,
-                },
-              ]}
-            >
-              <Text style={[typography.label, { color: '#fff' }]}>View Courses</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* Note Modal */}
-        <Modal
-          visible={noteModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setNoteModalVisible(false)}
-        >
-          <Pressable
-            style={{
-              flex: 1,
-              backgroundColor: useThemeColors().overlay,
-              justifyContent: 'center',
-              alignItems: 'center',
-              padding: spacing(6),
-            }}
-            onPress={() => setNoteModalVisible(false)}
-          >
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={{ width: '100%', maxWidth: 500 }}
-            >
-              <Pressable
-                style={{
-                  backgroundColor: useThemeColors().surface,
-                  borderRadius: radii.xl,
-                  padding: spacing(6),
-                  gap: spacing(5),
-                }}
-                onPress={(e) => e.stopPropagation()}
-              >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={[typography.section, { color: useThemeColors().text }]}>
-                    Add Quick Note
+            {/* Quick Note for non-desktop */}
+            {!isDesktop && (
+              <Card style={{ marginBottom: spacing(6) }}>
+                <View style={{ padding: spacing(6) }}>
+                  <SectionLabel title="Personal" />
+                  <SectionTitle title="Quick Note" icon="create-outline" />
+                  <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing(4) }]}>
+                    Save important details about this university for later.
                   </Text>
-                  <IconButton
-                    icon="close"
-                    label="Close note modal"
-                    onPress={() => setNoteModalVisible(false)}
-                    color={useThemeColors().textSecondary}
-                  />
-                </View>
-
-                <TextInput
-                  value={noteText}
-                  onChangeText={setNoteText}
-                  placeholder="e.g. Check scholarship deadlines and compare with my points..."
-                  placeholderTextColor={useThemeColors().textSecondary}
-                  style={{
-                    minHeight: 120,
-                    borderRadius: radii.lg,
-                    borderWidth: 1,
-                    borderColor: useThemeColors().border,
-                    padding: spacing(4),
-                    backgroundColor: useThemeColors().surfaceAlt,
-                    color: useThemeColors().text,
-                    textAlignVertical: 'top',
-                  }}
-                  multiline
-                />
-
-                <View style={{ flexDirection: 'row', gap: spacing(4) }}>
                   <Pressable
-                    onPress={() => setNoteModalVisible(false)}
-                    style={({ pressed }) => [
-                      {
-                        flex: 1,
-                        height: 52,
-                        borderRadius: radii.lg,
-                        backgroundColor: useThemeColors().surfaceAlt,
-                        borderWidth: 1,
-                        borderColor: useThemeColors().border,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: pressed ? 0.85 : 1,
-                      },
-                    ]}
+                    onPress={() => setNoteModalVisible(true)}
+                    style={({ pressed }) => ({
+                      padding: spacing(4),
+                      backgroundColor: colors.surfaceAlt,
+                      borderRadius: radii.lg,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      alignItems: 'center',
+                      opacity: pressed ? 0.9 : 1,
+                    })}
                   >
-                    <Text style={[typography.label, { color: useThemeColors().text }]}>Cancel</Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={handleSaveNote}
-                    style={({ pressed }) => [
-                      {
-                        flex: 1,
-                        height: 52,
-                        borderRadius: radii.lg,
-                        backgroundColor: useThemeColors().primary,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: pressed ? 0.9 : 1,
-                      },
-                    ]}
-                  >
-                    <Text style={[typography.label, { color: '#fff' }]}>Save Note</Text>
+                    <Text style={[typography.label, { color: colors.primary }]}>Add Personal Note</Text>
                   </Pressable>
                 </View>
-              </Pressable>
-            </KeyboardAvoidingView>
+              </Card>
+            )}
+          </View>
+
+          {/* Desktop Sidebar */}
+          {isDesktop && (
+            <DesktopSidebar
+              uni={university}
+              onVisitWebsite={handleVisitWebsite}
+              onAddNote={() => setNoteModalVisible(true)}
+            />
+          )}
+        </View>
+      </DashboardLayout>
+
+      {/* Mobile Sticky Bar */}
+      {isMobile && (
+        <View style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          flexDirection: 'row',
+          padding: spacing(5),
+          paddingBottom: spacing(8),
+          backgroundColor: colors.surface,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+          gap: spacing(3),
+        }}>
+          <Pressable
+            onPress={handleVisitWebsite}
+            style={({ pressed }) => ({
+              flex: 1,
+              height: 52,
+              borderRadius: radii.lg,
+              backgroundColor: colors.surfaceAlt,
+              borderWidth: 1,
+              borderColor: colors.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={[typography.label, { color: colors.textPrimary }]}>Website</Text>
           </Pressable>
-        </Modal>
-      </SafeAreaView>
-    </View>
+          <Pressable
+            onPress={() => {}}
+            style={({ pressed }) => ({
+              flex: 2,
+              height: 52,
+              borderRadius: radii.lg,
+              backgroundColor: colors.primary,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'row' as const,
+              gap: spacing(2),
+              opacity: pressed ? 0.9 : 1,
+            })}
+          >
+            <Ionicons name="school-outline" size={18} color="#fff" />
+            <Text style={[typography.label, { color: '#fff' }]}>Explore Courses</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Note Modal */}
+      <NoteModal
+        visible={noteModalVisible}
+        noteText={noteText}
+        onChangeText={setNoteText}
+        onClose={() => setNoteModalVisible(false)}
+        onSave={handleSaveNote}
+      />
+    </>
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Exported Screen (with Provider wrapper) ──────────────────────────────────────
-// ──────────────────────────────────────────────────────────────────────────────
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Exported Screen
+// ─────────────────────────────────────────────────────────────────────────────
 export default function UniversityDetailsScreen() {
   return (
     <StudentMenuProvider>

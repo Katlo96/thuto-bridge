@@ -747,6 +747,29 @@ useEffect(() => {
     </View>
   );
 
+  if (loading) {
+    return (
+      <DashboardLayout
+        title="Colleges"
+        subtitle="Explore colleges across Botswana"
+        showPointsCard={false}
+      >
+        <Text
+          style={[
+            typography.body,
+            {
+              color: colors.textSecondary,
+              textAlign: 'center',
+              marginTop: spacing(10),
+            },
+          ]}
+        >
+          Loading colleges...
+        </Text>
+      </DashboardLayout>
+    );
+  }
+
   // ── Card grid ──────────────────────────────────────────────────────────────
   const Grid =
     filtered.length === 0 ? (
