@@ -8,6 +8,11 @@ const brigades = require('./brigades');
 
 const SERVICE_ACCOUNT_PATH = path.join(__dirname, '..', 'thuto-bridge-d4d15-firebase-adminsdk-fbsvc-b06e51d1d4.json');
 
+console.log('📊 Total Institutions to seed:', 
+  universities.length, 'universities +', 
+  colleges.length, 'colleges +', 
+  brigades.length, 'brigades');
+
 if (!fs.existsSync(SERVICE_ACCOUNT_PATH)) {
   console.error(`❌ Service account not found: ${SERVICE_ACCOUNT_PATH}`);
   process.exit(1);
@@ -21447,7 +21452,7 @@ const BRIGADE_FACULTIES = {
 
 
 
-// Seeding Functions (Updated to use the new data)
+// ====================== SEED UNIVERSITIES ======================
 async function seedUniversities() {
   for (const institution of universities) {
     await safeSet(db.collection('institutions').doc(institution.id), {
@@ -21462,6 +21467,7 @@ async function seedUniversities() {
 
     for (const [facultyName, courses] of Object.entries(facultiesData)) {
       const facultyId = `${institution.id}-fac-${String(facultyCounter++).padStart(3,'0')}`;
+      
       await safeSet(db.collection('faculties').doc(facultyId), {
         id: facultyId,
         institutionId: institution.id,
@@ -21474,6 +21480,7 @@ async function seedUniversities() {
       let c = 1;
       for (const course of courses) {
         const courseId = `${facultyId}-course-${String(c++).padStart(3,'0')}`;
+        
         await safeSet(db.collection('courses').doc(courseId), {
           id: courseId,
           institutionId: institution.id,
@@ -21490,7 +21497,8 @@ async function seedUniversities() {
             subjectRequirements: course.subjects.map(([subject, grade]) => ({ subject, minimumGrade: grade })),
             englishRequired: true
           },
-          careerPaths: ['Professional roles in the field'],
+          careers: course.careers || [],     // ← Main field
+          about: course.about || '',
           createdAt: admin.firestore.Timestamp.now(),
           updatedAt: admin.firestore.Timestamp.now(),
         });
@@ -21499,7 +21507,7 @@ async function seedUniversities() {
   }
 }
 
-// Similar functions for colleges and brigades (same logic as original)
+// ====================== SEED COLLEGES ======================
 async function seedColleges() {
   for (const institution of colleges) {
     await safeSet(db.collection('institutions').doc(institution.id), {
@@ -21514,6 +21522,7 @@ async function seedColleges() {
 
     for (const [facultyName, courses] of Object.entries(facultiesData)) {
       const facultyId = `${institution.id}-fac-${String(facultyCounter++).padStart(3,'0')}`;
+      
       await safeSet(db.collection('faculties').doc(facultyId), {
         id: facultyId,
         institutionId: institution.id,
@@ -21526,6 +21535,7 @@ async function seedColleges() {
       let c = 1;
       for (const course of courses) {
         const courseId = `${facultyId}-course-${String(c++).padStart(3,'0')}`;
+        
         await safeSet(db.collection('courses').doc(courseId), {
           id: courseId,
           institutionId: institution.id,
@@ -21542,7 +21552,8 @@ async function seedColleges() {
             subjectRequirements: course.subjects.map(([subject, grade]) => ({ subject, minimumGrade: grade })),
             englishRequired: true
           },
-          careerPaths: ['Skilled professional roles'],
+          careers: course.careers || [],
+          about: course.about || '',
           createdAt: admin.firestore.Timestamp.now(),
           updatedAt: admin.firestore.Timestamp.now(),
         });
@@ -21551,6 +21562,7 @@ async function seedColleges() {
   }
 }
 
+// ====================== SEED BRIGADES ======================
 async function seedBrigades() {
   for (const institution of brigades) {
     await safeSet(db.collection('institutions').doc(institution.id), {
@@ -21566,6 +21578,7 @@ async function seedBrigades() {
 
     for (const [facultyName, courses] of Object.entries(facultiesData)) {
       const facultyId = `${institution.id}-fac-${String(facultyCounter++).padStart(3,'0')}`;
+      
       await safeSet(db.collection('faculties').doc(facultyId), {
         id: facultyId,
         institutionId: institution.id,
@@ -21578,6 +21591,7 @@ async function seedBrigades() {
       let c = 1;
       for (const course of courses) {
         const courseId = `${facultyId}-course-${String(c++).padStart(3,'0')}`;
+        
         await safeSet(db.collection('courses').doc(courseId), {
           id: courseId,
           institutionId: institution.id,
@@ -21594,7 +21608,8 @@ async function seedBrigades() {
             subjectRequirements: course.subjects.map(([subject, grade]) => ({ subject, minimumGrade: grade })),
             englishRequired: true
           },
-          careerPaths: ['Skilled artisan roles'],
+          careers: course.careers || [],
+          about: course.about || '',
           createdAt: admin.firestore.Timestamp.now(),
           updatedAt: admin.firestore.Timestamp.now(),
         });
@@ -21605,15 +21620,24 @@ async function seedBrigades() {
 
 async function seedAll() {
   try {
-    console.log('🚀 Starting full realistic seed with 10 faculties × 10 courses each...');
+    console.log('🚀 Starting fresh seeding process...\n');
+
     await seedUniversities();
+    console.log('✅ Universities seeded successfully');
+
     await seedColleges();
+    console.log('✅ Colleges seeded successfully');
+
     await seedBrigades();
-    await commitBatch();
-    console.log('🎉 SUCCESS - All institutions seeded successfully!');
+    console.log('✅ Brigades seeded successfully');
+
+    await commitBatch();        // Important: Final commit
+    console.log('\n🎉 ALL DATA SEEDED SUCCESSFULLY!');
+
   } catch (error) {
-    console.error('❌ Seeding error:', error);
+    console.error('❌ Seeding failed with error:', error);
   }
 }
 
+// Run it
 seedAll();

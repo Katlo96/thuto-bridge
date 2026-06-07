@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
   View,
@@ -170,11 +171,11 @@ function CourseRow({ course, onPress }: { course: Course; onPress: () => void })
       <View style={{ flex: 1 }}>
         <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>{course.title}</Text>
         <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing(1) }]}>
-          {course.qualificationLevel} • {course.duration} • {course.requiredPoints} points
+          {course.qualificationLevel} • {course.duration}
         </Text>
       </View>
       <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: `${colors.primary}22` }}>
-        <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{course.requiredPoints}</Text>
+        <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{course.requiredPoints} pts</Text>
       </View>
       <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: spacing(3) }} />
     </Pressable>
@@ -280,6 +281,10 @@ function BrigadeDetailsContent() {
   const [noteModalVisible, setNoteModalVisible] = useState(false);
   const [noteText, setNoteText] = useState('');
 
+  // Pagination State
+  const INITIAL_VISIBLE_COUNT = 6;
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
+
   const breakpoint = useMemo<Breakpoint>(() => (width < 768 ? 'mobile' : width < 1024 ? 'tablet' : 'desktop'), [width]);
   const isMobile = breakpoint === 'mobile';
   const isDesktop = breakpoint === 'desktop';
@@ -297,7 +302,6 @@ function BrigadeDetailsContent() {
         setLoading(true);
         setError(null);
 
-        // Fetch Brigade
         const brigadeDoc = await getDoc(doc(db, 'institutions', brigadeId));
         if (!brigadeDoc.exists()) {
           setError("Brigade not found");
@@ -305,7 +309,7 @@ function BrigadeDetailsContent() {
         }
 
         const data = brigadeDoc.data();
-        const accentColor = '#34D399'; // Brigades usually use green accent
+        const accentColor = '#34D399'; 
 
         const brigadeData: Brigade = {
           id: brigadeDoc.id,
@@ -320,7 +324,6 @@ function BrigadeDetailsContent() {
         };
         setBrigade(brigadeData);
 
-        // Fetch Faculties
         const facultiesQuery = query(collection(db, 'faculties'), where('institutionId', '==', brigadeId));
         const facultiesSnap = await getDocs(facultiesQuery);
         const fetchedFaculties = facultiesSnap.docs
@@ -332,7 +335,6 @@ function BrigadeDetailsContent() {
           .sort((a, b) => a.name.localeCompare(b.name));
         setFaculties(fetchedFaculties);
 
-        // Fetch Courses
         const coursesQuery = query(collection(db, 'courses'), where('institutionId', '==', brigadeId));
         const coursesSnap = await getDocs(coursesQuery);
         const fetchedCourses = coursesSnap.docs
@@ -365,6 +367,16 @@ function BrigadeDetailsContent() {
     return courses.filter((c) => c.facultyId === selectedFacultyId);
   }, [courses, selectedFacultyId]);
 
+  const displayedCourses = useMemo(() => {
+    return filteredCourses.slice(0, visibleCount);
+  }, [filteredCourses, visibleCount]);
+
+  const hasMore = filteredCourses.length > visibleCount;
+
+  const handleLoadMore = () => {
+    setVisibleCount((prev) => prev + INITIAL_VISIBLE_COUNT);
+  };
+
   const handleVisitWebsite = () => {
     if (brigade?.website) {
       Alert.alert('Visit Website', `Would open: ${brigade.website}`);
@@ -383,7 +395,10 @@ function BrigadeDetailsContent() {
     setNoteText('');
   };
 
-  const clearFacultyFilter = () => setSelectedFacultyId(null);
+  const handleFacultySelect = (id: string | null) => {
+      setSelectedFacultyId(id);
+      setVisibleCount(INITIAL_VISIBLE_COUNT);
+  }
 
   if (loading) {
     return (
@@ -425,12 +440,11 @@ function BrigadeDetailsContent() {
         </View>
 
         <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: spacing(8) }}>
-          {/* Main Content */}
           <View style={{ flex: 1, minWidth: 0 }}>
             {/* Hero Card */}
             <Card intensity="lg" accentColor={brigade.accentColor} style={{ marginBottom: spacing(7) }}>
               <View style={{ padding: isMobile ? spacing(5) : spacing(7), gap: spacing(5) }}>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: spacing(2) }}>
                   <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: `${brigade.accentColor}1A`, borderWidth: 1, borderColor: `${brigade.accentColor}44` }}>
                     <Text style={[typography.label, { color: brigade.accentColor }]}>{brigade.badge}</Text>
                   </View>
@@ -439,7 +453,7 @@ function BrigadeDetailsContent() {
                       {brigade.ownership} • Est. {brigade.established}
                     </Text>
                   </View>
-                </View>
+                </div>
 
                 <Text style={[typography.hero, { color: colors.textPrimary, fontSize: isMobile ? 24 : 32, lineHeight: isMobile ? 30 : 38 }]}>
                   {brigade.name}
@@ -465,13 +479,13 @@ function BrigadeDetailsContent() {
                 <SectionLabel title="Training Areas" />
                 <SectionTitle title="Browse by Faculty" icon="layers-outline" />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing(2) }}>
-                  <FacultyChip name="All Faculties" isActive={selectedFacultyId === null} onPress={clearFacultyFilter} />
+                  <FacultyChip name="All" isActive={selectedFacultyId === null} onPress={() => handleFacultySelect(null)} />
                   {faculties.map((faculty) => (
                     <FacultyChip
                       key={faculty.id}
                       name={faculty.name}
                       isActive={selectedFacultyId === faculty.id}
-                      onPress={() => setSelectedFacultyId(faculty.id)}
+                      onPress={() => handleFacultySelect(faculty.id)}
                     />
                   ))}
                 </ScrollView>
@@ -481,25 +495,51 @@ function BrigadeDetailsContent() {
             {/* Courses Section */}
             <Card style={{ marginBottom: spacing(6) }}>
               <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
-                <SectionLabel title="Programmes" />
-                <SectionTitle title="Courses" icon="school-outline" />
-                <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing(4) }]}>
-                  {filteredCourses.length} course{filteredCourses.length !== 1 ? 's' : ''} found
-                </Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing(1) }}>
+                    <SectionLabel title="Programmes" />
+                    <Text style={[typography.caption, { color: colors.textMuted }]}>
+                        {displayedCourses.length} of {filteredCourses.length}
+                    </Text>
+                </View>
+                <SectionTitle title="Courses Offered" icon="school-outline" />
 
                 {filteredCourses.length === 0 ? (
                   <View style={{ padding: spacing(8), alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radii.xl }}>
                     <Ionicons name="book-outline" size={48} color={colors.textMuted} />
                     <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(3), textAlign: 'center' }]}>
-                      No courses found in this training area.
+                      No courses found.
                     </Text>
                   </View>
                 ) : (
-                  <View style={{ gap: spacing(2) }}>
-                    {filteredCourses.map((course) => (
-                      <CourseRow key={course.id} course={course} onPress={() => handleOpenCourse(course.id)} />
-                    ))}
-                  </View>
+                  <>
+                    <View style={{ gap: spacing(2) }}>
+                      {displayedCourses.map((course) => (
+                        <CourseRow key={course.id} course={course} onPress={() => handleOpenCourse(course.id)} />
+                      ))}
+                    </View>
+
+                    {hasMore && (
+                      <Pressable 
+                        onPress={handleLoadMore} 
+                        style={({ pressed }) => ({
+                          marginTop: spacing(6),
+                          paddingVertical: spacing(4),
+                          backgroundColor: colors.surfaceAlt,
+                          borderRadius: radii.lg,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexDirection: 'row',
+                          gap: spacing(2),
+                          opacity: pressed ? 0.8 : 1
+                        })}
+                      >
+                        <Text style={[typography.label, { color: colors.primary }]}>Load More Courses</Text>
+                        <Ionicons name="chevron-down" size={16} color={colors.primary} />
+                      </Pressable>
+                    )}
+                  </>
                 )}
               </View>
             </Card>
@@ -522,6 +562,16 @@ function BrigadeDetailsContent() {
                   </Pressable>
                 </View>
               </Card>
+            </View>
+          )}
+
+          {/* Mobile Actions */}
+          {isMobile && (
+            <View style={{ gap: spacing(3), marginBottom: spacing(10) }}>
+                 <Pressable onPress={handleVisitWebsite} style={({ pressed }) => ({ height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing(3), backgroundColor: colors.primary, borderRadius: radii.xl, opacity: pressed ? 0.9 : 1 })}>
+                    <Ionicons name="open-outline" size={20} color="#fff" />
+                    <Text style={[typography.bodyStrong, { color: '#fff' }]}>Official Website</Text>
+                </Pressable>
             </View>
           )}
         </View>
@@ -549,3 +599,4 @@ export default function BrigadeDetailsScreen() {
     </StudentMenuProvider>
   );
 }
+

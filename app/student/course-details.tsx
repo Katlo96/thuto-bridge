@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
   View,
@@ -50,7 +51,7 @@ type Course = {
   institutionId: string;
   facultyId: string;
   entryRequirements?: string[];
-  careerPaths?: string[];
+  careers?: string[];
 };
 
 type Institution = {
@@ -211,8 +212,12 @@ function CourseDetailsContent() {
           about: c.about || 'No detailed description available.',
           institutionId: c.institutionId,
           facultyId: c.facultyId,
-          entryRequirements: c.entryRequirements?.subjectRequirements?.map((s: any) => `${s.subject} - Minimum ${s.minimumGrade}`) || ['Meet minimum entry points'],
-          careerPaths: c.careerPaths || ['Various career opportunities'],
+          entryRequirements: c.entryRequirements?.subjectRequirements?.map(
+            (s: any) => `${s.subject} - Minimum ${s.minimumGrade}`
+          ) || ['Meet minimum entry points'],
+          careers: Array.isArray(c.careers) && c.careers.length > 0
+            ? c.careers
+            : ['Various career opportunities'],
         };
         setCourse(courseData);
 
@@ -358,13 +363,13 @@ function CourseDetailsContent() {
               </View>
             </Card>
 
-            {/* Career Pathways */}
+            {/* Careers */}
             <Card style={{ marginBottom: spacing(6) }}>
               <View style={{ padding: spacing(6) }}>
                 <SectionLabel title="Future Opportunities" />
-                <SectionTitle title="Career Pathways" icon="briefcase-outline" />
+                <SectionTitle title="Careers" icon="briefcase-outline" />
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) }}>
-                  {(course.careerPaths || ['Excellent career prospects']).map((career, idx) => (
+                  {(course.careers || ['Excellent career prospects']).map((career, idx) => (
                     <View key={idx} style={{ paddingHorizontal: spacing(4), paddingVertical: spacing(2), backgroundColor: colors.surfaceAlt, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border }}>
                       <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '600' }]}>{career}</Text>
                     </View>
@@ -422,3 +427,5 @@ export default function CourseDetailsScreen() {
     </StudentMenuProvider>
   );
 }
+
+

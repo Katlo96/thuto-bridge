@@ -76,8 +76,13 @@ const DEFAULTS = {
 function allowedTracksForLevel(level: Level): Track[] {
   return level === 'BGCSE' ? ['PURE', 'DOUBLE', 'SINGLE'] : ['ADVANCED', 'ORDINARY'];
 }
+
+// ── Optional subjects bumped from 3 → 4 (Pure / Double / Single) ──────────────
+// Pure:   6 prefilled + 4 optional = 10 slots
+// Double: 4 prefilled + 4 optional = 8 slots
+// Single: 4 prefilled + 4 optional = 8 slots
 function requiredSubjectSlots(level: Level, track: Track): number {
-  if (level === 'BGCSE') return track === 'PURE' ? 9 : 7;
+  if (level === 'BGCSE') return track === 'PURE' ? 10 : 8;
   return track === 'ADVANCED' ? 9 : 7;
 }
 function defaultsForSelection(level: Level, track: Track): readonly string[] {
@@ -149,20 +154,69 @@ function pickBestSix(rows: ResultRow[]) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Elevation helper
+// Elevation helper — softer, modern shadows
 // ─────────────────────────────────────────────────────────────────────────────
 function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md'): ViewStyle {
   return useMemo<ViewStyle>(() => {
-    const opacity = 0.28;
-    const radius  = intensity === 'sm' ? 6 : intensity === 'md' ? 14 : 22;
-    const offsetY = intensity === 'sm' ? 2 : intensity === 'md' ? 5 : 10;
+    const opacity = intensity === 'sm' ? 0.08 : intensity === 'md' ? 0.12 : 0.18;
+    const radius  = intensity === 'sm' ? 10 : intensity === 'md' ? 20 : 34;
+    const offsetY = intensity === 'sm' ? 3 : intensity === 'md' ? 8 : 16;
     return Platform.select({
-      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: offsetY }, shadowOpacity: opacity, shadowRadius: radius },
-      android: { elevation: intensity === 'sm' ? 3 : intensity === 'md' ? 6 : 12 },
-      web:     { boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})` } as any,
+      ios:     { shadowColor: '#0B1220', shadowOffset: { width: 0, height: offsetY }, shadowOpacity: opacity, shadowRadius: radius },
+      android: { elevation: intensity === 'sm' ? 2 : intensity === 'md' ? 5 : 10 },
+      web:     { boxShadow: `0 ${offsetY}px ${radius * 1.4}px rgba(11,18,32,${opacity})` } as any,
       default: {},
     }) ?? {};
   }, [intensity]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Accent bar (gradient-style header strip)
+// ─────────────────────────────────────────────────────────────────────────────
+function AccentBar({ color, tall = false }: { color: string; tall?: boolean }) {
+  return (
+    <View style={{ height: tall ? 5 : 4, flexDirection: 'row', overflow: 'hidden' }}>
+      <View style={{ flex: 2, backgroundColor: color }} />
+      <View style={{ flex: 1, backgroundColor: `${color}AA` }} />
+      <View style={{ flex: 1, backgroundColor: `${color}55` }} />
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Card shell
+// ─────────────────────────────────────────────────────────────────────────────
+function Card({
+  children,
+  accent,
+  style,
+  intensity = 'lg',
+}: {
+  children: React.ReactNode;
+  accent?: string;
+  style?: ViewStyle;
+  intensity?: 'sm' | 'md' | 'lg';
+}) {
+  const colors = useTheme();
+  const elevation = useElevation(intensity);
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: colors.surface,
+          borderRadius: radii.xxl,
+          borderWidth: 1,
+          borderColor: colors.border,
+          overflow: 'hidden',
+        },
+        elevation,
+        style,
+      ]}
+    >
+      {accent ? <AccentBar color={accent} /> : null}
+      {children}
+    </View>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -182,21 +236,29 @@ function StatCard({
   compact?: boolean;
 }) {
   const colors = useTheme();
+  const accent =
+    tone === 'primary' ? colors.primary
+    : tone === 'success' ? colors.success
+    : colors.textSecondary;
   const bg =
-    tone === 'primary' ? `${colors.primary}22`
-    : tone === 'success' ? `${colors.success}22`
+    tone === 'primary' ? `${colors.primary}14`
+    : tone === 'success' ? `${colors.success}14`
     : colors.surfaceAlt;
+  const borderColor =
+    tone === 'primary' ? `${colors.primary}33`
+    : tone === 'success' ? `${colors.success}33`
+    : colors.border;
 
   return (
     <View
       style={{
         flex: 1,
-        minWidth: compact ? 0 : 140,
+        minWidth: compact ? 0 : 150,
         backgroundColor: bg,
         borderRadius: radii.lg,
         borderWidth: 1,
-        borderColor: colors.border,
-        padding: compact ? spacing(3) : spacing(3),
+        borderColor,
+        padding: spacing(3),
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing(2),
@@ -204,29 +266,60 @@ function StatCard({
     >
       <View
         style={{
-          width: compact ? 30 : 36,
-          height: compact ? 30 : 36,
+          width: compact ? 34 : 40,
+          height: compact ? 34 : 40,
           borderRadius: radii.md,
-          backgroundColor: colors.surface,
+          backgroundColor: tone === 'neutral' ? colors.surface : `${accent}22`,
           borderWidth: 1,
-          borderColor: colors.border,
+          borderColor: tone === 'neutral' ? colors.border : `${accent}44`,
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
         }}
       >
-        <Ionicons name={icon} size={compact ? 13 : 16} color={colors.textPrimary} />
+        <Ionicons name={icon} size={compact ? 15 : 18} color={accent} />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[typography.caption, { color: colors.textMuted, fontSize: compact ? 10 : 11 }]} numberOfLines={1}>
+        <Text style={[typography.caption, { color: colors.textMuted, fontSize: compact ? 10 : 11, letterSpacing: 0.3 }]} numberOfLines={1}>
           {label}
         </Text>
         <Text
-          style={[typography.label, { color: colors.textPrimary, marginTop: 1, fontSize: compact ? 12 : 13 }]}
+          style={[typography.label, { color: colors.textPrimary, marginTop: 1, fontSize: compact ? 13 : 14, fontWeight: '800' }]}
           numberOfLines={1}
         >
           {value}
         </Text>
+      </View>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Progress ring (mobile hero)
+// ─────────────────────────────────────────────────────────────────────────────
+function ProgressBar({ completed, total, colors }: { completed: number; total: number; colors: any }) {
+  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const done = pct === 100;
+  return (
+    <View style={{ marginBottom: spacing(5) }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing(2) }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
+          <Ionicons name={done ? 'checkmark-circle' : 'hourglass-outline'} size={14} color={done ? colors.success : colors.primary} />
+          <Text style={[typography.caption, { color: colors.textSecondary }]}>Completion</Text>
+        </View>
+        <Text style={[typography.caption, { color: done ? colors.success : colors.textPrimary, fontWeight: '800' }]}>
+          {completed}/{total} · {pct}%
+        </Text>
+      </View>
+      <View style={{ height: 10, backgroundColor: colors.surfaceAlt, borderRadius: radii.pill, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
+        <View
+          style={{
+            height: '100%',
+            width: `${pct}%`,
+            backgroundColor: done ? colors.success : colors.primary,
+            borderRadius: radii.pill,
+          }}
+        />
       </View>
     </View>
   );
@@ -248,14 +341,15 @@ function GradePickerModal({
 }) {
   const colors    = useTheme();
   const elevation = useElevation('lg');
-  const grades    = activeRow && isDoubleAward(activeRow.subject) ? GRADES_DOUBLE : GRADES_STANDARD;
+  const isDouble  = activeRow ? isDoubleAward(activeRow.subject) : false;
+  const grades    = isDouble ? GRADES_DOUBLE : GRADES_STANDARD;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable
         style={{
           flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.6)',
+          backgroundColor: 'rgba(8,12,22,0.62)',
           justifyContent: 'flex-end',
           ...Platform.select({ web: { justifyContent: 'center', alignItems: 'center', padding: spacing(5) } }),
         }}
@@ -270,32 +364,31 @@ function GradePickerModal({
               borderWidth: 1,
               borderColor: colors.border,
               overflow: 'hidden',
-              paddingBottom: spacing(8), // safe area clearance
+              paddingBottom: spacing(9),
             },
             Platform.select({
-              web: {
-                width: '90%',
-                maxWidth: 420,
-                borderRadius: radii.xxl,
-              } as any,
+              web: { width: '92%', maxWidth: 440, borderRadius: radii.xxl } as any,
             }),
             elevation,
           ]}
           onPress={(e) => e.stopPropagation()}
         >
-          {/* Drag handle */}
           {Platform.OS !== 'web' && (
             <View style={{ alignItems: 'center', paddingTop: spacing(3), paddingBottom: spacing(1) }}>
-              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
+              <View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: colors.border }} />
             </View>
           )}
 
-          <View style={{ height: 3, backgroundColor: colors.primary }} />
+          <AccentBar color={colors.primary} />
 
           <View style={{ padding: spacing(5) }}>
-            {/* Header */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing(3) }}>
-              <Text style={[typography.h2, { color: colors.textPrimary }]}>Select Grade</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
+                <View style={{ width: 40, height: 40, borderRadius: radii.lg, backgroundColor: `${colors.primary}1A`, borderWidth: 1, borderColor: `${colors.primary}33`, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="ribbon-outline" size={20} color={colors.primary} />
+                </View>
+                <Text style={[typography.h2, { color: colors.textPrimary }]}>Select Grade</Text>
+              </View>
               <Pressable
                 onPress={onClose}
                 style={({ pressed }) => ({
@@ -311,35 +404,34 @@ function GradePickerModal({
             </View>
 
             {activeRow?.subject ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), backgroundColor: `${colors.primary}14`, borderRadius: radii.lg, borderLeftWidth: 3, borderLeftColor: colors.primary, marginBottom: spacing(4) }}>
-                <Ionicons name="book-outline" size={14} color={colors.primary} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(3), backgroundColor: `${colors.primary}12`, borderRadius: radii.lg, borderLeftWidth: 3, borderLeftColor: colors.primary, marginBottom: spacing(4) }}>
+                <Ionicons name={isDouble ? 'flask-outline' : 'book-outline'} size={15} color={colors.primary} />
                 <Text style={[typography.caption, { color: colors.textSecondary, flex: 1 }]} numberOfLines={1}>
-                  {activeRow.subject} —{' '}
-                  {isDoubleAward(activeRow.subject) ? 'Double Award scale' : 'Standard scale'}
+                  {activeRow.subject} — {isDouble ? 'Double Award scale' : 'Standard scale'}
                 </Text>
               </View>
             ) : null}
 
             {/* Grade grid */}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginBottom: spacing(4) }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2.5), marginBottom: spacing(4) }}>
               {grades.map((g) => (
                 <Pressable
                   key={g}
                   onPress={() => onSelect(g as Grade)}
                   style={({ pressed }) => ({
-                    minWidth: 64,
-                    paddingHorizontal: spacing(4),
+                    flexGrow: 1,
+                    flexBasis: '28%',
+                    minWidth: 72,
                     paddingVertical: spacing(4),
                     borderRadius: radii.lg,
-                    backgroundColor: colors.surfaceAlt,
-                    borderWidth: 1,
-                    borderColor: colors.border,
+                    backgroundColor: pressed ? `${colors.primary}1A` : colors.surfaceAlt,
+                    borderWidth: 1.5,
+                    borderColor: pressed ? colors.primary : colors.border,
                     alignItems: 'center' as const,
-                    opacity: pressed ? 0.8 : 1,
                     transform: pressed ? [{ scale: 0.96 }] : [],
                   })}
                 >
-                  <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 16 }]}>{g}</Text>
+                  <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 18, fontWeight: '800' }]}>{g}</Text>
                 </Pressable>
               ))}
             </View>
@@ -349,9 +441,9 @@ function GradePickerModal({
               style={({ pressed }) => ({
                 padding: spacing(4),
                 borderRadius: radii.lg,
-                backgroundColor: colors.surfaceAlt,
+                backgroundColor: `${colors.danger}10`,
                 borderWidth: 1,
-                borderColor: colors.border,
+                borderColor: `${colors.danger}33`,
                 alignItems: 'center' as const,
                 opacity: pressed ? 0.8 : 1,
                 flexDirection: 'row' as const,
@@ -359,8 +451,8 @@ function GradePickerModal({
                 gap: spacing(2),
               })}
             >
-              <Ionicons name="backspace-outline" size={16} color={colors.textMuted} />
-              <Text style={[typography.label, { color: colors.textMuted }]}>Clear Grade</Text>
+              <Ionicons name="backspace-outline" size={16} color={colors.danger} />
+              <Text style={[typography.label, { color: colors.danger }]}>Clear Grade</Text>
             </Pressable>
           </View>
         </Pressable>
@@ -387,12 +479,12 @@ function ConfirmModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: spacing(5) }}
+        style={{ flex: 1, backgroundColor: 'rgba(8,12,22,0.62)', justifyContent: 'center', alignItems: 'center', padding: spacing(5) }}
         onPress={onClose}
       >
         <Pressable
           style={[{
-            width: '92%', maxWidth: 420,
+            width: '94%', maxWidth: 430,
             backgroundColor: colors.surface,
             borderRadius: radii.xxl,
             borderWidth: 1, borderColor: colors.border,
@@ -400,22 +492,22 @@ function ConfirmModal({
           }, elevation]}
           onPress={(e) => e.stopPropagation()}
         >
-          <View style={{ height: 3, backgroundColor: colors.primary }} />
+          <AccentBar color={colors.primary} />
           <View style={{ padding: spacing(6), gap: spacing(4) }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
-              <View style={{ width: 44, height: 44, borderRadius: radii.lg, backgroundColor: `${colors.primary}22`, borderWidth: 1, borderColor: `${colors.primary}44`, alignItems: 'center', justifyContent: 'center' }}>
-                <Ionicons name="calculator-outline" size={22} color={colors.primary} />
+              <View style={{ width: 48, height: 48, borderRadius: radii.lg, backgroundColor: `${colors.primary}1A`, borderWidth: 1, borderColor: `${colors.primary}44`, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="calculator-outline" size={24} color={colors.primary} />
               </View>
               <Text style={[typography.h2, { color: colors.textPrimary, flex: 1 }]}>Confirm Calculation</Text>
             </View>
             <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 22 }]}>
-              We will automatically select your best 6 subjects. Science Double Award counts as 2 subjects when included.
+              We'll automatically select your best 6 subjects. Science Double Award counts as 2 subjects when included.
             </Text>
             <View style={{ flexDirection: 'row', gap: spacing(3), marginTop: spacing(2) }}>
               <Pressable
                 onPress={onClose}
                 style={({ pressed }) => ({
-                  flex: 1, height: 52, borderRadius: radii.lg,
+                  flex: 1, height: 54, borderRadius: radii.lg,
                   backgroundColor: colors.surfaceAlt,
                   borderWidth: 1, borderColor: colors.border,
                   alignItems: 'center' as const, justifyContent: 'center' as const,
@@ -427,12 +519,16 @@ function ConfirmModal({
               <Pressable
                 onPress={onConfirm}
                 style={({ pressed }) => ({
-                  flex: 1, height: 52, borderRadius: radii.lg,
+                  flex: 1, height: 54, borderRadius: radii.lg,
                   backgroundColor: colors.primary,
+                  flexDirection: 'row' as const,
                   alignItems: 'center' as const, justifyContent: 'center' as const,
+                  gap: spacing(2),
                   opacity: pressed ? 0.9 : 1,
+                  transform: pressed ? [{ scale: 0.98 }] : [],
                 })}
               >
+                <Ionicons name="flash" size={16} color="#fff" />
                 <Text style={[typography.label, { color: '#fff' }]}>Calculate</Text>
               </Pressable>
             </View>
@@ -458,13 +554,17 @@ function ResultsModal({
   const colors    = useTheme();
   const elevation = useElevation('lg');
   const eligible  = calculation?.eligible ?? false;
+  const tone      = eligible ? colors.success : colors.danger;
+  const total     = calculation?.totalPoints ?? 0;
+  const threshold = calculation?.threshold ?? 36;
+  const pct       = Math.min(100, Math.round((total / threshold) * 100));
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable
         style={{
           flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.65)',
+          backgroundColor: 'rgba(8,12,22,0.66)',
           justifyContent: 'flex-end',
           ...Platform.select({ web: { justifyContent: 'center', alignItems: 'center', padding: spacing(5) } }),
         }}
@@ -479,31 +579,29 @@ function ResultsModal({
               borderWidth: 1,
               borderColor: colors.border,
               overflow: 'hidden',
-              maxHeight: '90%',
+              maxHeight: '92%',
               paddingBottom: spacing(8),
             },
             Platform.select({
-              web: { width: '92%', maxWidth: 480, borderRadius: radii.xxl, maxHeight: '85%' } as any,
+              web: { width: '94%', maxWidth: 500, borderRadius: radii.xxl, maxHeight: '88%' } as any,
             }),
             elevation,
           ]}
           onPress={(e) => e.stopPropagation()}
         >
-          {/* Drag handle */}
           {Platform.OS !== 'web' && (
             <View style={{ alignItems: 'center', paddingTop: spacing(3), paddingBottom: spacing(1) }}>
-              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
+              <View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: colors.border }} />
             </View>
           )}
 
-          <View style={{ height: 4, backgroundColor: eligible ? colors.success : colors.danger }} />
+          <AccentBar color={tone} tall />
 
           <ScrollView
             showsVerticalScrollIndicator={false}
             bounces={false}
             contentContainerStyle={{ padding: spacing(6) }}
           >
-            {/* Header */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing(5) }}>
               <Text style={[typography.h2, { color: colors.textPrimary }]}>Your Results</Text>
               <Pressable
@@ -522,47 +620,55 @@ function ResultsModal({
 
             {/* Score hero */}
             <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              backgroundColor: eligible ? `${colors.success}14` : `${colors.danger}14`,
+              backgroundColor: `${tone}12`,
               borderRadius: radii.xl,
               borderWidth: 1,
-              borderColor: eligible ? `${colors.success}33` : `${colors.danger}33`,
+              borderColor: `${tone}33`,
               padding: spacing(5),
               marginBottom: spacing(5),
             }}>
-              <View>
-                <Text style={{ fontSize: 38, lineHeight: 44, fontWeight: '900', color: colors.textPrimary }}>
-                  {calculation?.totalPoints ?? 0}
-                </Text>
-                <Text style={[typography.body, { color: colors.textSecondary, fontWeight: '600' }]}>points</Text>
-                <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(1) }]}>Best 6 subjects</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View>
+                  <Text style={{ fontSize: 46, lineHeight: 50, fontWeight: '900', color: colors.textPrimary }}>
+                    {total}
+                  </Text>
+                  <Text style={[typography.body, { color: colors.textSecondary, fontWeight: '700' }]}>points · best 6</Text>
+                </View>
+                <View style={{
+                  paddingHorizontal: spacing(4), paddingVertical: spacing(3),
+                  borderRadius: radii.xl,
+                  backgroundColor: `${tone}1A`,
+                  borderWidth: 1,
+                  borderColor: tone,
+                  alignItems: 'center',
+                }}>
+                  <Ionicons
+                    name={eligible ? 'checkmark-circle' : 'close-circle'}
+                    size={30}
+                    color={tone}
+                  />
+                  <Text style={[typography.label, { color: tone, marginTop: spacing(1) }]}>
+                    {eligible ? 'Eligible' : 'Not Eligible'}
+                  </Text>
+                </View>
               </View>
-              <View style={{
-                paddingHorizontal: spacing(4), paddingVertical: spacing(3),
-                borderRadius: radii.xl,
-                backgroundColor: eligible ? `${colors.success}22` : `${colors.danger}22`,
-                borderWidth: 1,
-                borderColor: eligible ? colors.success : colors.danger,
-                alignItems: 'center',
-              }}>
-                <Ionicons
-                  name={eligible ? 'checkmark-circle' : 'close-circle'}
-                  size={28}
-                  color={eligible ? colors.success : colors.danger}
-                />
-                <Text style={[typography.label, { color: eligible ? colors.success : colors.danger, marginTop: spacing(1) }]}>
-                  {eligible ? 'Eligible' : 'Not Eligible'}
+
+              {/* threshold bar */}
+              <View style={{ marginTop: spacing(4) }}>
+                <View style={{ height: 8, backgroundColor: colors.surface, borderRadius: radii.pill, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
+                  <View style={{ height: '100%', width: `${pct}%`, backgroundColor: tone, borderRadius: radii.pill }} />
+                </View>
+                <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(2) }]}>
+                  {total} / {threshold} points required for eligibility
                 </Text>
               </View>
             </View>
 
             {/* Table header */}
             <View style={{ flexDirection: 'row', paddingBottom: spacing(2), borderBottomWidth: 1, borderBottomColor: colors.divider, marginBottom: spacing(2) }}>
-              <Text style={[typography.caption, { color: colors.textMuted, flex: 1, fontWeight: '700', letterSpacing: 0.5 }]}>SUBJECT</Text>
-              <Text style={[typography.caption, { color: colors.textMuted, width: 56, textAlign: 'center', fontWeight: '700', letterSpacing: 0.5 }]}>GRADE</Text>
-              <Text style={[typography.caption, { color: colors.textMuted, width: 44, textAlign: 'right', fontWeight: '700', letterSpacing: 0.5 }]}>PTS</Text>
+              <Text style={[typography.caption, { color: colors.textMuted, flex: 1, fontWeight: '800', letterSpacing: 0.5 }]}>SUBJECT</Text>
+              <Text style={[typography.caption, { color: colors.textMuted, width: 56, textAlign: 'center', fontWeight: '800', letterSpacing: 0.5 }]}>GRADE</Text>
+              <Text style={[typography.caption, { color: colors.textMuted, width: 44, textAlign: 'right', fontWeight: '800', letterSpacing: 0.5 }]}>PTS</Text>
             </View>
 
             {(calculation?.bestRows ?? []).map((row) => (
@@ -571,40 +677,35 @@ function ResultsModal({
                 style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing(3), borderBottomWidth: 1, borderBottomColor: colors.divider }}
               >
                 <View style={{ flex: 1, paddingRight: spacing(2) }}>
-                  <Text style={[typography.body, { color: colors.textPrimary }]} numberOfLines={2}>
+                  <Text style={[typography.body, { color: colors.textPrimary, fontWeight: '600' }]} numberOfLines={2}>
                     {toTitle(row.subject)}
                   </Text>
                   {row.countsAs === 2 && (
-                    <Text style={[typography.caption, { color: colors.primary, marginTop: 2 }]}>Double Award ×2</Text>
+                    <View style={{ alignSelf: 'flex-start', marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing(2), paddingVertical: 2, backgroundColor: `${colors.primary}1A`, borderRadius: radii.pill }}>
+                      <Ionicons name="flask-outline" size={10} color={colors.primary} />
+                      <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>Double ×2</Text>
+                    </View>
                   )}
                 </View>
                 <Text style={[typography.bodyStrong, { color: colors.textPrimary, width: 56, textAlign: 'center' }]}>
                   {row.grade}
                 </Text>
-                <Text style={[typography.bodyStrong, { color: colors.primary, width: 44, textAlign: 'right', fontSize: 16 }]}>
+                <Text style={[typography.bodyStrong, { color: colors.primary, width: 44, textAlign: 'right', fontSize: 17, fontWeight: '800' }]}>
                   {row.points}
                 </Text>
               </View>
             ))}
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: spacing(3), marginTop: spacing(1) }}>
-              <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]}>
-                Threshold: {calculation?.threshold ?? 36} points
-              </Text>
-              <Text style={[typography.bodyStrong, { color: eligible ? colors.success : colors.danger, fontSize: 16 }]}>
-                {calculation?.totalPoints ?? 0} / {calculation?.threshold ?? 36}
-              </Text>
-            </View>
-
             {/* CTA buttons */}
-            <View style={{ gap: spacing(3), marginTop: spacing(4) }}>
+            <View style={{ gap: spacing(3), marginTop: spacing(5) }}>
               <Pressable
                 onPress={() => { onClose(); router.push('/student/courses'); }}
                 style={({ pressed }) => ({
-                  height: 54, borderRadius: radii.lg,
+                  height: 56, borderRadius: radii.xl,
                   backgroundColor: colors.primary,
                   flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const,
                   gap: spacing(2), opacity: pressed ? 0.9 : 1,
+                  transform: pressed ? [{ scale: 0.99 }] : [],
                 })}
               >
                 <Ionicons name="school-outline" size={18} color="#fff" />
@@ -613,7 +714,7 @@ function ResultsModal({
               <Pressable
                 onPress={onClose}
                 style={({ pressed }) => ({
-                  height: 54, borderRadius: radii.lg,
+                  height: 54, borderRadius: radii.xl,
                   backgroundColor: colors.surfaceAlt,
                   borderWidth: 1, borderColor: colors.border,
                   alignItems: 'center' as const, justifyContent: 'center' as const,
@@ -648,30 +749,23 @@ function SidebarPanel({
   onAddRow: () => void;
   onReset: () => void;
 }) {
-  const colors    = useTheme();
-  const elevation = useElevation('md');
+  const colors = useTheme();
 
   return (
-    <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
-      <View style={[{
-        backgroundColor: colors.surface,
-        borderRadius: radii.xxl,
-        borderWidth: 1, borderColor: colors.border,
-        overflow: 'hidden',
-      }, elevation]}>
-        <View style={{ height: 3, backgroundColor: colors.primary }} />
+    <View style={{ width: 320, flexShrink: 0, gap: spacing(5) }}>
+      <Card accent={colors.primary}>
         <View style={{ padding: spacing(6), gap: spacing(4) }}>
           <Text style={[typography.h2, { color: colors.textPrimary }]}>Calculation Summary</Text>
           <Text style={[typography.caption, { color: colors.textSecondary, lineHeight: 18 }]}>
             Best 6 subjects chosen automatically. Double Award counts as 2 slots.
           </Text>
           <View style={{ gap: spacing(3) }}>
-            <StatCard icon="albums-outline"       label="Rows on screen"    value={`${rows.length}`} />
+            <StatCard icon="albums-outline"       label="Rows on screen"    value={`${rows.length}`} tone="primary" />
             <StatCard icon="close-circle-outline" label="Missing subjects"  value={`${missingSubjects}`} />
             <StatCard icon="warning-outline"      label="Missing grades"    value={`${missingGrades}`} />
             <StatCard icon="flask-outline"        label="Double Award rows" value={`${doubleAwardRowsCount}`} />
           </View>
-          <View style={{ padding: spacing(4), backgroundColor: `${colors.primary}14`, borderRadius: radii.lg, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
+          <View style={{ padding: spacing(4), backgroundColor: `${colors.primary}12`, borderRadius: radii.lg, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(2) }}>
               <Ionicons name="information-circle-outline" size={16} color={colors.primary} style={{ marginTop: 1 }} />
               <Text style={[typography.caption, { color: colors.textSecondary, flex: 1, lineHeight: 18 }]}>
@@ -685,8 +779,8 @@ function SidebarPanel({
               style={({ pressed }) => ({
                 flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(3),
                 padding: spacing(4), borderRadius: radii.lg,
-                borderWidth: 1, borderColor: colors.primary,
-                backgroundColor: `${colors.primary}1A`,
+                borderWidth: 1.5, borderColor: colors.primary,
+                backgroundColor: `${colors.primary}14`,
                 opacity: pressed ? 0.85 : 1, transform: pressed ? [{ scale: 0.98 }] : [],
               })}
             >
@@ -708,34 +802,7 @@ function SidebarPanel({
             </Pressable>
           </View>
         </View>
-      </View>
-    </View>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Inline progress bar — mobile only
-// ─────────────────────────────────────────────────────────────────────────────
-function ProgressBar({ completed, total, colors }: { completed: number; total: number; colors: any }) {
-  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-  return (
-    <View style={{ marginBottom: spacing(5) }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing(2) }}>
-        <Text style={[typography.caption, { color: colors.textSecondary }]}>Progress</Text>
-        <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '700' }]}>
-          {completed}/{total} complete
-        </Text>
-      </View>
-      <View style={{ height: 6, backgroundColor: colors.surfaceAlt, borderRadius: 3, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
-        <View
-          style={{
-            height: '100%',
-            width: `${pct}%`,
-            backgroundColor: pct === 100 ? colors.success : colors.primary,
-            borderRadius: 3,
-          }}
-        />
-      </View>
+      </Card>
     </View>
   );
 }
@@ -743,9 +810,9 @@ function ProgressBar({ completed, total, colors }: { completed: number; total: n
 // ─────────────────────────────────────────────────────────────────────────────
 // Mobile stat strip
 // ─────────────────────────────────────────────────────────────────────────────
-function MobileStatStrip({ level, track, requiredSlots, completedRows, total, allFilled, colors }: any) {
+function MobileStatStrip({ level, track, requiredSlots, completedRows, total, allFilled }: any) {
   return (
-    <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap', marginBottom: spacing(5) }}>
+    <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap', marginBottom: spacing(4) }}>
       <StatCard icon="school-outline"         label="Level"    value={level}            tone="primary"  compact />
       <StatCard icon="git-branch-outline"     label="Track"    value={track}                            compact />
       <StatCard icon="list-outline"           label="Required" value={`${requiredSlots}`}               compact />
@@ -755,13 +822,12 @@ function MobileStatStrip({ level, track, requiredSlots, completedRows, total, al
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Subject Row — extracted for clarity
+// Subject Row (mobile)
 // ─────────────────────────────────────────────────────────────────────────────
 function SubjectRow({
   row,
   index,
   canRemove,
-  isMobile,
   colors,
   onSubjectChange,
   onGradePress,
@@ -770,7 +836,6 @@ function SubjectRow({
   row: ResultRow;
   index: number;
   canRemove: boolean;
-  isMobile: boolean;
   colors: any;
   onSubjectChange: (id: string, text: string) => void;
   onGradePress: (id: string) => void;
@@ -781,144 +846,191 @@ function SubjectRow({
   const hasGrade    = row.grade !== '';
   const isComplete  = hasSubject && hasGrade;
 
+  const statusColor = isDouble ? colors.primary : isComplete ? colors.success : colors.border;
+
   return (
     <View
       style={{
-        backgroundColor: colors.surfaceAlt,
+        backgroundColor: colors.surface,
         borderRadius: radii.xl,
         borderWidth: 1.5,
         borderColor: isDouble
           ? `${colors.primary}55`
           : isComplete
-          ? `${colors.success}44`
+          ? `${colors.success}55`
           : colors.border,
         marginBottom: spacing(3),
         overflow: 'hidden',
       }}
     >
-      {/* Row number bar */}
-      <View style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: spacing(4),
-        paddingTop: spacing(3),
-        paddingBottom: spacing(2),
-      }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
+      {/* left status spine */}
+      <View style={{ flexDirection: 'row' }}>
+        <View style={{ width: 5, backgroundColor: statusColor }} />
+        <View style={{ flex: 1 }}>
+          {/* Row top bar */}
           <View style={{
-            width: 24, height: 24, borderRadius: 12,
-            backgroundColor: isComplete ? `${colors.success}22` : `${colors.primary}22`,
-            borderWidth: 1,
-            borderColor: isComplete ? `${colors.success}55` : `${colors.primary}44`,
-            alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Text style={{ fontSize: 11, fontWeight: '800', color: isComplete ? colors.success : colors.primary }}>
-              {index + 1}
-            </Text>
-          </View>
-          {isDouble && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1), paddingHorizontal: spacing(2), paddingVertical: 2, backgroundColor: `${colors.primary}1A`, borderRadius: radii.pill }}>
-              <Ionicons name="flask-outline" size={10} color={colors.primary} />
-              <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary }}>Double Award</Text>
-            </View>
-          )}
-        </View>
-        {isComplete && (
-          <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-        )}
-        {canRemove && (
-          <Pressable
-            onPress={() => onRemove(row.id)}
-            style={({ pressed }) => ({
-              width: 30, height: 30, borderRadius: radii.md,
-              backgroundColor: `${colors.danger}15`,
-              alignItems: 'center' as const, justifyContent: 'center' as const,
-              opacity: pressed ? 0.8 : 1,
-            })}
-          >
-            <Ionicons name="trash-outline" size={15} color={colors.danger} />
-          </Pressable>
-        )}
-      </View>
-
-      {/* Inputs area */}
-      <View style={{ paddingHorizontal: spacing(4), paddingBottom: spacing(4), gap: spacing(3) }}>
-        {/* Subject label */}
-        <View>
-          <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing(1), letterSpacing: 0.4 }]}>
-            SUBJECT
-          </Text>
-          <View style={{
-            height: 48,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
             paddingHorizontal: spacing(4),
-            borderWidth: 1,
-            borderRadius: radii.lg,
-            borderColor: isDouble ? colors.primary : colors.border,
-            backgroundColor: colors.surface,
-            justifyContent: 'center',
+            paddingTop: spacing(3),
+            paddingBottom: spacing(2),
           }}>
-            <TextInput
-              value={row.subject}
-              onChangeText={(text) => onSubjectChange(row.id, text)}
-              placeholder={`e.g. Mathematics`}
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="words"
-              autoCorrect={false}
-              style={[typography.body, { color: colors.textPrimary }]}
-            />
-          </View>
-        </View>
-
-        {/* Grade button */}
-        <View>
-          <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing(1), letterSpacing: 0.4 }]}>
-            GRADE
-          </Text>
-          <Pressable
-            onPress={() => onGradePress(row.id)}
-            style={({ pressed }) => ({
-              height: 48,
-              paddingHorizontal: spacing(4),
-              borderWidth: 1,
-              borderRadius: radii.lg,
-              borderColor: row.grade
-                ? isDouble ? colors.primary : `${colors.success}88`
-                : colors.border,
-              backgroundColor: row.grade
-                ? isDouble ? `${colors.primary}12` : `${colors.success}10`
-                : colors.surface,
-              flexDirection: 'row' as const,
-              alignItems: 'center' as const,
-              justifyContent: 'space-between' as const,
-              opacity: pressed ? 0.85 : 1,
-            })}
-          >
-            <Text style={[
-              typography.bodyStrong,
-              {
-                color: row.grade ? colors.textPrimary : colors.textMuted,
-                fontSize: row.grade ? 16 : 14,
-              }
-            ]}>
-              {row.grade || 'Tap to select grade'}
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1) }}>
-              {row.grade && (
-                <View style={{
-                  paddingHorizontal: spacing(2), paddingVertical: 2,
-                  backgroundColor: `${colors.success}22`,
-                  borderRadius: radii.pill,
-                }}>
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success }}>SET</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
+              <View style={{
+                width: 26, height: 26, borderRadius: 13,
+                backgroundColor: isComplete ? `${colors.success}22` : `${colors.primary}18`,
+                borderWidth: 1,
+                borderColor: isComplete ? `${colors.success}55` : `${colors.primary}44`,
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: isComplete ? colors.success : colors.primary }}>
+                  {index + 1}
+                </Text>
+              </View>
+              {isDouble && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing(2), paddingVertical: 3, backgroundColor: `${colors.primary}18`, borderRadius: radii.pill }}>
+                  <Ionicons name="flask-outline" size={10} color={colors.primary} />
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary }}>Double Award</Text>
                 </View>
               )}
-              <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
+              {isComplete && !isDouble && (
+                <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              )}
             </View>
-          </Pressable>
+            {canRemove && (
+              <Pressable
+                onPress={() => onRemove(row.id)}
+                hitSlop={8}
+                style={({ pressed }) => ({
+                  width: 32, height: 32, borderRadius: radii.md,
+                  backgroundColor: `${colors.danger}15`,
+                  alignItems: 'center' as const, justifyContent: 'center' as const,
+                  opacity: pressed ? 0.8 : 1,
+                })}
+              >
+                <Ionicons name="trash-outline" size={15} color={colors.danger} />
+              </Pressable>
+            )}
+          </View>
+
+          {/* Inputs */}
+          <View style={{ paddingHorizontal: spacing(4), paddingBottom: spacing(4), gap: spacing(3) }}>
+            <View>
+              <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing(1), letterSpacing: 0.4 }]}>
+                SUBJECT
+              </Text>
+              <View style={{
+                height: 52,
+                paddingHorizontal: spacing(4),
+                borderWidth: 1.5,
+                borderRadius: radii.lg,
+                borderColor: isDouble ? colors.primary : hasSubject ? `${colors.success}55` : colors.border,
+                backgroundColor: colors.surfaceAlt,
+                justifyContent: 'center',
+              }}>
+                <TextInput
+                  value={row.subject}
+                  onChangeText={(text) => onSubjectChange(row.id, text)}
+                  placeholder="e.g. Mathematics"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  style={[typography.body, { color: colors.textPrimary, fontWeight: '600' }]}
+                />
+              </View>
+            </View>
+
+            <View>
+              <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing(1), letterSpacing: 0.4 }]}>
+                GRADE
+              </Text>
+              <Pressable
+                onPress={() => onGradePress(row.id)}
+                style={({ pressed }) => ({
+                  height: 52,
+                  paddingHorizontal: spacing(4),
+                  borderWidth: 1.5,
+                  borderRadius: radii.lg,
+                  borderColor: row.grade
+                    ? isDouble ? colors.primary : `${colors.success}88`
+                    : colors.border,
+                  backgroundColor: row.grade
+                    ? isDouble ? `${colors.primary}12` : `${colors.success}12`
+                    : colors.surfaceAlt,
+                  flexDirection: 'row' as const,
+                  alignItems: 'center' as const,
+                  justifyContent: 'space-between' as const,
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <Text style={[
+                  typography.bodyStrong,
+                  {
+                    color: row.grade ? colors.textPrimary : colors.textMuted,
+                    fontSize: row.grade ? 17 : 14,
+                    fontWeight: row.grade ? '800' : '500',
+                  }
+                ]}>
+                  {row.grade || 'Tap to select grade'}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1) }}>
+                  {row.grade ? (
+                    <View style={{
+                      paddingHorizontal: spacing(2), paddingVertical: 3,
+                      backgroundColor: `${colors.success}22`,
+                      borderRadius: radii.pill,
+                    }}>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: colors.success }}>SET</Text>
+                    </View>
+                  ) : null}
+                  <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
+                </View>
+              </Pressable>
+            </View>
+          </View>
         </View>
       </View>
     </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Segmented selector pill
+// ─────────────────────────────────────────────────────────────────────────────
+function SegPill({
+  label,
+  active,
+  onPress,
+  fill,
+  colors,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  fill: boolean;
+  colors: any;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flex: fill ? 1 : 0,
+        paddingVertical: spacing(3.5),
+        paddingHorizontal: spacing(5),
+        borderRadius: radii.pill,
+        borderWidth: 1.5,
+        borderColor: active ? colors.primary : colors.border,
+        backgroundColor: active ? colors.primary : colors.surfaceAlt,
+        alignItems: 'center' as const,
+        opacity: pressed ? 0.85 : 1,
+        transform: pressed ? [{ scale: 0.97 }] : [],
+      })}
+    >
+      <Text style={[typography.label, { color: active ? '#fff' : colors.textPrimary, fontWeight: active ? '800' : '600' }]}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -928,7 +1040,6 @@ function SubjectRow({
 function EnterResultsContent() {
   const { width } = useWindowDimensions();
   const colors    = useTheme();
-  const elevation = useElevation('lg');
 
   const breakpoint = useMemo<Breakpoint>(() => {
     if (width < 768)  return 'mobile';
@@ -937,7 +1048,6 @@ function EnterResultsContent() {
   }, [width]);
 
   const isMobile  = breakpoint === 'mobile';
-  const isTablet  = breakpoint === 'tablet';
   const isDesktop = breakpoint === 'desktop';
 
   // ── Form state ─────────────────────────────────────────────────────────────
@@ -951,13 +1061,13 @@ function EnterResultsContent() {
   const [showResults,     setShowResults]     = useState(false);
   const [calculation,     setCalculation]     = useState<ReturnType<typeof pickBestSix> | null>(null);
 
-  const activeRow           = useMemo(() => rows.find((r) => r.id === activeRowId) || null, [rows, activeRowId]);
-  const availableTracks     = useMemo(() => allowedTracksForLevel(level), [level]);
-  const requiredSlots       = useMemo(() => requiredSubjectSlots(level, track), [level, track]);
-  const completedRows       = useMemo(() => rows.filter((r) => r.subject.trim() && r.grade !== '').length, [rows]);
-  const missingSubjects     = useMemo(() => rows.filter((r) => !r.subject.trim()).length, [rows]);
-  const missingGrades       = useMemo(() => rows.filter((r) => r.grade === '').length, [rows]);
-  const allFilled           = useMemo(() => rows.length >= requiredSlots && rows.every((r) => r.subject.trim() && r.grade !== ''), [rows, requiredSlots]);
+  const activeRow            = useMemo(() => rows.find((r) => r.id === activeRowId) || null, [rows, activeRowId]);
+  const availableTracks      = useMemo(() => allowedTracksForLevel(level), [level]);
+  const requiredSlots        = useMemo(() => requiredSubjectSlots(level, track), [level, track]);
+  const completedRows        = useMemo(() => rows.filter((r) => r.subject.trim() && r.grade !== '').length, [rows]);
+  const missingSubjects      = useMemo(() => rows.filter((r) => !r.subject.trim()).length, [rows]);
+  const missingGrades        = useMemo(() => rows.filter((r) => r.grade === '').length, [rows]);
+  const allFilled            = useMemo(() => rows.length >= requiredSlots && rows.every((r) => r.subject.trim() && r.grade !== ''), [rows, requiredSlots]);
   const doubleAwardRowsCount = useMemo(() => rows.filter((r) => isDoubleAward(r.subject)).length, [rows]);
 
   const resetRowsFor = useCallback((l: Level, t: Track) => setRows(buildRows(l, t)), []);
@@ -1022,30 +1132,22 @@ function EnterResultsContent() {
 
   // ── Hero card ──────────────────────────────────────────────────────────────
   const HeroCard = (
-    <View style={[{
-      backgroundColor: colors.surface,
-      borderRadius: radii.xxl,
-      borderWidth: 1, borderColor: colors.border,
-      overflow: 'hidden',
-      marginBottom: spacing(5),
-    }, elevation]}>
-      <View style={{ height: 3, backgroundColor: colors.primary }} />
+    <Card accent={colors.primary} style={{ marginBottom: spacing(5) }}>
       <View style={{ padding: isMobile ? spacing(5) : spacing(7) }}>
-        {/* Badge */}
         <View style={{
           alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center',
           gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2),
           borderRadius: radii.pill,
-          backgroundColor: `${colors.primary}22`, borderWidth: 1, borderColor: `${colors.primary}44`,
+          backgroundColor: `${colors.primary}1A`, borderWidth: 1, borderColor: `${colors.primary}44`,
           marginBottom: spacing(3),
         }}>
           <Ionicons name="calculator-outline" size={12} color={colors.primary} />
-          <Text style={[typography.caption, { color: colors.primary, fontWeight: '700', letterSpacing: 0.5 }]}>
+          <Text style={[typography.caption, { color: colors.primary, fontWeight: '800', letterSpacing: 0.6 }]}>
             RESULTS CALCULATOR
           </Text>
         </View>
 
-        <Text style={{ fontSize: isMobile ? 24 : 34, lineHeight: isMobile ? 30 : 40, fontWeight: '900', color: colors.textPrimary }}>
+        <Text style={{ fontSize: isMobile ? 26 : 36, lineHeight: isMobile ? 32 : 42, fontWeight: '900', color: colors.textPrimary }}>
           Enter Your Results
         </Text>
         <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2), lineHeight: 22, maxWidth: 560 }]}>
@@ -1054,17 +1156,16 @@ function EnterResultsContent() {
             : 'Choose your qualification, complete every subject row, and calculate your best 6 points. Science Double Award is handled automatically.'}
         </Text>
 
-        {/* Status chip */}
         <View style={{
           alignSelf: 'flex-start', marginTop: spacing(4),
           flexDirection: 'row', alignItems: 'center', gap: spacing(2),
-          paddingHorizontal: spacing(4), paddingVertical: spacing(2),
+          paddingHorizontal: spacing(4), paddingVertical: spacing(2.5),
           borderRadius: radii.pill,
-          backgroundColor: allFilled ? `${colors.success}22` : `${colors.primary}22`,
+          backgroundColor: allFilled ? `${colors.success}1A` : `${colors.primary}1A`,
           borderWidth: 1, borderColor: allFilled ? `${colors.success}44` : `${colors.primary}44`,
         }}>
           <Ionicons
-            name={allFilled ? 'checkmark-circle-outline' : 'list-outline'}
+            name={allFilled ? 'checkmark-circle' : 'list-outline'}
             size={14}
             color={allFilled ? colors.success : colors.primary}
           />
@@ -1073,31 +1174,22 @@ function EnterResultsContent() {
           </Text>
         </View>
 
-        {/* Stats strip — desktop/tablet only; mobile has its own inline strip */}
         {!isMobile && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3), marginTop: spacing(5) }}>
-            <StatCard icon="school-outline"         label="Level"          value={level}                    tone="primary" />
-            <StatCard icon="git-branch-outline"     label="Track"          value={track}                    />
-            <StatCard icon="list-outline"           label="Required"       value={`${requiredSlots}`}       />
-            <StatCard icon="checkmark-done-outline" label="Completed"      value={`${completedRows}/${rows.length}`} tone={allFilled ? 'success' : 'neutral'} />
+            <StatCard icon="school-outline"         label="Level"     value={level}                    tone="primary" />
+            <StatCard icon="git-branch-outline"     label="Track"     value={track}                    />
+            <StatCard icon="list-outline"           label="Required"  value={`${requiredSlots}`}       />
+            <StatCard icon="checkmark-done-outline" label="Completed" value={`${completedRows}/${rows.length}`} tone={allFilled ? 'success' : 'neutral'} />
           </View>
         )}
       </View>
-    </View>
+    </Card>
   );
 
   // ── Selector section ───────────────────────────────────────────────────────
   const SelectorSection = (
-    <View style={[{
-      backgroundColor: colors.surface,
-      borderRadius: radii.xxl,
-      borderWidth: 1, borderColor: colors.border,
-      overflow: 'hidden',
-      marginBottom: spacing(5),
-    }, elevation]}>
-      <View style={{ height: 3, backgroundColor: colors.primary }} />
+    <Card accent={colors.primary} style={{ marginBottom: spacing(5) }}>
       <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
-        {/* Header row */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing(4) }}>
           <View style={{ flex: 1 }}>
             <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5 }]}>EXAM SETUP</Text>
@@ -1110,7 +1202,7 @@ function EnterResultsContent() {
               onPress={handleClearAll}
               style={({ pressed }) => ({
                 flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2),
-                paddingHorizontal: spacing(3), paddingVertical: spacing(2),
+                paddingHorizontal: spacing(3), paddingVertical: spacing(2.5),
                 borderRadius: radii.lg,
                 backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border,
                 opacity: pressed ? 0.8 : 1,
@@ -1122,69 +1214,32 @@ function EnterResultsContent() {
           )}
         </View>
 
-        {/* Level */}
         <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(2) }]}>
           LEVEL
         </Text>
         <View style={{ flexDirection: 'row', gap: spacing(3), marginBottom: spacing(5), flexWrap: 'wrap' }}>
           {(['BGCSE', 'IGCSE'] as const).map((l) => (
-            <Pressable
-              key={l}
-              onPress={() => handleLevelChange(l)}
-              style={({ pressed }) => ({
-                flex: isMobile ? 1 : 0,
-                paddingVertical: spacing(3), paddingHorizontal: spacing(5),
-                borderRadius: radii.pill,
-                borderWidth: 1.5,
-                borderColor: level === l ? colors.primary : colors.border,
-                backgroundColor: level === l ? colors.primary : colors.surfaceAlt,
-                alignItems: 'center' as const,
-                opacity: pressed ? 0.85 : 1,
-              })}
-            >
-              <Text style={[typography.label, { color: level === l ? '#fff' : colors.textPrimary }]}>
-                {l}
-              </Text>
-            </Pressable>
+            <SegPill key={l} label={l} active={level === l} onPress={() => handleLevelChange(l)} fill={isMobile} colors={colors} />
           ))}
         </View>
 
-        {/* Track */}
         <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(2) }]}>
           TRACK
         </Text>
         <View style={{ flexDirection: 'row', gap: spacing(3), marginBottom: spacing(5), flexWrap: 'wrap' }}>
           {availableTracks.map((t) => (
-            <Pressable
-              key={t}
-              onPress={() => handleTrackChange(t)}
-              style={({ pressed }) => ({
-                flex: isMobile ? 1 : 0,
-                paddingVertical: spacing(3), paddingHorizontal: spacing(5),
-                borderRadius: radii.pill,
-                borderWidth: 1.5,
-                borderColor: track === t ? colors.primary : colors.border,
-                backgroundColor: track === t ? colors.primary : colors.surfaceAlt,
-                alignItems: 'center' as const,
-                opacity: pressed ? 0.85 : 1,
-              })}
-            >
-              <Text style={[typography.label, { color: track === t ? '#fff' : colors.textPrimary }]}>
-                {t}
-              </Text>
-            </Pressable>
+            <SegPill key={t} label={t} active={track === t} onPress={() => handleTrackChange(t)} fill={isMobile} colors={colors} />
           ))}
         </View>
 
-        {/* Info banners */}
         <View style={{ gap: spacing(3) }}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3), padding: spacing(4), backgroundColor: `${colors.primary}12`, borderRadius: radii.lg, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3), padding: spacing(4), backgroundColor: `${colors.primary}10`, borderRadius: radii.lg, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
             <Ionicons name="information-circle-outline" size={16} color={colors.primary} style={{ marginTop: 1, flexShrink: 0 }} />
             <Text style={[typography.caption, { color: colors.textSecondary, flex: 1, lineHeight: 18 }]}>
-              {requiredSlots} required slots. Best 6 subjects used. Science Double Award counts as 2.
+              {requiredSlots} subject slots (incl. 4 optional). Best 6 used. Science Double Award counts as 2.
             </Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3), padding: spacing(4), backgroundColor: allFilled ? `${colors.success}12` : colors.surfaceAlt, borderRadius: radii.lg, borderLeftWidth: 3, borderLeftColor: allFilled ? colors.success : colors.border }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3), padding: spacing(4), backgroundColor: allFilled ? `${colors.success}10` : colors.surfaceAlt, borderRadius: radii.lg, borderLeftWidth: 3, borderLeftColor: allFilled ? colors.success : colors.border }}>
             <Ionicons name={allFilled ? 'checkmark-circle-outline' : 'list-outline'} size={16} color={allFilled ? colors.success : colors.textSecondary} style={{ marginTop: 1, flexShrink: 0 }} />
             <Text style={[typography.caption, { color: colors.textSecondary, flex: 1, lineHeight: 18 }]}>
               {allFilled ? 'All rows complete — ready to calculate.' : `${completedRows} of ${rows.length} rows complete. Every row needs a subject and grade.`}
@@ -1192,21 +1247,13 @@ function EnterResultsContent() {
           </View>
         </View>
       </View>
-    </View>
+    </Card>
   );
 
   // ── Subject table ──────────────────────────────────────────────────────────
   const SubjectTable = (
-    <View style={[{
-      backgroundColor: colors.surface,
-      borderRadius: radii.xxl,
-      borderWidth: 1, borderColor: colors.border,
-      overflow: 'hidden',
-      marginBottom: spacing(5),
-    }, elevation]}>
-      <View style={{ height: 3, backgroundColor: colors.primary }} />
+    <Card accent={colors.primary} style={{ marginBottom: spacing(5) }}>
       <View style={{ padding: isMobile ? spacing(4) : spacing(6) }}>
-        {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing(5) }}>
           <View>
             <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5 }]}>SUBJECTS & GRADES</Text>
@@ -1215,34 +1262,32 @@ function EnterResultsContent() {
             </Text>
           </View>
           <View style={{
-            paddingHorizontal: spacing(3), paddingVertical: spacing(2),
+            paddingHorizontal: spacing(3.5), paddingVertical: spacing(2),
             borderRadius: radii.pill,
-            backgroundColor: allFilled ? `${colors.success}22` : `${colors.primary}22`,
+            backgroundColor: allFilled ? `${colors.success}1A` : `${colors.primary}1A`,
             borderWidth: 1,
             borderColor: allFilled ? `${colors.success}44` : `${colors.primary}44`,
           }}>
             <Text style={[typography.caption, {
               color: allFilled ? colors.success : colors.primary,
-              fontWeight: '700',
+              fontWeight: '800',
             }]}>
               {completedRows}/{rows.length}
             </Text>
           </View>
         </View>
 
-        {/* Mobile: stat strip + progress bar */}
         {isMobile && (
           <>
             <MobileStatStrip
               level={level} track={track} requiredSlots={requiredSlots}
               completedRows={completedRows} total={rows.length}
-              allFilled={allFilled} colors={colors}
+              allFilled={allFilled}
             />
             <ProgressBar completed={completedRows} total={rows.length} colors={colors} />
           </>
         )}
 
-        {/* Desktop: column headers */}
         {!isMobile && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), paddingHorizontal: spacing(1), marginBottom: spacing(3) }}>
             <View style={{ width: 34 }} />
@@ -1252,7 +1297,6 @@ function EnterResultsContent() {
           </View>
         )}
 
-        {/* Rows — mobile uses SubjectRow component, tablet/desktop uses compact inline layout */}
         {isMobile ? (
           <View>
             {rows.map((row, index) => (
@@ -1261,7 +1305,6 @@ function EnterResultsContent() {
                 row={row}
                 index={index}
                 canRemove={rows.length > requiredSlots}
-                isMobile={isMobile}
                 colors={colors}
                 onSubjectChange={handleSubjectChange}
                 onGradePress={handleGradePress}
@@ -1271,76 +1314,79 @@ function EnterResultsContent() {
           </View>
         ) : (
           <View style={{ gap: spacing(3) }}>
-            {rows.map((row, index) => (
-              <View
-                key={row.id}
-                style={{
-                  backgroundColor: colors.surfaceAlt,
-                  borderRadius: radii.xl,
-                  borderWidth: 1,
-                  borderColor: isDoubleAward(row.subject) ? `${colors.primary}44` : colors.border,
-                  padding: spacing(3),
-                  flexDirection: 'row',
-                  alignItems: 'flex-start',
-                  gap: spacing(3),
-                }}
-              >
-                <View style={{ width: 34, height: 34, borderRadius: radii.pill, backgroundColor: `${colors.primary}22`, borderWidth: 1, borderColor: `${colors.primary}44`, alignItems: 'center', justifyContent: 'center', marginTop: spacing(2) }}>
-                  <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{index + 1}</Text>
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <View style={{ minHeight: 52, paddingHorizontal: spacing(3), paddingVertical: spacing(3), borderWidth: 1, borderRadius: radii.lg, borderColor: isDoubleAward(row.subject) ? colors.primary : colors.border, backgroundColor: colors.surface, justifyContent: 'center' }}>
-                    <TextInput
-                      value={row.subject}
-                      onChangeText={(text) => handleSubjectChange(row.id, text)}
-                      placeholder={`Subject ${index + 1}`}
-                      placeholderTextColor={colors.textMuted}
-                      autoCapitalize="words"
-                      autoCorrect={false}
-                      style={[typography.bodyStrong, { color: colors.textPrimary }]}
-                    />
-                  </View>
-                  {isDoubleAward(row.subject) && (
-                    <Text style={[typography.caption, { color: colors.primary, marginTop: spacing(2), fontWeight: '700' }]}>
-                      Double Award — double-grade scale enabled.
-                    </Text>
-                  )}
-                </View>
-                <Pressable
-                  onPress={() => handleGradePress(row.id)}
-                  style={({ pressed }) => ({
-                    width: 132, minHeight: 52, paddingHorizontal: spacing(3),
-                    borderWidth: 1, borderRadius: radii.lg,
-                    borderColor: isDoubleAward(row.subject) ? colors.primary : colors.border,
-                    backgroundColor: colors.surface,
-                    flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const,
-                    opacity: pressed ? 0.85 : 1,
-                  })}
+            {rows.map((row, index) => {
+              const isDouble = isDoubleAward(row.subject);
+              const complete = row.subject.trim() && row.grade !== '';
+              return (
+                <View
+                  key={row.id}
+                  style={{
+                    backgroundColor: colors.surfaceAlt,
+                    borderRadius: radii.xl,
+                    borderWidth: 1.5,
+                    borderColor: isDouble ? `${colors.primary}55` : complete ? `${colors.success}44` : colors.border,
+                    padding: spacing(3),
+                    flexDirection: 'row',
+                    alignItems: 'flex-start',
+                    gap: spacing(3),
+                  }}
                 >
-                  <Text style={[typography.bodyStrong, { color: row.grade ? colors.textPrimary : colors.textMuted }]}>
-                    {row.grade || 'Grade'}
-                  </Text>
-                  <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
-                </Pressable>
-                {rows.length > requiredSlots && (
+                  <View style={{ width: 34, height: 34, borderRadius: radii.pill, backgroundColor: complete ? `${colors.success}22` : `${colors.primary}1A`, borderWidth: 1, borderColor: complete ? `${colors.success}55` : `${colors.primary}44`, alignItems: 'center', justifyContent: 'center', marginTop: spacing(2) }}>
+                    <Text style={[typography.caption, { color: complete ? colors.success : colors.primary, fontWeight: '800' }]}>{index + 1}</Text>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <View style={{ minHeight: 52, paddingHorizontal: spacing(3), paddingVertical: spacing(3), borderWidth: 1.5, borderRadius: radii.lg, borderColor: isDouble ? colors.primary : colors.border, backgroundColor: colors.surface, justifyContent: 'center' }}>
+                      <TextInput
+                        value={row.subject}
+                        onChangeText={(text) => handleSubjectChange(row.id, text)}
+                        placeholder={`Subject ${index + 1}`}
+                        placeholderTextColor={colors.textMuted}
+                        autoCapitalize="words"
+                        autoCorrect={false}
+                        style={[typography.bodyStrong, { color: colors.textPrimary }]}
+                      />
+                    </View>
+                    {isDouble && (
+                      <Text style={[typography.caption, { color: colors.primary, marginTop: spacing(2), fontWeight: '700' }]}>
+                        Double Award — double-grade scale enabled.
+                      </Text>
+                    )}
+                  </View>
                   <Pressable
-                    onPress={() => handleRemoveRow(row.id)}
+                    onPress={() => handleGradePress(row.id)}
                     style={({ pressed }) => ({
-                      width: 42, height: 42, borderRadius: radii.lg,
-                      backgroundColor: `${colors.danger}1A`,
-                      alignItems: 'center' as const, justifyContent: 'center' as const,
-                      marginTop: spacing(1), opacity: pressed ? 0.8 : 1,
+                      width: 132, minHeight: 52, paddingHorizontal: spacing(3),
+                      borderWidth: 1.5, borderRadius: radii.lg,
+                      borderColor: row.grade ? (isDouble ? colors.primary : `${colors.success}88`) : colors.border,
+                      backgroundColor: row.grade ? (isDouble ? `${colors.primary}12` : `${colors.success}10`) : colors.surface,
+                      flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const,
+                      opacity: pressed ? 0.85 : 1,
                     })}
                   >
-                    <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                    <Text style={[typography.bodyStrong, { color: row.grade ? colors.textPrimary : colors.textMuted, fontWeight: row.grade ? '800' : '500' }]}>
+                      {row.grade || 'Grade'}
+                    </Text>
+                    <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
                   </Pressable>
-                )}
-              </View>
-            ))}
+                  {rows.length > requiredSlots && (
+                    <Pressable
+                      onPress={() => handleRemoveRow(row.id)}
+                      style={({ pressed }) => ({
+                        width: 42, height: 42, borderRadius: radii.lg,
+                        backgroundColor: `${colors.danger}1A`,
+                        alignItems: 'center' as const, justifyContent: 'center' as const,
+                        marginTop: spacing(1), opacity: pressed ? 0.8 : 1,
+                      })}
+                    >
+                      <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                    </Pressable>
+                  )}
+                </View>
+              );
+            })}
           </View>
         )}
 
-        {/* Mobile/tablet action buttons */}
         {!isDesktop && (
           <View style={{ flexDirection: 'row', gap: spacing(3), marginTop: spacing(5) }}>
             <Pressable
@@ -1348,8 +1394,8 @@ function EnterResultsContent() {
               style={({ pressed }) => ({
                 flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const,
                 gap: spacing(2), padding: spacing(4), borderRadius: radii.lg,
-                borderWidth: 1, borderColor: colors.primary,
-                backgroundColor: `${colors.primary}1A`,
+                borderWidth: 1.5, borderColor: colors.primary,
+                backgroundColor: `${colors.primary}14`,
                 opacity: pressed ? 0.85 : 1,
               })}
             >
@@ -1372,13 +1418,12 @@ function EnterResultsContent() {
           </View>
         )}
 
-        {/* Calculate CTA */}
         <Pressable
           onPress={handleCalculate}
           disabled={!allFilled}
           style={({ pressed }) => ({
             marginTop: spacing(6),
-            height: isMobile ? 60 : 56,
+            height: isMobile ? 62 : 58,
             borderRadius: radii.xl,
             backgroundColor: allFilled ? colors.primary : colors.surfaceAlt,
             borderWidth: 1,
@@ -1387,7 +1432,8 @@ function EnterResultsContent() {
             alignItems: 'center' as const,
             justifyContent: 'center' as const,
             gap: spacing(3),
-            opacity: allFilled ? (pressed ? 0.88 : 1) : 0.45,
+            opacity: allFilled ? (pressed ? 0.9 : 1) : 0.5,
+            transform: allFilled && pressed ? [{ scale: 0.99 }] : [],
           })}
         >
           <Ionicons name="calculator-outline" size={20} color={allFilled ? '#fff' : colors.textMuted} />
@@ -1399,18 +1445,16 @@ function EnterResultsContent() {
             CALCULATE POINTS
           </Text>
           {allFilled && (
-            <View style={{ paddingHorizontal: spacing(2), paddingVertical: 2, backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: radii.pill }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>READY</Text>
+            <View style={{ paddingHorizontal: spacing(2.5), paddingVertical: 3, backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: radii.pill }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#fff' }}>READY</Text>
             </View>
           )}
         </Pressable>
       </View>
-    </View>
+    </Card>
   );
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Render
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
       <DashboardLayout
@@ -1418,13 +1462,12 @@ function EnterResultsContent() {
         subtitle="Calculate your best 6 subject points"
         showPointsCard={false}
       >
-        {/* Back + breadcrumb */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
           <Pressable
             onPress={() => router.back()}
             style={({ pressed }) => ({
               flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2),
-              paddingHorizontal: spacing(4), paddingVertical: spacing(2),
+              paddingHorizontal: spacing(4), paddingVertical: spacing(2.5),
               borderRadius: radii.lg,
               backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border,
               opacity: pressed ? 0.8 : 1,
@@ -1438,10 +1481,9 @@ function EnterResultsContent() {
           </Text>
         </View>
 
-        {/* Layout: two-column on desktop, stacked on mobile/tablet */}
         <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: spacing(8), alignItems: 'flex-start' }}>
           <KeyboardAvoidingView
-            style={{ flex: 1, minWidth: 0 }}
+            style={{ flex: 1, minWidth: 0, width: isDesktop ? undefined : '100%' }}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           >
             {HeroCard}
