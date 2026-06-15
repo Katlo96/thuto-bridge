@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,12 @@ import {
   ScrollView,
   useWindowDimensions,
   Platform,
+  StyleSheet,
   type ViewStyle,
+  type StyleProp,
   ActivityIndicator,
   Alert,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -90,8 +93,14 @@ const IGCSE_DEFAULTS: Record<IGCSETrack, string[]> = {
 };
 
 const TOTAL_SUBJECTS = 9;
-const ADDITIONAL_SUBJECTS = 4; // Fixed as requested
+const ADDITIONAL_SUBJECTS = 4;
 const EXAM_TYPES: ExamType[] = ['End of Month Test', 'End of Term Exam', 'End of Year Exam'];
+
+const EXAM_TYPE_SHORT: Record<ExamType, string> = {
+  'End of Month Test': 'Monthly',
+  'End of Term Exam': 'Term',
+  'End of Year Exam': 'Annual',
+};
 
 const EXAM_TYPE_ICONS: Record<ExamType, keyof typeof Ionicons.glyphMap> = {
   'End of Month Test': 'calendar-outline',
@@ -101,6 +110,23 @@ const EXAM_TYPE_ICONS: Record<ExamType, keyof typeof Ionicons.glyphMap> = {
 
 const BGCSE_FORMS: BGCSEForm[] = ['Form 4', 'Form 5'];
 const IGCSE_FORMS: IGCSEForm[] = ['Form 4', 'Form 5', 'Form 6 (A-Level)'];
+
+// Grade bands
+const getGrade = (score: number) => {
+  if (score >= 80) return { letter: 'A', color: '#34D399' };
+  if (score >= 70) return { letter: 'B', color: '#60A5FA' };
+  if (score >= 60) return { letter: 'C', color: '#A78BFA' };
+  if (score >= 50) return { letter: 'D', color: '#FBBF24' };
+  if (score >= 40) return { letter: 'E', color: '#FB923C' };
+  return { letter: 'U', color: '#F87171' };
+};
+
+const WIZARD_STEPS: { key: WizardStep; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: 'system', label: 'System', icon: 'school-outline' },
+  { key: 'track', label: 'Track', icon: 'flask-outline' },
+  { key: 'form', label: 'Year', icon: 'person-outline' },
+  { key: 'subjects', label: 'Subjects', icon: 'book-outline' },
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Elevation helper
@@ -120,16 +146,70 @@ function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md'): ViewStyle {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PerformanceBar
+// AnimatedCard — fade+slide in on mount
 // ─────────────────────────────────────────────────────────────────────────────
-function PerformanceBar({ score }: { score: number }) {
-  const colors = useTheme();
-  const color = score >= 70 ? colors.success : score >= 50 ? colors.warning : colors.danger;
+function AnimatedCard({ children, delay = 0, style }: { children: React.ReactNode; delay?: number; style?: StyleProp<ViewStyle> }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(18)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 420, delay, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, delay, useNativeDriver: true, damping: 18, stiffness: 120 }),
+    ]).start();
+  }, []);
 
   return (
-    <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.border, overflow: 'hidden', marginTop: spacing(1) }}>
-      <View style={{ height: 8, width: `${score}%` as any, backgroundColor: color, borderRadius: 4 }} />
-    </View>
+    <Animated.View style={[style, { opacity, transform: [{ translateY }] }]}>
+      {children}
+    </Animated.View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GradeRing — SVG arc progress ring (web only, fallback circle on native)
+// ─────────────────────────────────────────────────────────────────────────────
+function GradeRing({ score, size = 72 }: { score: number | null; size?: number }) {
+  const colors = useTheme();
+  const grade = score !== null ? getGrade(score) : null;
+  const radius = (size - 10) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const arc = score !== null ? circumference * (score / 100) : 0;
+  const cx = size / 2;
+
+  if (Platform.OS !== 'web') {
+    return (
+      <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: grade ? `${grade.color}22` : colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: grade?.color ?? colors.border }}>
+        <Text style={{ fontSize: size * 0.28, fontWeight: '900', color: grade?.color ?? colors.textMuted }}>{grade ? grade.letter : '—'}</Text>
+        {score !== null && <Text style={{ fontSize: size * 0.18, color: colors.textMuted }}>{score}%</Text>}
+      </View>
+    );
+  }
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={cx} cy={cx} r={radius} fill="none" stroke={colors.border} strokeWidth={5} />
+      {score !== null && (
+        <circle
+          cx={cx} cy={cx} r={radius}
+          fill="none"
+          stroke={grade?.color ?? colors.primary}
+          strokeWidth={5}
+          strokeDasharray={`${arc} ${circumference}`}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${cx} ${cx})`}
+          style={{ transition: 'stroke-dasharray 0.7s cubic-bezier(.4,0,.2,1)' } as any}
+        />
+      )}
+      <text x="50%" y="44%" textAnchor="middle" dominantBaseline="middle" fill={grade?.color ?? colors.textMuted} fontSize={size * 0.26} fontWeight="900">
+        {grade ? grade.letter : '—'}
+      </text>
+      {score !== null && (
+        <text x="50%" y="68%" textAnchor="middle" dominantBaseline="middle" fill={colors.textMuted} fontSize={size * 0.17}>
+          {score}%
+        </text>
+      )}
+    </svg>
   );
 }
 
@@ -141,41 +221,107 @@ function SelectionPill({
   selected,
   onPress,
   icon,
+  description,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
   icon?: keyof typeof Ionicons.glyphMap;
+  description?: string;
 }) {
   const colors = useTheme();
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 0.95, duration: 80, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, damping: 12 }),
+    ]).start();
+    onPress();
+  };
+
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing(2),
-        paddingHorizontal: spacing(4),
-        paddingVertical: spacing(3),
-        borderRadius: radii.pill,
-        borderWidth: 1,
-        borderColor: selected ? colors.primary : colors.border,
-        backgroundColor: selected ? colors.primary : colors.surfaceAlt,
-        opacity: pressed ? 0.85 : 1,
-        transform: pressed ? [{ scale: 0.97 }] : [],
-      })}
-    >
-      {icon && <Ionicons name={icon} size={16} color={selected ? '#fff' : colors.textSecondary} />}
-      <Text style={[typography.label, { color: selected ? '#fff' : colors.textPrimary }]}>
-        {label}
-      </Text>
-      {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
-    </Pressable>
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Pressable
+        onPress={handlePress}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing(3),
+          paddingHorizontal: spacing(5),
+          paddingVertical: spacing(4),
+          borderRadius: radii.xl,
+          borderWidth: 1.5,
+          borderColor: selected ? colors.primary : colors.border,
+          backgroundColor: selected ? `${colors.primary}1A` : colors.surfaceAlt,
+          minWidth: 130,
+          ...(Platform.OS === 'web' && {
+            transition: 'all 0.18s ease',
+            cursor: 'pointer',
+          } as any),
+        }}
+      >
+        {icon && (
+          <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: selected ? colors.primary : colors.border, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name={icon} size={16} color={selected ? '#fff' : colors.textSecondary} />
+          </View>
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={[typography.label, { color: selected ? colors.primary : colors.textPrimary, fontWeight: '700' }]}>{label}</Text>
+          {description && <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>{description}</Text>}
+        </View>
+        <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: selected ? colors.primary : colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? colors.primary : 'transparent' }}>
+          {selected && <Ionicons name="checkmark" size={12} color="#fff" />}
+        </View>
+      </Pressable>
+    </Animated.View>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SetupWizard (Updated)
+// WizardStepBar
+// ─────────────────────────────────────────────────────────────────────────────
+function WizardStepBar({ currentStep }: { currentStep: WizardStep }) {
+  const colors = useTheme();
+  const currentIdx = WIZARD_STEPS.findIndex(s => s.key === currentStep);
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing(8) }}>
+      {WIZARD_STEPS.map((s, i) => {
+        const done = i < currentIdx;
+        const active = i === currentIdx;
+        return (
+          <React.Fragment key={s.key}>
+            <View style={{ alignItems: 'center', gap: spacing(1) }}>
+              <View style={{
+                width: 40, height: 40, borderRadius: 20,
+                backgroundColor: done ? colors.success : active ? colors.primary : colors.surfaceAlt,
+                borderWidth: 2,
+                borderColor: done ? colors.success : active ? colors.primary : colors.border,
+                alignItems: 'center', justifyContent: 'center',
+                ...(Platform.OS === 'web' && { transition: 'all 0.3s ease' } as any),
+              }}>
+                {done
+                  ? <Ionicons name="checkmark" size={18} color="#fff" />
+                  : <Ionicons name={s.icon} size={16} color={active ? '#fff' : colors.textMuted} />
+                }
+              </View>
+              <Text style={[typography.caption, { color: active ? colors.primary : done ? colors.success : colors.textMuted, fontWeight: active ? '700' : '400' }]}>
+                {s.label}
+              </Text>
+            </View>
+            {i < WIZARD_STEPS.length - 1 && (
+              <View style={{ flex: 1, height: 2, backgroundColor: i < currentIdx ? colors.success : colors.border, marginBottom: spacing(5), marginHorizontal: spacing(1) }} />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SetupWizard
 // ─────────────────────────────────────────────────────────────────────────────
 function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => void }) {
   const colors = useTheme();
@@ -194,8 +340,6 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
     return IGCSE_DEFAULTS[track as IGCSETrack] ?? [];
   }, [system, track]);
 
-  const stepIndex: Record<WizardStep, number> = { system: 0, track: 1, form: 2, subjects: 3, done: 4 };
-
   const goNext = useCallback(() => {
     if (step === 'system' && system) setStep('track');
     else if (step === 'track' && track) setStep('form');
@@ -206,7 +350,6 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
         Alert.alert('Incomplete', `Please enter all ${ADDITIONAL_SUBJECTS} additional subjects.`);
         return;
       }
-
       const allSubjects = [...defaults, ...filled];
       onComplete({ system: system!, track: track!, form: form!, subjects: allSubjects });
     }
@@ -224,66 +367,75 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
     (step === 'form' && !!form) ||
     (step === 'subjects' && extraInputs.filter((s) => s.trim()).length >= ADDITIONAL_SUBJECTS);
 
-  const progressPct = ((stepIndex[step] as number) / 4) * 100;
+  const stepDescriptions: Record<WizardStep, { title: string; subtitle: string }> = {
+    system: { title: 'Choose Your System', subtitle: 'Select the examination board you are registered with.' },
+    track: { title: 'Select Your Track', subtitle: 'This determines your default subject set.' },
+    form: { title: 'What Year Are You In?', subtitle: 'We use this to personalise your academic timeline.' },
+    subjects: { title: 'Confirm Your Subjects', subtitle: `Your ${defaults.length} core subjects are pre-loaded. Add ${ADDITIONAL_SUBJECTS} electives.` },
+    done: { title: '', subtitle: '' },
+  };
 
   return (
-    <View style={{ padding: isMobile ? spacing(5) : spacing(7) }}>
-      <View style={{ marginBottom: spacing(6) }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing(2) }}>
-          <Text style={[typography.caption, { color: colors.textMuted }]}>STEP {stepIndex[step] + 1} OF 4</Text>
-          <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{Math.round(progressPct)}%</Text>
-        </View>
-        <View style={{ height: 6, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden' }}>
-          <View style={{ height: 6, width: `${progressPct}%`, backgroundColor: colors.primary, borderRadius: 3 }} />
-        </View>
+    <AnimatedCard style={{ padding: isMobile ? spacing(5) : spacing(8) }}>
+      <WizardStepBar currentStep={step} />
+
+      {/* Step heading */}
+      <View style={{ marginBottom: spacing(7) }}>
+        <Text style={[typography.h1, { color: colors.textPrimary, marginBottom: spacing(2) }]}>
+          {stepDescriptions[step].title}
+        </Text>
+        <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 24 }]}>
+          {stepDescriptions[step].subtitle}
+        </Text>
       </View>
 
       {/* Steps */}
       {step === 'system' && (
-        <View style={{ gap: spacing(5) }}>
-          <Text style={[typography.h1, { color: colors.textPrimary }]}>Welcome 👋</Text>
-          <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 24 }]}>
-            Which examination system are you enrolled in?
-          </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3) }}>
-            <SelectionPill label="BGCSE" selected={system === 'BGCSE'} onPress={() => setSystem('BGCSE')} icon="school-outline" />
-            <SelectionPill label="IGCSE" selected={system === 'IGCSE'} onPress={() => setSystem('IGCSE')} icon="globe-outline" />
-          </View>
+        <View style={{ gap: spacing(3) }}>
+          <SelectionPill
+            label="BGCSE"
+            description="Botswana General Certificate of Secondary Education"
+            selected={system === 'BGCSE'}
+            onPress={() => setSystem('BGCSE')}
+            icon="school-outline"
+          />
+          <SelectionPill
+            label="IGCSE"
+            description="International General Certificate of Secondary Education"
+            selected={system === 'IGCSE'}
+            onPress={() => setSystem('IGCSE')}
+            icon="globe-outline"
+          />
         </View>
       )}
 
       {step === 'track' && system && (
-        <View style={{ gap: spacing(5) }}>
-          <Text style={[typography.h1, { color: colors.textPrimary }]}>Your Track</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3) }}>
-            {(system === 'BGCSE' ? (['Pure', 'Double', 'Single'] as BGCSETrack[]) : (['Advanced', 'Ordinary'] as IGCSETrack[])).map((t) => (
-              <SelectionPill key={t} label={t} selected={track === t} onPress={() => setTrack(t)} icon="flask-outline" />
-            ))}
-          </View>
+        <View style={{ gap: spacing(3) }}>
+          {(system === 'BGCSE'
+            ? [{ t: 'Pure', desc: 'All three sciences as separate subjects' }, { t: 'Double', desc: 'Combined double science award' }, { t: 'Single', desc: 'Combined single science award' }] as { t: BGCSETrack; desc: string }[]
+            : [{ t: 'Advanced', desc: 'Extended Mathematics & Sciences' }, { t: 'Ordinary', desc: 'Core level across subjects' }] as { t: IGCSETrack; desc: string }[]
+          ).map(({ t, desc }) => (
+            <SelectionPill key={t} label={t} description={desc} selected={track === t} onPress={() => setTrack(t)} icon="flask-outline" />
+          ))}
         </View>
       )}
 
       {step === 'form' && system && (
-        <View style={{ gap: spacing(5) }}>
-          <Text style={[typography.h1, { color: colors.textPrimary }]}>Your Year Group</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3) }}>
-            {(system === 'BGCSE' ? BGCSE_FORMS : IGCSE_FORMS).map((f) => (
-              <SelectionPill key={f} label={f} selected={form === f} onPress={() => setForm(f)} icon="person-outline" />
-            ))}
-          </View>
+        <View style={{ gap: spacing(3) }}>
+          {(system === 'BGCSE' ? BGCSE_FORMS : IGCSE_FORMS).map((f) => (
+            <SelectionPill key={f} label={f} selected={form === f} onPress={() => setForm(f)} icon="person-outline" />
+          ))}
         </View>
       )}
 
       {step === 'subjects' && track && (
-        <View style={{ gap: spacing(5) }}>
-          <Text style={[typography.h1, { color: colors.textPrimary }]}>Your Subjects</Text>
-          <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 24 }]}>
-            You must enter exactly {ADDITIONAL_SUBJECTS} additional subjects.
-          </Text>
-
-          {/* Default Subjects */}
-          <View style={{ gap: spacing(2) }}>
-            <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5 }]}>DEFAULT SUBJECTS</Text>
+        <View style={{ gap: spacing(6) }}>
+          {/* Default subjects grid */}
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginBottom: spacing(3) }}>
+              <View style={{ width: 4, height: 16, borderRadius: 2, backgroundColor: colors.primary }} />
+              <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 1, fontWeight: '700' }]}>CORE SUBJECTS ({defaults.length})</Text>
+            </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) }}>
               {defaults.map((s, i) => (
                 <View
@@ -292,49 +444,80 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
                     paddingHorizontal: spacing(3),
                     paddingVertical: spacing(2),
                     borderRadius: radii.pill,
-                    backgroundColor: `${colors.primary}1A`,
+                    backgroundColor: `${colors.primary}18`,
                     borderWidth: 1,
-                    borderColor: `${colors.primary}33`,
+                    borderColor: `${colors.primary}30`,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing(1),
                   }}
                 >
-                  <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{s}</Text>
+                  <Ionicons name="checkmark-circle" size={12} color={colors.primary} />
+                  <Text style={[typography.caption, { color: colors.primary, fontWeight: '600' }]}>{s}</Text>
                 </View>
               ))}
             </View>
           </View>
 
-          {/* Additional Subjects */}
-          <View style={{ gap: spacing(3) }}>
-            <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5 }]}>
-              ADD {ADDITIONAL_SUBJECTS} ADDITIONAL SUBJECTS
-            </Text>
-            {extraInputs.map((val, i) => (
-              <TextInput
-                key={i}
-                value={val}
-                onChangeText={(text) => {
-                  const copy = [...extraInputs];
-                  copy[i] = text;
-                  setExtraInputs(copy);
-                }}
-                placeholder={`Additional Subject ${i + 1}`}
-                style={{
-                  padding: spacing(4),
-                  backgroundColor: colors.surfaceAlt,
-                  borderRadius: radii.lg,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  color: colors.textPrimary,
-                }}
-              />
-            ))}
+          {/* Additional inputs */}
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginBottom: spacing(3) }}>
+              <View style={{ width: 4, height: 16, borderRadius: 2, backgroundColor: colors.warning }} />
+              <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 1, fontWeight: '700' }]}>ADD {ADDITIONAL_SUBJECTS} ELECTIVES</Text>
+            </View>
+            <View style={{ gap: spacing(3) }}>
+              {extraInputs.map((val, i) => (
+                <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
+                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: val.trim() ? colors.success : colors.surfaceAlt, borderWidth: 1, borderColor: val.trim() ? colors.success : colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: val.trim() ? '#fff' : colors.textMuted }}>{i + 1}</Text>
+                  </View>
+                  <TextInput
+                    value={val}
+                    onChangeText={(text) => {
+                      const copy = [...extraInputs];
+                      copy[i] = text;
+                      setExtraInputs(copy);
+                    }}
+                    placeholder={`Elective subject ${i + 1}`}
+                    placeholderTextColor={colors.textMuted}
+                    style={{
+                      flex: 1,
+                      padding: spacing(4),
+                      backgroundColor: colors.surfaceAlt,
+                      borderRadius: radii.lg,
+                      borderWidth: 1.5,
+                      borderColor: val.trim() ? `${colors.success}66` : colors.border,
+                      color: colors.textPrimary,
+                      fontSize: 15,
+                    }}
+                  />
+                </View>
+              ))}
+            </View>
           </View>
         </View>
       )}
 
-      <View style={{ flexDirection: 'row', gap: spacing(3), marginTop: spacing(8) }}>
+      {/* Navigation */}
+      <View style={{ flexDirection: 'row', gap: spacing(3), marginTop: spacing(10) }}>
         {step !== 'system' && (
-          <Pressable onPress={goBack} style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}>
+          <Pressable
+            onPress={goBack}
+            style={({ pressed }) => ({
+              flex: 1,
+              height: 52,
+              borderRadius: radii.lg,
+              backgroundColor: colors.surfaceAlt,
+              borderWidth: 1,
+              borderColor: colors.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'row',
+              gap: spacing(2),
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Ionicons name="arrow-back" size={16} color={colors.textSecondary} />
             <Text style={[typography.label, { color: colors.textPrimary }]}>Back</Text>
           </Pressable>
         )}
@@ -348,20 +531,113 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
             backgroundColor: canNext ? colors.primary : colors.surfaceAlt,
             alignItems: 'center',
             justifyContent: 'center',
-            opacity: canNext ? (pressed ? 0.88 : 1) : 0.5,
+            flexDirection: 'row',
+            gap: spacing(2),
+            opacity: canNext ? (pressed ? 0.88 : 1) : 0.45,
+            ...(Platform.OS === 'web' && canNext && { boxShadow: `0 4px 18px ${colors.primary}55` } as any),
           })}
         >
-          <Text style={[typography.label, { color: canNext ? '#fff' : colors.textMuted }]}>
+          <Text style={[typography.label, { color: canNext ? '#fff' : colors.textMuted, fontSize: 15, fontWeight: '700' }]}>
             {step === 'subjects' ? 'Save Profile' : 'Continue'}
           </Text>
+          {step !== 'subjects' && canNext && <Ionicons name="arrow-forward" size={16} color="#fff" />}
+          {step === 'subjects' && canNext && <Ionicons name="checkmark" size={16} color="#fff" />}
         </Pressable>
+      </View>
+    </AnimatedCard>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ScoreSlider — smooth horizontal scroll score picker
+// ─────────────────────────────────────────────────────────────────────────────
+function ScoreSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const colors = useTheme();
+  const grade = getGrade(value);
+  const segments = [
+    { label: 'U', range: [0, 39], color: '#F87171' },
+    { label: 'E', range: [40, 49], color: '#FB923C' },
+    { label: 'D', range: [50, 59], color: '#FBBF24' },
+    { label: 'C', range: [60, 69], color: '#A78BFA' },
+    { label: 'B', range: [70, 79], color: '#60A5FA' },
+    { label: 'A', range: [80, 100], color: '#34D399' },
+  ];
+
+  return (
+    <View style={{ gap: spacing(4) }}>
+      {/* Grade band display */}
+      <View style={{ flexDirection: 'row', gap: spacing(2) }}>
+        {segments.map((seg) => {
+          const active = value >= seg.range[0] && value <= seg.range[1];
+          return (
+            <Pressable
+              key={seg.label}
+              onPress={() => onChange(Math.round((seg.range[0] + seg.range[1]) / 2))}
+              style={{
+                flex: 1,
+                height: 36,
+                borderRadius: radii.md,
+                backgroundColor: active ? seg.color : `${seg.color}22`,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1.5,
+                borderColor: active ? seg.color : 'transparent',
+                ...(Platform.OS === 'web' && { transition: 'all 0.2s ease', cursor: 'pointer' } as any),
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '800', color: active ? '#fff' : seg.color }}>{seg.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Score dial */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(4) }}>
+        <Pressable
+          onPress={() => onChange(Math.max(0, value - 1))}
+          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Ionicons name="remove" size={18} color={colors.textSecondary} />
+        </Pressable>
+
+        <View style={{ flex: 1, height: 56, backgroundColor: `${grade.color}15`, borderRadius: radii.lg, borderWidth: 1.5, borderColor: `${grade.color}55`, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 26, fontWeight: '900', color: grade.color }}>{value}%</Text>
+        </View>
+
+        <Pressable
+          onPress={() => onChange(Math.min(100, value + 1))}
+          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Ionicons name="add" size={18} color={colors.textSecondary} />
+        </Pressable>
+      </View>
+
+      {/* Quick picks */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) }}>
+        {[0, 25, 40, 50, 60, 70, 75, 80, 85, 90, 95, 100].map((v) => (
+          <Pressable
+            key={v}
+            onPress={() => onChange(v)}
+            style={({ pressed }) => ({
+              paddingHorizontal: spacing(3),
+              paddingVertical: spacing(2),
+              borderRadius: radii.md,
+              backgroundColor: value === v ? `${getGrade(v).color}22` : colors.surfaceAlt,
+              borderWidth: 1,
+              borderColor: value === v ? getGrade(v).color : colors.border,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Text style={{ fontSize: 12, fontWeight: '700', color: value === v ? getGrade(v).color : colors.textSecondary }}>{v}</Text>
+          </Pressable>
+        ))}
       </View>
     </View>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AddRecordModal (Enhanced)
+// AddRecordModal
 // ─────────────────────────────────────────────────────────────────────────────
 function AddRecordModal({
   visible,
@@ -375,37 +651,57 @@ function AddRecordModal({
   onClose: () => void;
 }) {
   const colors = useTheme();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const modalElevation = useElevation('lg');
   const [subject, setSubject] = useState('');
   const [score, setScore] = useState(65);
   const [examType, setExamType] = useState<ExamType>('End of Term Exam');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
 
-  const canSave = subject && examType && date;
+  const canSave = !!subject && !!examType && !!date;
+  const grade = getGrade(score);
 
   const handleSave = () => {
     if (!canSave) return;
-    onSave({
-      id: Date.now().toString(),
-      subject,
-      score,
-      examType,
-      date,
-    });
+    onSave({ id: Date.now().toString(), subject, score, examType, date });
+    // reset
+    setSubject('');
+    setScore(65);
+    setExamType('End of Term Exam');
+    setDate(new Date().toISOString().slice(0, 10));
     onClose();
   };
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: spacing(5) }} onPress={onClose}>
-        <View style={{ width: '100%', maxWidth: 480, backgroundColor: colors.surface, borderRadius: radii.xxl, overflow: 'hidden' }}>
-          <View style={{ height: 4, backgroundColor: colors.primary }} />
+      <Pressable
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: spacing(4) }}
+        onPress={onClose}
+      >
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          style={[{ width: '100%', maxWidth: 520, backgroundColor: colors.surface, borderRadius: radii.xxl, overflow: 'hidden' }, modalElevation]}
+        >
+          {/* Header */}
+          <View style={{ height: 5, backgroundColor: grade.color }} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing(6), paddingBottom: spacing(4) }}>
+            <View>
+              <Text style={[typography.h2, { color: colors.textPrimary }]}>Add Result</Text>
+              <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(1) }]}>
+                {subject ? `${subject} · ${grade.letter} grade` : 'Select a subject to get started'}
+              </Text>
+            </View>
+            <Pressable onPress={onClose} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="close" size={18} color={colors.textSecondary} />
+            </Pressable>
+          </View>
 
-          <View style={{ padding: spacing(6), gap: spacing(5) }}>
-            <Text style={[typography.h2, { color: colors.textPrimary }]}>Add New Record</Text>
+          <ScrollView style={{ maxHeight: isMobile ? 520 : 600 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: spacing(6), paddingTop: 0, gap: spacing(6) }}>
 
             {/* Subject */}
             <View>
-              <Text style={[typography.label, { color: colors.textPrimary, marginBottom: spacing(2) }]}>Subject</Text>
+              <Text style={[typography.label, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>SUBJECT</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={{ flexDirection: 'row', gap: spacing(2) }}>
                   {subjects.map((s) => (
@@ -414,15 +710,15 @@ function AddRecordModal({
                       onPress={() => setSubject(s)}
                       style={({ pressed }) => ({
                         paddingHorizontal: spacing(4),
-                        paddingVertical: spacing(2),
+                        paddingVertical: spacing(3),
                         borderRadius: radii.pill,
                         backgroundColor: subject === s ? colors.primary : colors.surfaceAlt,
-                        borderWidth: 1,
+                        borderWidth: 1.5,
                         borderColor: subject === s ? colors.primary : colors.border,
                         opacity: pressed ? 0.85 : 1,
                       })}
                     >
-                      <Text style={{ color: subject === s ? '#fff' : colors.textPrimary }}>{s}</Text>
+                      <Text style={{ color: subject === s ? '#fff' : colors.textPrimary, fontWeight: subject === s ? '700' : '400', fontSize: 13 }}>{s}</Text>
                     </Pressable>
                   ))}
                 </View>
@@ -431,53 +727,39 @@ function AddRecordModal({
 
             {/* Score */}
             <View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing(2) }}>
-                <Text style={[typography.label, { color: colors.textPrimary }]}>Score (%)</Text>
-                <Text style={[typography.h2, { color: colors.primary }]}>{score}%</Text>
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={{ flexDirection: 'row', gap: spacing(1), paddingVertical: spacing(2) }}>
-                  {Array.from({ length: 101 }, (_, i) => i).map((s) => (
-                    <Pressable
-                      key={s}
-                      onPress={() => setScore(s)}
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: radii.md,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: s === score ? `${colors.primary}22` : colors.surfaceAlt,
-                        borderWidth: 1,
-                        borderColor: s === score ? colors.primary : colors.border,
-                      }}
-                    >
-                      <Text style={{ color: s === score ? colors.primary : colors.textSecondary }}>{s}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </ScrollView>
+              <Text style={[typography.label, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>SCORE</Text>
+              <ScoreSlider value={score} onChange={setScore} />
             </View>
 
             {/* Exam Type */}
             <View>
-              <Text style={[typography.label, { color: colors.textPrimary, marginBottom: spacing(2) }]}>Exam Type</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) }}>
+              <Text style={[typography.label, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>EXAM TYPE</Text>
+              <View style={{ gap: spacing(2) }}>
                 {EXAM_TYPES.map((type) => (
                   <Pressable
                     key={type}
                     onPress={() => setExamType(type)}
                     style={({ pressed }) => ({
-                      paddingHorizontal: spacing(4),
-                      paddingVertical: spacing(2),
-                      borderRadius: radii.pill,
-                      backgroundColor: examType === type ? colors.primary : colors.surfaceAlt,
-                      borderWidth: 1,
-                      borderColor: examType === type ? colors.primary : colors.border,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: spacing(3),
+                      padding: spacing(4),
+                      borderRadius: radii.lg,
+                      backgroundColor: examType === type ? `${colors.primary}15` : colors.surfaceAlt,
+                      borderWidth: 1.5,
+                      borderColor: examType === type ? `${colors.primary}66` : colors.border,
                       opacity: pressed ? 0.85 : 1,
                     })}
                   >
-                    <Text style={{ color: examType === type ? '#fff' : colors.textPrimary }}>{type}</Text>
+                    <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: examType === type ? colors.primary : colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name={EXAM_TYPE_ICONS[type]} size={16} color={examType === type ? '#fff' : colors.textMuted} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[typography.label, { color: examType === type ? colors.primary : colors.textPrimary }]}>{type}</Text>
+                    </View>
+                    <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: examType === type ? colors.primary : colors.border, backgroundColor: examType === type ? colors.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                      {examType === type && <Ionicons name="checkmark" size={11} color="#fff" />}
+                    </View>
                   </Pressable>
                 ))}
               </View>
@@ -485,21 +767,19 @@ function AddRecordModal({
 
             {/* Date */}
             <View>
-              <Text style={[typography.label, { color: colors.textPrimary, marginBottom: spacing(2) }]}>Date</Text>
-              <TextInput
-                value={date}
-                onChangeText={setDate}
-                style={{
-                  padding: spacing(4),
-                  backgroundColor: colors.surfaceAlt,
-                  borderRadius: radii.lg,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  color: colors.textPrimary,
-                }}
-              />
+              <Text style={[typography.label, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>DATE</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(4), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1.5, borderColor: colors.border }}>
+                <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
+                <TextInput
+                  value={date}
+                  onChangeText={setDate}
+                  placeholderTextColor={colors.textMuted}
+                  style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}
+                />
+              </View>
             </View>
 
+            {/* Save */}
             <Pressable
               onPress={handleSave}
               style={({ pressed }) => ({
@@ -508,20 +788,162 @@ function AddRecordModal({
                 borderRadius: radii.lg,
                 alignItems: 'center',
                 justifyContent: 'center',
-                opacity: canSave ? (pressed ? 0.9 : 1) : 0.6,
+                flexDirection: 'row',
+                gap: spacing(2),
+                opacity: canSave ? (pressed ? 0.9 : 1) : 0.5,
+                ...(Platform.OS === 'web' && canSave && { boxShadow: `0 4px 18px ${colors.primary}55` } as any),
               })}
             >
-              <Text style={[typography.label, { color: canSave ? '#fff' : colors.textMuted }]}>SAVE RECORD</Text>
+              <Ionicons name="checkmark-circle" size={20} color={canSave ? '#fff' : colors.textMuted} />
+              <Text style={[typography.label, { color: canSave ? '#fff' : colors.textMuted, fontSize: 15, fontWeight: '700' }]}>SAVE RESULT</Text>
             </Pressable>
-          </View>
-        </View>
+          </ScrollView>
+        </Pressable>
       </Pressable>
     </Modal>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PerformanceTable (Enhanced)
+// GradeDistributionBar
+// ─────────────────────────────────────────────────────────────────────────────
+function GradeDistributionBar({ subjectStats }: { subjectStats: { avg: number | null }[] }) {
+  const colors = useTheme();
+  const bands = [
+    { label: 'A (80+)', color: '#34D399', count: subjectStats.filter(s => s.avg !== null && s.avg >= 80).length },
+    { label: 'B (70–79)', color: '#60A5FA', count: subjectStats.filter(s => s.avg !== null && s.avg >= 70 && s.avg < 80).length },
+    { label: 'C (60–69)', color: '#A78BFA', count: subjectStats.filter(s => s.avg !== null && s.avg >= 60 && s.avg < 70).length },
+    { label: 'D (50–59)', color: '#FBBF24', count: subjectStats.filter(s => s.avg !== null && s.avg >= 50 && s.avg < 60).length },
+    { label: 'E (40–49)', color: '#FB923C', count: subjectStats.filter(s => s.avg !== null && s.avg >= 40 && s.avg < 50).length },
+    { label: 'U (<40)', color: '#F87171', count: subjectStats.filter(s => s.avg !== null && s.avg < 40).length },
+  ];
+  const total = bands.reduce((a, b) => a + b.count, 0);
+  if (total === 0) return null;
+
+  return (
+    <View style={{ gap: spacing(3) }}>
+      <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, fontWeight: '700' }]}>GRADE DISTRIBUTION</Text>
+      <View style={{ flexDirection: 'row', height: 10, borderRadius: 5, overflow: 'hidden', gap: 1 }}>
+        {bands.filter(b => b.count > 0).map((b) => (
+          <View key={b.label} style={{ flex: b.count, backgroundColor: b.color }} />
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3) }}>
+        {bands.filter(b => b.count > 0).map((b) => (
+          <View key={b.label} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1) }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: b.color }} />
+            <Text style={[typography.caption, { color: colors.textMuted }]}>{b.label}: {b.count}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SubjectCard — the signature element
+// ─────────────────────────────────────────────────────────────────────────────
+function SubjectCard({
+  subject,
+  avg,
+  latest,
+  latestDate,
+  examType,
+  count,
+  marks,
+  delay,
+}: {
+  subject: string;
+  avg: number | null;
+  latest: number | null;
+  latestDate: string | null;
+  examType: string | null;
+  count: number;
+  marks: MarkRecord[];
+  delay: number;
+}) {
+  const colors = useTheme();
+  const [expanded, setExpanded] = useState(false);
+  const elev = useElevation('sm');
+  const grade = avg !== null ? getGrade(avg) : null;
+
+  const subjectMarks = marks.filter(m => m.subject === subject).sort((a, b) => b.date.localeCompare(a.date));
+
+  return (
+    <AnimatedCard delay={delay} style={[{ backgroundColor: colors.surface, borderRadius: radii.xl, borderWidth: 1, borderColor: expanded ? `${grade?.color ?? colors.border}44` : colors.border, overflow: 'hidden' }, elev]}>
+      {/* Top accent line — grade colour */}
+      {grade && <View style={{ height: 3, backgroundColor: grade.color }} />}
+
+      <Pressable onPress={() => setExpanded(!expanded)} style={{ flexDirection: 'row', alignItems: 'center', padding: spacing(5), gap: spacing(4) }}>
+        {/* Ring */}
+        <GradeRing score={avg} size={64} />
+
+        {/* Subject info */}
+        <View style={{ flex: 1 }}>
+          <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 15 }]} numberOfLines={1}>{subject}</Text>
+          {count > 0 ? (
+            <View style={{ flexDirection: 'row', gap: spacing(3), marginTop: spacing(2), flexWrap: 'wrap' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1) }}>
+                <Ionicons name="document-text-outline" size={12} color={colors.textMuted} />
+                <Text style={[typography.caption, { color: colors.textMuted }]}>{count} test{count !== 1 ? 's' : ''}</Text>
+              </View>
+              {latestDate && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1) }}>
+                  <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+                  <Text style={[typography.caption, { color: colors.textMuted }]}>{latestDate}</Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(1) }]}>No results yet</Text>
+          )}
+        </View>
+
+        {/* Expand chevron */}
+        <View style={{ alignItems: 'flex-end', gap: spacing(2) }}>
+          {examType && (
+            <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: `${colors.primary}18` }}>
+              <Text style={[typography.caption, { color: colors.primary, fontWeight: '700', fontSize: 10 }]}>
+                {EXAM_TYPE_SHORT[examType as ExamType] ?? examType}
+              </Text>
+            </View>
+          )}
+          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+        </View>
+      </Pressable>
+
+      {/* Expanded history */}
+      {expanded && (
+        <View style={{ borderTopWidth: 1, borderTopColor: colors.divider, padding: spacing(5), gap: spacing(3) }}>
+          {subjectMarks.length === 0 ? (
+            <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center' }]}>No results recorded for this subject yet.</Text>
+          ) : (
+            subjectMarks.map((m, i) => {
+              const g = getGrade(m.score);
+              return (
+                <View key={m.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(3), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg }}>
+                  <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: `${g.color}22`, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: `${g.color}44` }}>
+                    <Text style={{ fontSize: 12, fontWeight: '900', color: g.color }}>{g.letter}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 13 }]}>{EXAM_TYPE_SHORT[m.examType]} · {m.score}%</Text>
+                    <Text style={[typography.caption, { color: colors.textMuted }]}>{m.date}</Text>
+                  </View>
+                  <View style={{ height: 36, width: 36, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: g.color }}>{m.score}</Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+      )}
+    </AnimatedCard>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PerformanceTable
 // ─────────────────────────────────────────────────────────────────────────────
 function PerformanceTable({
   profile,
@@ -537,16 +959,16 @@ function PerformanceTable({
   const colors = useTheme();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const isDesktop = width >= 1024;
+  const heroElevation = useElevation('md');
 
-  const [filter, setFilter] = useState<'all' | 'well' | 'poor'>('all');
-  const [sortBy, setSortBy] = useState<'subject' | 'avg' | 'latest'>('subject');
-  const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | 'well' | 'poor' | 'untested'>('all');
+  const [sortBy, setSortBy] = useState<'subject' | 'avg' | 'count'>('subject');
+  const [search, setSearch] = useState('');
 
   const subjectStats = useMemo(() => {
     const map = new Map<string, { scores: number[]; latest: number | null; latestDate: string | null; examType: string | null }>();
-
     profile.subjects.forEach((s) => map.set(s, { scores: [], latest: null, latestDate: null, examType: null }));
-
     [...marks].sort((a, b) => a.date.localeCompare(b.date)).forEach((m) => {
       const entry = map.get(m.subject);
       if (entry) {
@@ -556,95 +978,205 @@ function PerformanceTable({
         entry.examType = m.examType;
       }
     });
-
     return Array.from(map.entries()).map(([subject, data]) => {
       const avg = data.scores.length ? Math.round(data.scores.reduce((a, b) => a + b, 0) / data.scores.length) : null;
-      return { subject, avg, latest: data.latest, latestDate: data.latestDate, examType: data.examType, scores: data.scores, count: data.scores.length };
+      return { subject, avg, latest: data.latest, latestDate: data.latestDate, examType: data.examType, count: data.scores.length };
     });
   }, [profile.subjects, marks]);
 
   const filtered = useMemo(() => {
     let rows = [...subjectStats];
-    if (filter === 'well') rows = rows.filter((r) => r.avg && r.avg >= 60);
-    if (filter === 'poor') rows = rows.filter((r) => r.avg && r.avg < 60);
-
+    if (search.trim()) rows = rows.filter(r => r.subject.toLowerCase().includes(search.toLowerCase()));
+    if (filter === 'well') rows = rows.filter(r => r.avg !== null && r.avg >= 60);
+    if (filter === 'poor') rows = rows.filter(r => r.avg !== null && r.avg < 60);
+    if (filter === 'untested') rows = rows.filter(r => r.avg === null);
     if (sortBy === 'avg') rows.sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1));
-    if (sortBy === 'latest') rows.sort((a, b) => (b.latest ?? -1) - (a.latest ?? -1));
+    if (sortBy === 'count') rows.sort((a, b) => b.count - a.count);
     if (sortBy === 'subject') rows.sort((a, b) => a.subject.localeCompare(b.subject));
-
     return rows;
-  }, [subjectStats, filter, sortBy]);
+  }, [subjectStats, filter, sortBy, search]);
 
   const overallAvg = useMemo(() => {
-    const avgs = subjectStats.filter((s) => s.avg !== null).map((s) => s.avg!);
+    const avgs = subjectStats.filter(s => s.avg !== null).map(s => s.avg!);
     return avgs.length ? Math.round(avgs.reduce((a, b) => a + b, 0) / avgs.length) : null;
   }, [subjectStats]);
 
+  const tested = subjectStats.filter(s => s.count > 0).length;
+  const overallGrade = overallAvg !== null ? getGrade(overallAvg) : null;
+
   return (
     <View style={{ gap: spacing(6) }}>
-      {/* Stats Overview */}
-      <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing(6) }, useElevation('md')]}>
-        <Text style={[typography.h2, { color: colors.textPrimary }]}>Your Performance</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(4), marginTop: spacing(5) }}>
-          <View style={{ flex: 1, minWidth: 140 }}>
-            <Text style={[typography.caption, { color: colors.textMuted }]}>OVERALL AVERAGE</Text>
-            <Text style={{ fontSize: 42, fontWeight: '900', color: overallAvg ? (overallAvg >= 70 ? colors.success : colors.warning) : colors.textMuted }}>
-              {overallAvg ?? '—'}%
-            </Text>
+      {/* Hero stats */}
+      <AnimatedCard delay={0} style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }, heroElevation]}>
+        <View style={{ height: 4, backgroundColor: overallGrade?.color ?? colors.primary }} />
+        <View style={{ padding: spacing(6), gap: spacing(5) }}>
+          <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: spacing(5), alignItems: isDesktop ? 'center' : 'flex-start' }}>
+            {/* Overall avg big ring */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(5) }}>
+              <GradeRing score={overallAvg} size={96} />
+              <View>
+                <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, fontWeight: '700' }]}>OVERALL AVERAGE</Text>
+                <Text style={{ fontSize: 38, fontWeight: '900', color: overallGrade?.color ?? colors.textMuted, lineHeight: 46 }}>
+                  {overallAvg !== null ? `${overallAvg}%` : '—'}
+                </Text>
+                <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(1) }]}>
+                  {profile.system} · {profile.track} · {profile.form}
+                </Text>
+              </View>
+            </View>
+
+            {isDesktop && <View style={{ flex: 1 }} />}
+
+            {/* Mini stats */}
+            <View style={{ flexDirection: 'row', gap: spacing(4), flexWrap: 'wrap' }}>
+              {[
+                { label: 'SUBJECTS', value: profile.subjects.length, icon: 'book-outline' as const, color: colors.primary },
+                { label: 'TESTED', value: tested, icon: 'checkmark-circle-outline' as const, color: colors.success },
+                { label: 'RESULTS', value: marks.length, icon: 'document-text-outline' as const, color: colors.warning },
+              ].map((stat) => (
+                <View key={stat.label} style={{ alignItems: 'center', gap: spacing(1), minWidth: 72 }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${stat.color}20`, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name={stat.icon} size={18} color={stat.color} />
+                  </View>
+                  <Text style={{ fontSize: 22, fontWeight: '900', color: colors.textPrimary }}>{stat.value}</Text>
+                  <Text style={[typography.caption, { color: colors.textMuted }]}>{stat.label}</Text>
+                </View>
+              ))}
+            </View>
           </View>
-          <View style={{ flex: 1, minWidth: 140 }}>
-            <Text style={[typography.caption, { color: colors.textMuted }]}>SUBJECTS TRACKED</Text>
-            <Text style={[typography.h1, { color: colors.textPrimary }]}>{profile.subjects.length}</Text>
-          </View>
+
+          <GradeDistributionBar subjectStats={subjectStats} />
         </View>
-      </View>
+      </AnimatedCard>
 
       {/* Controls */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: spacing(3) }}>
-        <View style={{ flexDirection: 'row', gap: spacing(2) }}>
-          {(['all', 'well', 'poor'] as const).map((f) => (
-            <Pressable key={f} onPress={() => setFilter(f)} style={({ pressed }) => ({ paddingHorizontal: spacing(4), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: filter === f ? colors.primary : colors.surfaceAlt, borderWidth: 1, borderColor: filter === f ? colors.primary : colors.border, opacity: pressed ? 0.85 : 1 })}>
-              <Text style={{ color: filter === f ? '#fff' : colors.textPrimary }}>{f === 'all' ? 'All' : f === 'well' ? 'Strong' : 'Needs Work'}</Text>
-            </Pressable>
+      <AnimatedCard delay={80}>
+        <View style={{ gap: spacing(3) }}>
+          {/* Search */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(3), backgroundColor: colors.surface, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border }}>
+            <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search subjects…"
+              placeholderTextColor={colors.textMuted}
+              style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}
+            />
+            {search.length > 0 && (
+              <Pressable onPress={() => setSearch('')}>
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              </Pressable>
+            )}
+          </View>
+
+          {/* Filter / sort row */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: spacing(3) }}>
+            {/* Filters */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row', gap: spacing(2) }}>
+                {([
+                  { key: 'all', label: 'All', icon: 'grid-outline' },
+                  { key: 'well', label: 'Strong', icon: 'trending-up-outline' },
+                  { key: 'poor', label: 'Needs Work', icon: 'alert-circle-outline' },
+                  { key: 'untested', label: 'Not Tested', icon: 'time-outline' },
+                ] as const).map(({ key, label, icon }) => (
+                  <Pressable
+                    key={key}
+                    onPress={() => setFilter(key)}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: spacing(2),
+                      paddingHorizontal: spacing(4),
+                      paddingVertical: spacing(2),
+                      borderRadius: radii.pill,
+                      backgroundColor: filter === key ? colors.primary : colors.surface,
+                      borderWidth: 1.5,
+                      borderColor: filter === key ? colors.primary : colors.border,
+                      opacity: pressed ? 0.85 : 1,
+                    })}
+                  >
+                    <Ionicons name={icon} size={13} color={filter === key ? '#fff' : colors.textSecondary} />
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: filter === key ? '#fff' : colors.textPrimary }}>{label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </ScrollView>
+
+            {/* Action buttons */}
+            <View style={{ flexDirection: 'row', gap: spacing(2) }}>
+              {/* Sort */}
+              <Pressable
+                onPress={() => setSortBy(s => s === 'subject' ? 'avg' : s === 'avg' ? 'count' : 'subject')}
+                style={({ pressed }) => ({
+                  flexDirection: 'row', alignItems: 'center', gap: spacing(2),
+                  paddingHorizontal: spacing(4), paddingVertical: spacing(2),
+                  backgroundColor: colors.surface, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border,
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <Ionicons name="swap-vertical-outline" size={14} color={colors.textSecondary} />
+                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>
+                  {sortBy === 'subject' ? 'A–Z' : sortBy === 'avg' ? 'By Avg' : 'By Count'}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={onAddRecord}
+                style={({ pressed }) => ({
+                  flexDirection: 'row', alignItems: 'center', gap: spacing(2),
+                  paddingHorizontal: spacing(5), paddingVertical: spacing(3),
+                  backgroundColor: colors.primary, borderRadius: radii.lg,
+                  opacity: pressed ? 0.9 : 1,
+                  ...(Platform.OS === 'web' && { boxShadow: `0 4px 14px ${colors.primary}55` } as any),
+                })}
+              >
+                <Ionicons name="add" size={16} color="#fff" />
+                <Text style={[typography.label, { color: '#fff', fontSize: 13 }]}>Add Result</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={onReset}
+                style={({ pressed }) => ({
+                  width: 40, height: 40, borderRadius: radii.lg,
+                  backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+                  alignItems: 'center', justifyContent: 'center',
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <Ionicons name="refresh-outline" size={16} color={colors.danger} />
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </AnimatedCard>
+
+      {/* Subject cards */}
+      {filtered.length === 0 ? (
+        <AnimatedCard delay={100} style={{ padding: spacing(12), alignItems: 'center', backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, gap: spacing(3) }}>
+          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="search-outline" size={28} color={colors.textMuted} />
+          </View>
+          <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>No subjects match</Text>
+          <Text style={[typography.body, { color: colors.textMuted, textAlign: 'center' }]}>Try a different filter or search term.</Text>
+        </AnimatedCard>
+      ) : (
+        <View style={{ gap: spacing(3) }}>
+          {filtered.map((row, i) => (
+            <SubjectCard
+              key={row.subject}
+              subject={row.subject}
+              avg={row.avg}
+              latest={row.latest}
+              latestDate={row.latestDate}
+              examType={row.examType}
+              count={row.count}
+              marks={marks}
+              delay={i * 40}
+            />
           ))}
         </View>
-
-        <View style={{ flexDirection: 'row', gap: spacing(3) }}>
-          <Pressable onPress={onAddRecord} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(5), paddingVertical: spacing(3), backgroundColor: colors.primary, borderRadius: radii.lg, opacity: pressed ? 0.9 : 1 })}>
-            <Ionicons name="add" size={18} color="#fff" />
-            <Text style={[typography.label, { color: '#fff' }]}>Add Record</Text>
-          </Pressable>
-
-          <Pressable onPress={onReset} style={({ pressed }) => ({ paddingHorizontal: spacing(4), paddingVertical: spacing(3), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.85 : 1 })}>
-            <Ionicons name="refresh-outline" size={18} color={colors.danger} />
-          </Pressable>
-        </View>
-      </View>
-
-      {/* Table */}
-      <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }, useElevation('md')]}>
-        {filtered.length === 0 ? (
-          <View style={{ padding: spacing(10), alignItems: 'center' }}>
-            <Text style={[typography.body, { color: colors.textMuted }]}>No records match your filter.</Text>
-          </View>
-        ) : (
-          filtered.map((row) => (
-            <Pressable key={row.subject} onPress={() => setExpandedSubject(expandedSubject === row.subject ? null : row.subject)} style={{ borderTopWidth: 1, borderTopColor: colors.divider }}>
-              <View style={{ flexDirection: 'row', padding: spacing(5), alignItems: 'center' }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>{row.subject}</Text>
-                  {row.avg && <PerformanceBar score={row.avg} />}
-                </View>
-                <View style={{ alignItems: 'center', width: 70 }}>
-                  <Text style={[typography.bodyStrong, { color: row.avg ? (row.avg >= 70 ? colors.success : colors.warning) : colors.textMuted }]}>
-                    {row.avg ?? '—'}%
-                  </Text>
-                </View>
-              </View>
-            </Pressable>
-          ))
-        )}
-      </View>
+      )}
     </View>
   );
 }
@@ -666,7 +1198,6 @@ export default function Progress() {
         setUserId(user.uid);
         const profileDoc = await getDoc(doc(db, 'students', user.uid, 'profile', 'main'));
         if (profileDoc.exists()) setProfile(profileDoc.data() as StudentProfile);
-
         const marksSnap = await getDocs(collection(db, 'students', user.uid, 'marks'));
         setMarks(marksSnap.docs.map(d => ({ id: d.id, ...d.data() } as MarkRecord)));
       }
@@ -698,7 +1229,7 @@ export default function Progress() {
   };
 
   const handleReset = async () => {
-    if (!userId || !confirm('Delete ALL progress data?')) return;
+    if (!userId || !confirm('Delete ALL progress data? This cannot be undone.')) return;
     try {
       await deleteDoc(doc(db, 'students', userId, 'profile', 'main'));
       const marksSnap = await getDocs(collection(db, 'students', userId, 'marks'));
@@ -713,16 +1244,19 @@ export default function Progress() {
 
   if (loading) {
     return (
-      <DashboardLayout title="Progress" subtitle="Loading..." showPointsCard={false}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <DashboardLayout title="Progress" subtitle="Loading your data…" showPointsCard={false}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing(4), paddingTop: spacing(12) }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[typography.body, { color: colors.textMuted }]}>Fetching your results…</Text>
+        </View>
       </DashboardLayout>
     );
   }
 
   return (
     <DashboardLayout
-      title={profile ? 'Progress Analytics' : 'Setup Profile'}
-      subtitle={profile ? `${profile.system} · ${profile.track}` : 'Configure your academic profile'}
+      title={profile ? 'Progress Analytics' : 'Set Up Your Profile'}
+      subtitle={profile ? `${profile.system} · ${profile.track} · ${profile.form}` : 'Tell us about your studies to get started.'}
       showPointsCard={false}
     >
       {!profile ? (
