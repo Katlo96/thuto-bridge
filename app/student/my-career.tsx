@@ -1,6 +1,6 @@
 // app/student/career.tsx
 // Route: /student/career
-// UniPathway — My Career Explorer
+// Thuto-Bridge — My Career Explorer
 
 import React, { useMemo, useState, useCallback } from 'react';
 import {

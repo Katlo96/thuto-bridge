@@ -49,15 +49,15 @@ export const radii = {
 // ──────────────────────────────────────────────────────────────────────────────
 export function useTheme() {
   return useMemo(() => ({
-    background: '#0A1428',        // Deep dark navy blue
-    surface: '#1A2339',           // Slightly lighter surface
-    surfaceAlt: '#25314A',        // Subtle alt surface
+    background: '#0A1428',
+    surface: '#1A2339',
+    surfaceAlt: '#25314A',
     card: '#1A2339',
     divider: 'rgba(255,255,255,0.08)',
     textPrimary: '#F1F5F9',
     textSecondary: '#94A3B8',
     textMuted: '#64748B',
-    primary: '#60A5FA',           // Bright blue accent
+    primary: '#60A5FA',
     primaryText: '#FFFFFF',
     accent: '#3B82F6',
     success: '#34D399',
@@ -95,10 +95,8 @@ export default function DashboardLayout({
   const { width } = useWindowDimensions();
   const colors = useTheme();
   const { openMenu } = useStudentMenu();
-
   const [navExpanded, setNavExpanded] = useState(true);
   const [showInstitutionModal, setShowInstitutionModal] = useState(false);
-
   const pathname = usePathname();
 
   const breakpoint = useMemo<'mobile' | 'tablet' | 'desktop'>(() => {
@@ -119,6 +117,7 @@ export default function DashboardLayout({
   const openInstitutionModal = useCallback(() => setShowInstitutionModal(true), []);
   const closeInstitutionModal = useCallback(() => setShowInstitutionModal(false), []);
 
+  // Updated Navigation Items - Saved added under My Career section
   const navItems = useMemo(() => [
     { key: 'dashboard', label: 'Home', icon: 'home-outline' as const, href: '/student/dashboard' },
     { key: 'courses', label: 'Courses', icon: 'book-outline' as const, href: '/student/courses' },
@@ -126,10 +125,9 @@ export default function DashboardLayout({
     { key: 'scholarships', label: 'Scholarships', icon: 'ribbon-outline' as const, href: '/student/scholarships' },
     { key: 'progress', label: 'Progress', icon: 'trending-up-outline' as const, href: '/student/progress' },
     { key: 'applications', label: 'Applications', icon: 'document-text-outline' as const, href: '/student/applications' },
-     { key: 'myCareer', label: 'My Career', icon: 'compass-outline' as const, href: '/student/my-career' },
+    { key: 'myCareer', label: 'My Career', icon: 'compass-outline' as const, href: '/student/my-career' },
+    { key: 'saved', label: 'Saved', icon: 'bookmark-outline' as const, href: '/student/saved' },
   ], [openInstitutionModal]);
-
-
 
   return (
     <View style={[styles.page, { backgroundColor: colors.background }]}>
@@ -154,7 +152,6 @@ export default function DashboardLayout({
                 </Text>
               )}
             </View>
-
             <Pressable
               onPress={openMenu}
               style={({ pressed }) => [
@@ -185,8 +182,8 @@ export default function DashboardLayout({
                     <View style={{ padding: spacing(4), paddingTop: spacing(2), borderTopWidth: 1, borderTopColor: colors.divider }}>
                       {navItems.map((item) => {
                         const isActive =
-  item.href &&
-  (pathname === item.href || pathname.startsWith(item.href));
+                          item.href &&
+                          (pathname === item.href || pathname.startsWith(item.href));
                         return (
                           <Pressable
                             key={item.key}
@@ -222,7 +219,6 @@ export default function DashboardLayout({
                         Last updated {lastUpdated}
                       </Text>
                     </View>
-
                     <View style={styles.pointsRight}>
                       <View style={[styles.badge, { backgroundColor: `${colors.success}22`, borderColor: colors.success }]}>
                         <Text style={{ color: colors.success, fontWeight: '700' }}>Eligible</Text>
@@ -237,20 +233,19 @@ export default function DashboardLayout({
                   </View>
                 </View>
               )}
-
               {children}
             </View>
           </View>
         </ScrollView>
       </SafeAreaView>
 
-      {/* Institutions Modal - Restored */}
+      {/* Institutions Modal */}
       <Modal visible={showInstitutionModal} transparent animationType="fade" onRequestClose={closeInstitutionModal}>
         <Pressable style={modalStyles.overlay} onPress={closeInstitutionModal}>
-          <Pressable 
-  style={[modalStyles.container, { backgroundColor: colors.surface }]} 
-  onPress={() => {}}
->
+          <Pressable
+            style={[modalStyles.container, { backgroundColor: colors.surface }]}
+            onPress={() => {}}
+          >
             <View style={modalStyles.header}>
               <Text style={[modalStyles.title, { color: colors.textPrimary }]}>Choose Institution Type</Text>
               <Pressable onPress={closeInstitutionModal} hitSlop={16}>
@@ -267,7 +262,6 @@ export default function DashboardLayout({
                 </View>
                 <Text style={[modalStyles.optionText, { color: colors.textPrimary }]}>Universities</Text>
               </Pressable>
-
               <Pressable
                 style={[modalStyles.option, { backgroundColor: colors.surfaceAlt }]}
                 onPress={() => { closeInstitutionModal(); router.push('/student/colleges'); }}
@@ -277,7 +271,6 @@ export default function DashboardLayout({
                 </View>
                 <Text style={[modalStyles.optionText, { color: colors.textPrimary }]}>Colleges</Text>
               </Pressable>
-
               <Pressable
                 style={[modalStyles.option, { backgroundColor: colors.surfaceAlt }]}
                 onPress={() => { closeInstitutionModal(); router.push('/student/brigades'); }}

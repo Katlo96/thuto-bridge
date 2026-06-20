@@ -133,7 +133,7 @@ export default function Splash() {
             accessible
             accessibilityRole="header"
           >
-            Welcome to UniPathway
+            Welcome to Thuto-Bridge
           </Text>
 
           <Text

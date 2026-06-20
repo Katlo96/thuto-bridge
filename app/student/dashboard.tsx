@@ -99,6 +99,9 @@ const ACTION_ACCENTS = [
   '#F59E0B', // Institutions    — amber
   '#FB923C', // Scholarships    — orange
   '#38BDF8', // Progress        — sky
+  '#F472B6', // My Career       — pink
+  '#22D3EE', // Saved           — cyan
+  '#8B5CF6', // Applications    — purple
 ];
 
 // ─── Dashboard Content ────────────────────────────────────────────────────────
@@ -153,6 +156,28 @@ function DashboardContent() {
         href:    '/student/progress',
         accent:  ACTION_ACCENTS[5],
         desc:    'Track your grades',
+      },
+      // ── NEW ITEMS ─────────────────────────────────────
+      {
+        label:   'My Career',
+        icon:    'compass-outline'      as const,
+        href:    '/student/my-career',
+        accent:  ACTION_ACCENTS[6],
+        desc:    'Explore career paths',
+      },
+      {
+        label:   'Saved',
+        icon:    'bookmark-outline'     as const,
+        href:    '/student/saved',
+        accent:  ACTION_ACCENTS[7],
+        desc:    'Bookmarked items',
+      },
+      {
+        label:   'Applications',
+        icon:    'document-text-outline' as const,
+        href:    '/student/applications',
+        accent:  ACTION_ACCENTS[8],
+        desc:    'Track submissions',
       },
     ],
     [openInstitutionModal],
