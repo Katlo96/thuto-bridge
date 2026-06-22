@@ -8,9 +8,11 @@ import {
   Platform,
   useWindowDimensions,
   useColorScheme,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
+import { getAuth, signOut } from 'firebase/auth';
 
 const BASE_SPACING = 4;
 const spacing = (n: number) => n * BASE_SPACING;
@@ -34,8 +36,10 @@ const StudentMenuContext = createContext<StudentMenuContextValue | null>(null);
 
 export function StudentMenuProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
-  const { width } = useWindowDimensions();
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  const { width } = useWindowDimensions();
   const rawScheme = useColorScheme();
   const scheme: 'light' | 'dark' = rawScheme === 'dark' ? 'dark' : 'light';
 
@@ -87,27 +91,45 @@ export function StudentMenuProvider({ children }: { children: React.ReactNode })
     if (action === 'notifications') router.push(notificationsHref);
 
     if (action === 'logout') {
-      router.replace('/login');
-    }
+  setIsOpen(false);
+  setLogoutConfirmOpen(true);
+  return;
+}
   }
 
-  const cardWidth = isMobile ? Math.min(width - spacing(8), 380) : isTablet ? 380 : 400;
+ async function handleLogout() {
+  try {
+    setIsLoggingOut(true);
+
+    const auth = getAuth();
+    await signOut(auth);
+
+    setLogoutConfirmOpen(false);
+
+    router.replace('/login');
+  } catch (err) {
+    console.error('Logout failed:', err);
+  } finally {
+    setIsLoggingOut(false);
+  }
+}
+
+  const cardWidth = isMobile
+    ? Math.min(width - spacing(8), 380)
+    : isTablet
+    ? 380
+    : 400;
 
   return (
     <StudentMenuContext.Provider value={value}>
       {children}
 
-      <Modal
-        visible={isOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsOpen(false)}
-      >
+      {/* MAIN MENU MODAL */}
+      <Modal visible={isOpen} transparent animationType="fade" onRequestClose={() => setIsOpen(false)}>
         <View style={styles.modalRoot}>
           <Pressable
             style={[styles.backdrop, { backgroundColor: colors.overlay }]}
             onPress={() => setIsOpen(false)}
-            accessibilityLabel="Close menu overlay"
           />
 
           <View style={styles.centerLayer} pointerEvents="box-none">
@@ -127,88 +149,69 @@ export function StudentMenuProvider({ children }: { children: React.ReactNode })
                 <View style={{ width: 34 }} />
                 <Text style={[styles.title, { color: colors.text }]}>Menu</Text>
 
-                <Pressable
-                  onPress={() => setIsOpen(false)}
-                  style={({ pressed }) => [
-                    styles.closeBtn,
-                    {
-                      backgroundColor: colors.closeBg,
-                      borderColor: colors.closeBorder,
-                    },
-                    pressed && styles.pressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close menu"
-                >
+                <Pressable onPress={() => setIsOpen(false)} style={styles.closeBtn}>
                   <Ionicons name="close" size={18} color={colors.text} />
                 </Pressable>
               </View>
 
-              <View style={[styles.divider, { backgroundColor: colors.divider }]} />
-
-              <MenuItem
-                icon="home-outline"
-                label="Home"
-                onPress={() => runAction('home')}
-                textColor={colors.text}
-                mutedColor={colors.muted}
-                tintBg={colors.tealSoft}
-                tintBorder={colors.tealBorder}
-                itemBg={colors.section}
-                itemBorder={colors.sectionBorder}
-              />
-
-              <MenuItem
-                icon="person-outline"
-                label="Profile"
-                onPress={() => runAction('profile')}
-                textColor={colors.text}
-                mutedColor={colors.muted}
-                tintBg={colors.tealSoft}
-                tintBorder={colors.tealBorder}
-                itemBg={colors.section}
-                itemBorder={colors.sectionBorder}
-              />
-
-              <MenuItem
-                icon="settings-outline"
-                label="Settings"
-                onPress={() => runAction('settings')}
-                textColor={colors.text}
-                mutedColor={colors.muted}
-                tintBg={colors.tealSoft}
-                tintBorder={colors.tealBorder}
-                itemBg={colors.section}
-                itemBorder={colors.sectionBorder}
-              />
-
-              <MenuItem
-                icon="notifications-outline"
-                label="Notifications"
-                onPress={() => runAction('notifications')}
-                textColor={colors.text}
-                mutedColor={colors.muted}
-                tintBg={colors.tealSoft}
-                tintBorder={colors.tealBorder}
-                itemBg={colors.section}
-                itemBorder={colors.sectionBorder}
-              />
+              <MenuItem label="Home" onPress={() => runAction('home')} />
+              <MenuItem label="Profile" onPress={() => runAction('profile')} />
+              <MenuItem label="Settings" onPress={() => runAction('settings')} />
+              <MenuItem label="Notifications" onPress={() => runAction('notifications')} />
 
               <View style={[styles.dividerSoft, { backgroundColor: colors.dividerSoft }]} />
 
-              <MenuItem
-                icon="log-out-outline"
-                label="Logout"
-                danger
-                onPress={() => runAction('logout')}
-                textColor={colors.text}
-                mutedColor={colors.muted}
-                tintBg={colors.dangerSoft}
-                tintBorder={colors.dangerBorder}
-                itemBg={colors.section}
-                itemBorder={colors.sectionBorder}
-                dangerColor={colors.danger}
-              />
+            <MenuItem
+  label="Logout"
+  danger
+  onPress={() => runAction('logout')}
+/>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* LOGOUT CONFIRMATION MODAL */}
+      <Modal
+        visible={logoutConfirmOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLogoutConfirmOpen(false)}
+      >
+        <View style={styles.modalRoot}>
+          <Pressable
+            style={[styles.backdrop, { backgroundColor: colors.overlay }]}
+            onPress={() => setLogoutConfirmOpen(false)}
+          />
+
+          <View style={styles.centerLayer}>
+            <View style={[styles.confirmCard]}>
+              <Text style={styles.confirmTitle}>Confirm Logout</Text>
+              <Text style={styles.confirmText}>
+                Are you sure you want to log out of your account?
+              </Text>
+
+              <View style={styles.confirmActions}>
+                <Pressable
+                  style={[styles.cancelBtn]}
+                  onPress={() => setLogoutConfirmOpen(false)}
+                  disabled={isLoggingOut}
+                >
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </Pressable>
+
+                <Pressable
+                  style={[styles.logoutBtn]}
+                  onPress={handleLogout}
+                  disabled={isLoggingOut}
+                >
+                  {isLoggingOut ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.logoutText}>Logout</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
           </View>
         </View>
@@ -226,164 +229,120 @@ export function useStudentMenu() {
 }
 
 function MenuItem({
-  icon,
   label,
   onPress,
   danger,
-  textColor,
-  mutedColor,
-  tintBg,
-  tintBorder,
-  itemBg,
-  itemBorder,
-  dangerColor,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
   danger?: boolean;
-  textColor: string;
-  mutedColor: string;
-  tintBg: string;
-  tintBorder: string;
-  itemBg: string;
-  itemBorder: string;
-  dangerColor?: string;
 }) {
-  const activeTextColor = danger ? dangerColor || '#B22222' : textColor;
-  const chevronColor = danger ? dangerColor || '#B22222' : mutedColor;
-
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.item,
-        {
-          backgroundColor: itemBg,
-          borderColor: itemBorder,
-        },
-        pressed && styles.pressed,
-      ]}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <View
-        style={[
-          styles.itemIconWrap,
-          {
-            backgroundColor: tintBg,
-            borderColor: tintBorder,
-          },
-        ]}
-      >
-        <Ionicons name={icon} size={18} color={activeTextColor} />
-      </View>
-
-      <Text style={[styles.itemText, { color: activeTextColor }]}>{label}</Text>
-
-      <Ionicons name="chevron-forward" size={18} color={chevronColor} />
+    <Pressable onPress={onPress} style={styles.item}>
+      <Text style={[styles.itemText, danger && { color: '#B22222' }]}>
+        {label}
+      </Text>
+      <Ionicons name="chevron-forward" size={18} color="#888" />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  modalRoot: {
-    flex: 1,
-  },
-
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
+  modalRoot: { flex: 1 },
+  backdrop: { ...StyleSheet.absoluteFillObject },
 
   centerLayer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing(5),
-    paddingVertical: spacing(5),
+    padding: spacing(5),
   },
 
   card: {
     borderRadius: radii.xl,
     borderWidth: 1,
     padding: spacing(4),
-    shadowColor: '#000',
-    shadowOpacity: Platform.OS === 'web' ? 0 : 0.22,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 10,
   },
 
-  cardMobile: {
-    marginTop: 'auto',
-    width: '100%',
-  },
-
-  cardDesktop: {
-    alignSelf: 'center',
-  },
+  cardMobile: { width: '100%' },
+  cardDesktop: {},
 
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: spacing(2),
+    alignItems: 'center',
   },
 
-  title: {
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 0.3,
-  },
+  title: { fontSize: 16, fontWeight: '900' },
 
   closeBtn: {
     width: 34,
     height: 34,
     borderRadius: radii.pill,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  divider: {
-    height: 1,
-    marginBottom: spacing(3),
+  item: {
+    padding: spacing(3),
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  itemText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 
   dividerSoft: {
     height: 1,
-    marginTop: spacing(1),
-    marginBottom: spacing(3),
+    marginVertical: spacing(2),
   },
 
-  item: {
-    minHeight: 52,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    paddingHorizontal: spacing(3),
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(3),
-    marginBottom: spacing(3),
+  confirmCard: {
+    width: 300,
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 16,
   },
 
-  itemIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  itemText: {
-    flex: 1,
-    fontSize: 14,
+  confirmTitle: {
+    fontSize: 16,
     fontWeight: '900',
+    marginBottom: 8,
   },
 
-  pressed: {
-    opacity: 0.96,
-    transform: [{ scale: 0.99 }],
+  confirmText: {
+    fontSize: 13,
+    marginBottom: 16,
+    color: '#555',
+  },
+
+  confirmActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+
+  cancelBtn: {
+    padding: 10,
+  },
+
+  cancelText: {
+    color: '#333',
+    fontWeight: '700',
+  },
+
+  logoutBtn: {
+    padding: 10,
+    backgroundColor: '#B22222',
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+
+  logoutText: {
+    color: '#fff',
+    fontWeight: '800',
   },
 });

@@ -6,6 +6,7 @@ import {
   useWindowDimensions,
   Platform,
   ScrollView,
+  Linking,
   type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,45 +24,121 @@ import {
 type Breakpoint = 'mobile' | 'tablet' | 'desktop';
 
 type SupportItem = {
-  icon:     keyof typeof Ionicons.glyphMap;
-  title:    string;
-  value:    string;
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  value: string;
   subtitle: string;
-  color:    string;
+  actionLabel: string;
+  actionUrl: string;
+  color: string;
+  badge?: string;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Data
+// Data - Thuto-Bridge
 // ─────────────────────────────────────────────────────────────────────────────
+
 const SUPPORT_ITEMS: SupportItem[] = [
-  { icon: 'call-outline',     title: 'Support Phone',    value: '+267 71 234 567',         subtitle: 'Available Monday – Friday, 8 AM – 5 PM',        color: '#60A5FA' },
-  { icon: 'mail-outline',     title: 'Support Email',    value: 'support@thutobridge.com', subtitle: 'Best for detailed issues and document help',     color: '#34D399' },
-  { icon: 'logo-whatsapp',    title: 'WhatsApp Support', value: '+267 75 000 111',         subtitle: 'Quick help for simple student questions',        color: '#4ADE80' },
-  { icon: 'logo-instagram',   title: 'Instagram',        value: '@thutobridge',            subtitle: 'Announcements, updates, and community posts',    color: '#F472B6' },
-  { icon: 'logo-facebook',    title: 'Facebook',         value: 'Thuto Bridge',            subtitle: 'Community engagement and public updates',        color: '#818CF8' },
-  { icon: 'globe-outline',    title: 'Website',          value: 'www.thutobridge.com',     subtitle: 'Official platform information and updates',      color: '#FBBF24' },
+  {
+    icon: 'call-outline',
+    title: 'Support Phone',
+    value: '+267 71 234 567',
+    subtitle: 'Mon – Fri, 8 AM – 5 PM CAT. Talk to a real person.',
+    actionLabel: 'Call now',
+    actionUrl: 'tel:+26771234567',
+    color: '#3B82F6',
+    badge: 'Fastest',
+  },
+  {
+    icon: 'logo-whatsapp',
+    title: 'WhatsApp Support',
+    value: '+267 75 000 111',
+    subtitle: 'Quick help for application status and simple questions.',
+    actionLabel: 'Message us',
+    actionUrl: 'https://wa.me/26775000111',
+    color: '#22C55E',
+    badge: 'Popular',
+  },
+  {
+    icon: 'mail-outline',
+    title: 'Support Email',
+    value: 'support@thutobridge.com',
+    subtitle: 'Best for document reviews, appeals, and detailed queries.',
+    actionLabel: 'Email us',
+    actionUrl: 'mailto:support@thutobridge.com',
+    color: '#14B8A6',
+  },
+  {
+    icon: 'logo-instagram',
+    title: 'Instagram',
+    value: '@thutobridge',
+    subtitle: 'Deadlines, tips, bursary alerts, and student stories.',
+    actionLabel: 'Follow',
+    actionUrl: 'https://instagram.com/thutobridge',
+    color: '#EC4899',
+  },
+  {
+    icon: 'logo-facebook',
+    title: 'Facebook',
+    value: 'Thuto-Bridge',
+    subtitle: 'Community Q&A, live info sessions and updates.',
+    actionLabel: 'Visit page',
+    actionUrl: 'https://facebook.com/thutobridge',
+    color: '#6366F1',
+  },
+  {
+    icon: 'globe-outline',
+    title: 'Website',
+    value: 'www.thutobridge.com',
+    subtitle: 'Help centre, FAQs, and application guides.',
+    actionLabel: 'Open site',
+    actionUrl: 'https://www.thutobridge.com',
+    color: '#F59E0B',
+  },
+];
+
+const SUPPORT_HOURS = [
+  { day: 'Monday – Friday', hours: '8:00 AM – 5:00 PM' },
+  { day: 'Saturday', hours: '9:00 AM – 1:00 PM' },
+  { day: 'Sunday & Public Holidays', hours: 'Closed' },
+];
+
+const RESPONSE_TIMES = [
+  { channel: 'Phone', time: 'Immediate', color: '#3B82F6' },
+  { channel: 'WhatsApp', time: '< 1 hour', color: '#22C55E' },
+  { channel: 'Email', time: '< 24 hours', color: '#14B8A6' },
+  { channel: 'Social', time: '1–2 days', color: '#EC4899' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Elevation helper
 // ─────────────────────────────────────────────────────────────────────────────
+
 function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md'): ViewStyle {
   return useMemo<ViewStyle>(() => {
-    const opacity = 0.28;
-    const radius  = intensity === 'sm' ? 6 : intensity === 'md' ? 14 : 22;
-    const offsetY = intensity === 'sm' ? 2 : intensity === 'md' ? 5  : 10;
-    return (Platform.select({
-      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: offsetY }, shadowOpacity: opacity, shadowRadius: radius },
-      android: { elevation: intensity === 'sm' ? 3 : intensity === 'md' ? 6 : 12 },
-      web:     { boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})` } as any,
-      default: {},
-    }) ?? {}) as ViewStyle;
+    const opacity = 0.08;
+    const radius = intensity === 'sm' ? 8 : intensity === 'md' ? 16 : 28;
+    const offsetY = intensity === 'sm' ? 2 : intensity === 'md' ? 6 : 12;
+    return (
+      Platform.select({
+        ios: {
+          shadowColor: '#0f172a',
+          shadowOffset: { width: 0, height: offsetY },
+          shadowOpacity: opacity + 0.05,
+          shadowRadius: radius,
+        },
+        android: { elevation: intensity === 'sm' ? 2 : intensity === 'md' ? 4 : 8 },
+        web: { boxShadow: `0 ${offsetY}px ${radius}px rgba(15,23,42,${opacity})` } as any,
+        default: {},
+      }) ?? {}
+    ) as ViewStyle;
   }, [intensity]);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SectionCard
 // ─────────────────────────────────────────────────────────────────────────────
+
 function SectionCard({
   title,
   icon,
@@ -69,53 +146,61 @@ function SectionCard({
   children,
   compact,
 }: {
-  title:        string;
-  icon:         keyof typeof Ionicons.glyphMap;
+  title: string;
+  icon: keyof typeof Ionicons.glyphMap;
   accentColor?: string;
-  children:     React.ReactNode;
-  compact?:     boolean;
+  children: React.ReactNode;
+  compact?: boolean;
 }) {
-  const colors    = useTheme();
+  const colors = useTheme();
   const elevation = useElevation('md');
-  const color     = accentColor ?? colors.primary;
+  const color = accentColor ?? colors.primary;
+
   return (
-    <View style={[{
-      backgroundColor: colors.surface,
-      borderRadius:    radii.xxl,
-      borderWidth:     1,
-      borderColor:     colors.border,
-      overflow:        'hidden',
-    }, elevation]}>
+    <View
+      style={[
+        {
+          backgroundColor: colors.surface,
+          borderRadius: radii.xxl,
+          borderWidth: 1,
+          borderColor: colors.border,
+          overflow: 'hidden',
+        },
+        elevation,
+      ]}
+    >
       <View style={{ height: 3, backgroundColor: color }} />
-      <View style={{
-        flexDirection:     'row',
-        alignItems:        'center',
-        gap:               spacing(3),
-        paddingHorizontal: compact ? spacing(4) : spacing(6),
-        paddingTop:        compact ? spacing(4) : spacing(5),
-        paddingBottom:     compact ? spacing(3) : spacing(4),
-        borderBottomWidth: 1,
-        borderBottomColor: colors.divider,
-      }}>
-        <View style={{
-          width:           compact ? 30 : 36,
-          height:          compact ? 30 : 36,
-          borderRadius:    radii.md,
-          backgroundColor: `${color}22`,
-          borderWidth:     1,
-          borderColor:     `${color}44`,
-          alignItems:      'center',
-          justifyContent:  'center',
-        }}>
-          <Ionicons name={icon} size={compact ? 14 : 16} color={color} />
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing(3),
+          paddingHorizontal: compact ? spacing(4) : spacing(5),
+          paddingTop: compact ? spacing(4) : spacing(5),
+          paddingBottom: compact ? spacing(3) : spacing(4),
+          borderBottomWidth: 1,
+          borderBottomColor: colors.divider,
+        }}
+      >
+        <View
+          style={{
+            width: compact ? 34 : 38,
+            height: compact ? 34 : 38,
+            borderRadius: radii.md,
+            backgroundColor: `${color}18`,
+            borderWidth: 1,
+            borderColor: `${color}30`,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Ionicons name={icon} size={compact ? 16 : 17} color={color} />
         </View>
-        <Text style={[typography.h2, { color: colors.textPrimary, fontSize: compact ? 14 : 16 }]}>
+        <Text style={[typography.h2, { color: colors.textPrimary, fontSize: compact ? 15 : 16 }]}>
           {title}
         </Text>
       </View>
-      <View style={{ padding: compact ? spacing(4) : spacing(6) }}>
-        {children}
-      </View>
+      <View style={{ padding: compact ? spacing(4) : spacing(5) }}>{children}</View>
     </View>
   );
 }
@@ -123,134 +208,196 @@ function SectionCard({
 // ─────────────────────────────────────────────────────────────────────────────
 // SupportCard
 // ─────────────────────────────────────────────────────────────────────────────
-function SupportCard({ item, compact }: { item: SupportItem; compact?: boolean }) {
-  const colors    = useTheme();
+
+function SupportCard({
+  item,
+  cardWidth,
+  compact,
+}: {
+  item: SupportItem;
+  cardWidth: string | number;
+  compact?: boolean;
+}) {
+  const colors = useTheme();
   const elevation = useElevation('md');
+
+  const handlePress = () => {
+    if (item.actionUrl) {
+      Linking.openURL(item.actionUrl).catch(() => {});
+    }
+  };
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${item.title}: ${item.value}`}
-      style={({ pressed }) => ([
+      onPress={handlePress}
+      style={({ pressed }) => [
         {
-          width:           '48%' as any,
+          width: cardWidth as any,
+          flexGrow: 1,
           backgroundColor: colors.card,
-          borderRadius:    radii.xxl,
-          borderWidth:     1,
-          borderColor:     colors.border,
-          overflow:        'hidden' as const,
-          opacity:         pressed ? 0.88 : 1,
-          transform:       pressed ? [{ scale: 0.98 }] : [],
+          borderRadius: radii.xxl,
+          borderWidth: 1,
+          borderColor: colors.border,
+          overflow: 'hidden',
+          opacity: pressed ? 0.92 : 1,
+          transform: [{ scale: pressed ? 0.988 : 1 }],
         },
         elevation,
-      ])}
+      ]}
     >
       {/* Accent bar */}
-      <View style={{ height: 3, backgroundColor: item.color }} />
+      <View style={{ height: 3.5, backgroundColor: item.color }} />
 
-      <View style={{ padding: compact ? spacing(3) : spacing(5), gap: compact ? spacing(2) : spacing(3) }}>
-        {/* Icon + arrow row */}
+      <View style={{ padding: compact ? spacing(4) : spacing(5.5), gap: spacing(3) }}>
+        {/* Icon + Badge */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{
-            width:           compact ? 36 : 46,
-            height:          compact ? 36 : 46,
-            borderRadius:    radii.xl,
-            backgroundColor: `${item.color}1A`,
-            borderWidth:     1,
-            borderColor:     `${item.color}33`,
-            alignItems:      'center',
-            justifyContent:  'center',
-          }}>
-            <Ionicons name={item.icon} size={compact ? 17 : 22} color={item.color} />
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 14,
+              backgroundColor: `${item.color}14`,
+              borderWidth: 1,
+              borderColor: `${item.color}2A`,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name={item.icon} size={22} color={item.color} />
           </View>
-          <View style={{
-            width:           compact ? 26 : 30,
-            height:          compact ? 26 : 30,
-            borderRadius:    radii.md,
-            backgroundColor: colors.surfaceAlt,
-            borderWidth:     1,
-            borderColor:     colors.border,
-            alignItems:      'center',
-            justifyContent:  'center',
-          }}>
-            <Ionicons name="arrow-forward" size={compact ? 12 : 14} color={item.color} />
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
+            {item.badge && (
+              <View
+                style={{
+                  paddingHorizontal: spacing(2.5),
+                  paddingVertical: spacing(1),
+                  borderRadius: radii.pill,
+                  backgroundColor: `${item.color}12`,
+                  borderWidth: 1,
+                  borderColor: `${item.color}28`,
+                }}
+              >
+                <Text style={[typography.caption, { color: item.color, fontWeight: '700', fontSize: 10 }]}>
+                  {item.badge.toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <View
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 10,
+                backgroundColor: colors.surfaceAlt,
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="arrow-forward" size={14} color={colors.textSecondary} />
+            </View>
           </View>
         </View>
 
         {/* Title */}
-        <Text style={[typography.caption, { color: colors.textSecondary, letterSpacing: 0.4, fontSize: compact ? 9 : 10 }]}>
-          {item.title.toUpperCase()}
-        </Text>
-
-        {/* Value */}
-        <Text
-          style={[typography.bodyStrong, { color: item.color, fontSize: compact ? 11 : 14, lineHeight: compact ? 15 : 20 }]}
-          numberOfLines={1}
-        >
-          {item.value}
-        </Text>
-
-        {/* Subtitle — hidden on compact */}
-        {!compact && (
-          <Text style={[typography.caption, { color: colors.textSecondary, lineHeight: 17 }]}>
-            {item.subtitle}
+        <View>
+          <Text
+            style={[
+              typography.caption,
+              { color: colors.textSecondary, letterSpacing: 0.35, fontSize: 10.5, marginBottom: 4 },
+            ]}
+          >
+            {item.title.toUpperCase()}
           </Text>
-        )}
+          <Text style={[typography.h2, { color: colors.textPrimary, fontSize: 15.5 }]} numberOfLines={1}>
+            {item.value}
+          </Text>
+        </View>
+
+        {/* Subtitle */}
+        <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 20, fontSize: 13.5 }]}>
+          {item.subtitle}
+        </Text>
+
+        {/* Action */}
+        <View
+          style={{
+            marginTop: spacing(1),
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing(1.5),
+          }}
+        >
+          <Text style={[typography.label, { color: item.color, fontSize: 13 }]}>
+            {item.actionLabel}
+          </Text>
+          <Ionicons name="chevron-forward" size={13} color={item.color} />
+        </View>
       </View>
     </Pressable>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sidebar panel (desktop only)
+// Sidebar panel (desktop)
 // ─────────────────────────────────────────────────────────────────────────────
-function SidebarPanel() {
+
+function SidebarPanel({ compact }: { compact?: boolean }) {
   const colors = useTheme();
 
   return (
-    <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
+    <View style={{ width: 320, flexShrink: 0, gap: spacing(5) }}>
       {/* Support hours */}
-      <SectionCard title="Support Hours" icon="time-outline" accentColor={colors.primary}>
+      <SectionCard title="Support Hours" icon="time-outline" accentColor={colors.primary} compact={compact}>
         <View style={{ gap: spacing(1) }}>
-          {[
-            { day: 'Monday – Friday', hours: '8:00 AM – 5:00 PM' },
-            { day: 'Saturday',        hours: '9:00 AM – 1:00 PM' },
-            { day: 'Sunday & Public Holidays', hours: 'Closed' },
-          ].map(({ day, hours }) => (
-            <View key={day} style={{
-              flexDirection:     'row',
-              justifyContent:    'space-between',
-              alignItems:        'center',
-              paddingVertical:   spacing(3),
-              borderBottomWidth: 1,
-              borderBottomColor: colors.divider,
-            }}>
-              <Text style={[typography.body, { color: colors.textSecondary, fontSize: 13 }]}>{day}</Text>
-              <Text style={[typography.label, { color: colors.textPrimary, fontSize: 12 }]}>{hours}</Text>
+          {SUPPORT_HOURS.map(({ day, hours }, i) => (
+            <View
+              key={day}
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingVertical: spacing(2.5),
+                borderBottomWidth: i < SUPPORT_HOURS.length - 1 ? 1 : 0,
+                borderBottomColor: colors.divider,
+                gap: spacing(3),
+              }}
+            >
+              <Text style={[typography.body, { color: colors.textSecondary, fontSize: 13, flexShrink: 1 }]}>
+                {day}
+              </Text>
+              <Text style={[typography.label, { color: colors.textPrimary, fontSize: 12.5 }]}>
+                {hours}
+              </Text>
             </View>
           ))}
         </View>
       </SectionCard>
 
       {/* Response times */}
-      <SectionCard title="Response Times" icon="flash-outline" accentColor={colors.success}>
-        <View style={{ gap: spacing(3) }}>
-          {[
-            { channel: 'Phone',     time: 'Immediate', color: '#60A5FA' },
-            { channel: 'WhatsApp',  time: '< 1 hour',  color: '#4ADE80' },
-            { channel: 'Email',     time: '< 24 hours', color: '#34D399' },
-            { channel: 'Social',    time: '1–2 days',   color: '#F472B6' },
-          ].map(({ channel, time, color }) => (
-            <View key={channel} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={[typography.body, { color: colors.textSecondary, fontSize: 13 }]}>{channel}</Text>
-              <View style={{
-                paddingHorizontal: spacing(3),
-                paddingVertical:   spacing(1),
-                borderRadius:      radii.pill,
-                backgroundColor:   `${color}1A`,
-                borderWidth:       1,
-                borderColor:       `${color}33`,
-              }}>
+      <SectionCard title="Avg. Response Times" icon="flash-outline" accentColor={colors.success}>
+        <View style={{ gap: spacing(3.5) }}>
+          {RESPONSE_TIMES.map(({ channel, time, color }) => (
+            <View
+              key={channel}
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+            >
+              <Text style={[typography.body, { color: colors.textSecondary, fontSize: 13.5 }]}>
+                {channel}
+              </Text>
+              <View
+                style={{
+                  paddingHorizontal: spacing(3),
+                  paddingVertical: spacing(1.5),
+                  borderRadius: radii.pill,
+                  backgroundColor: `${color}14`,
+                  borderWidth: 1,
+                  borderColor: `${color}30`,
+                }}
+              >
                 <Text style={[typography.caption, { color, fontWeight: '700' }]}>{time}</Text>
               </View>
             </View>
@@ -259,16 +406,48 @@ function SidebarPanel() {
       </SectionCard>
 
       {/* Tip */}
-      <View style={{
-        padding:         spacing(4),
-        backgroundColor: `${colors.primary}14`,
-        borderRadius:    radii.xl,
-        borderLeftWidth: 3,
-        borderLeftColor: colors.primary,
-      }}>
-        <Text style={[typography.caption, { color: colors.textSecondary, lineHeight: 18 }]}>
-          💡 For urgent matters, WhatsApp or phone is fastest. For document reviews and application queries, email is recommended.
+      <View
+        style={{
+          padding: spacing(4),
+          backgroundColor: `${colors.primary}0F`,
+          borderRadius: radii.xl,
+          borderWidth: 1,
+          borderColor: `${colors.primary}22`,
+          borderLeftWidth: 3,
+          borderLeftColor: colors.primary,
+        }}
+      >
+        <Text style={[typography.label, { color: colors.textPrimary, marginBottom: 4, fontSize: 13 }]}>
+          Student tip
         </Text>
+        <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 20, fontSize: 13 }]}>
+          For urgent issues, call or WhatsApp us. For document reviews, bursary queries, and application appeals, email with your Thuto-Bridge Student ID.
+        </Text>
+      </View>
+
+      {/* Emergency card */}
+      <View
+        style={{
+          padding: spacing(4),
+          borderRadius: radii.xl,
+          backgroundColor: colors.surfaceAlt,
+          borderWidth: 1,
+          borderColor: colors.border,
+        }}
+      >
+        <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing(1.5) }]}>
+          NEED HELP FAST?
+        </Text>
+        <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 14, marginBottom: 6 }]}>
+          WhatsApp is usually quickest outside call hours
+        </Text>
+        <Pressable
+          onPress={() => Linking.openURL('https://wa.me/26775000111')}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+        >
+          <Text style={[typography.label, { color: '#22C55E' }]}>+267 75 000 111</Text>
+          <Ionicons name="open-outline" size={13} color="#22C55E" />
+        </Pressable>
       </View>
     </View>
   );
@@ -277,172 +456,247 @@ function SidebarPanel() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main content
 // ─────────────────────────────────────────────────────────────────────────────
+
 function ContactSupportContent() {
-  const { width }    = useWindowDimensions();
-  const colors       = useTheme();
+  const { width } = useWindowDimensions();
+  const colors = useTheme();
   const { openMenu } = useStudentMenu();
-  const elevMd       = useElevation('md');
-  const elevLg       = useElevation('lg');
+  const elevMd = useElevation('md');
+  const elevLg = useElevation('lg');
 
   const breakpoint = useMemo<Breakpoint>(() => {
-    if (width < 768)  return 'mobile';
-    if (width < 1024) return 'tablet';
+    if (width < 720) return 'mobile';
+    if (width < 1100) return 'tablet';
     return 'desktop';
   }, [width]);
 
   const isDesktop = breakpoint === 'desktop';
-  const isMobile  = breakpoint === 'mobile';
-  const compact   = isMobile;
-  const padX      = compact ? spacing(4) : spacing(7);
+  const isMobile = breakpoint === 'mobile';
+  const isTablet = breakpoint === 'tablet';
+  const compact = isMobile;
 
-  // ── NavBar ────────────────────────────────────────────────────────────────
+  const padX = isMobile ? spacing(4) : isTablet ? spacing(5) : spacing(8);
+
+  // Card column sizing – fully responsive
+  const cardWidth = isMobile ? '100%' : '48%';
+
+  // ── NavBar ────────────────────────────────────────────────────────────
   const NavBar = (
-    <View style={[{
-      flexDirection:     'row',
-      alignItems:        'center',
-      paddingHorizontal: padX,
-      paddingVertical:   spacing(compact ? 3 : 4),
-      backgroundColor:   colors.surface,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-      gap:               spacing(3),
-    }, elevMd]}>
+    <View
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: padX,
+          paddingVertical: spacing(compact ? 3 : 3.5),
+          backgroundColor: colors.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+          gap: spacing(3),
+        },
+        elevMd,
+      ]}
+    >
       <Pressable
         onPress={() => router.back()}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
         style={({ pressed }) => ({
-          width:           compact ? 38 : 44,
-          height:          compact ? 38 : 44,
-          borderRadius:    radii.lg,
+          width: 42,
+          height: 42,
+          borderRadius: radii.lg,
           backgroundColor: colors.surfaceAlt,
-          borderWidth:     1,
-          borderColor:     colors.border,
-          alignItems:      'center' as const,
-          justifyContent:  'center' as const,
-          opacity:         pressed ? 0.8 : 1,
+          borderWidth: 1,
+          borderColor: colors.border,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.78 : 1,
         })}
       >
-        <Ionicons name="arrow-back" size={compact ? 18 : 20} color={colors.primary} />
+        <Ionicons name="arrow-back" size={19} color={colors.primary} />
       </Pressable>
 
-      <View style={{ flex: 1 }}>
-        <Text style={[typography.h2, { color: colors.textPrimary, fontSize: compact ? 15 : undefined }]}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text
+          style={[typography.h2, { color: colors.textPrimary, fontSize: compact ? 16 : 17 }]}
+          numberOfLines={1}
+        >
           Contact Support
         </Text>
         {!compact && (
           <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
-            Reach Thuto Bridge through official channels
+            Thuto-Bridge Student Help Centre
           </Text>
         )}
       </View>
 
-      {/* Settings shortcut — tablet/desktop */}
-      {!compact && (
+      {!isMobile && (
         <Pressable
           onPress={() => router.push('/student/settings')}
           style={({ pressed }) => ({
-            flexDirection:    'row' as const,
-            alignItems:       'center' as const,
-            gap:              spacing(2),
-            paddingHorizontal: spacing(3),
-            paddingVertical:  spacing(2),
-            borderRadius:     radii.lg,
-            backgroundColor:  colors.surfaceAlt,
-            borderWidth:      1,
-            borderColor:      colors.border,
-            opacity:          pressed ? 0.8 : 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing(2),
+            paddingHorizontal: spacing(3.5),
+            paddingVertical: spacing(2),
+            borderRadius: radii.lg,
+            backgroundColor: colors.surfaceAlt,
+            borderWidth: 1,
+            borderColor: colors.border,
+            opacity: pressed ? 0.8 : 1,
           })}
         >
-          <Ionicons name="settings-outline" size={15} color={colors.textSecondary} />
-          <Text style={[typography.label, { color: colors.textSecondary, fontSize: 12 }]}>Settings</Text>
+          <Ionicons name="settings-outline" size={14} color={colors.textSecondary} />
+          <Text style={[typography.label, { color: colors.textSecondary, fontSize: 12.5 }]}>
+            Settings
+          </Text>
         </Pressable>
       )}
 
-      {/* Menu */}
       <Pressable
         onPress={openMenu}
+        accessibilityLabel="Open student menu"
         style={({ pressed }) => ({
-          width:           compact ? 38 : 44,
-          height:          compact ? 38 : 44,
-          borderRadius:    radii.lg,
+          width: 42,
+          height: 42,
+          borderRadius: radii.lg,
           backgroundColor: colors.surfaceAlt,
-          borderWidth:     1,
-          borderColor:     colors.border,
-          alignItems:      'center' as const,
-          justifyContent:  'center' as const,
-          opacity:         pressed ? 0.8 : 1,
+          borderWidth: 1,
+          borderColor: colors.border,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.8 : 1,
         })}
       >
-        <Ionicons name="menu" size={compact ? 20 : 22} color={colors.textPrimary} />
+        <Ionicons name="menu" size={21} color={colors.textPrimary} />
       </Pressable>
     </View>
   );
 
-  // ── Hero banner ────────────────────────────────────────────────────────────
+  // ── Hero banner ───────────────────────────────────────────────────────
   const HeroBanner = (
-    <View style={[{
-      backgroundColor: colors.surface,
-      borderRadius:    radii.xxl,
-      borderWidth:     1,
-      borderColor:     colors.border,
-      overflow:        'hidden',
-      marginBottom:    spacing(compact ? 5 : 7),
-    }, elevLg]}>
+    <View
+      style={[
+        {
+          backgroundColor: colors.surface,
+          borderRadius: radii.xxl,
+          borderWidth: 1,
+          borderColor: colors.border,
+          overflow: 'hidden',
+          marginBottom: spacing(compact ? 5 : 7),
+        },
+        elevLg,
+      ]}
+    >
       <View style={{ height: 4, backgroundColor: colors.primary }} />
-      <View style={{ padding: compact ? spacing(4) : spacing(7) }}>
-        <View style={{
-          flexDirection:  'row',
-          alignItems:     compact ? 'flex-start' : 'center',
-          justifyContent: 'space-between',
-          gap:            spacing(4),
-        }}>
-          <View style={{ flex: 1 }}>
+      <View style={{ padding: compact ? spacing(5) : spacing(7) }}>
+        <View
+          style={{
+            flexDirection: isMobile ? 'column' : 'row',
+            alignItems: isMobile ? 'flex-start' : 'center',
+            justifyContent: 'space-between',
+            gap: spacing(4),
+          }}
+        >
+          <View style={{ flex: 1, maxWidth: 560 }}>
             {/* Badge */}
-            <View style={{
-              alignSelf:        'flex-start',
-              flexDirection:    'row',
-              alignItems:       'center',
-              gap:              spacing(2),
-              paddingHorizontal: spacing(3),
-              paddingVertical:  spacing(2),
-              borderRadius:     radii.pill,
-              backgroundColor:  `${colors.primary}22`,
-              borderWidth:      1,
-              borderColor:      `${colors.primary}44`,
-              marginBottom:     spacing(compact ? 3 : 4),
-            }}>
-              <Ionicons name="help-buoy-outline" size={compact ? 12 : 14} color={colors.primary} />
-              <Text style={[typography.caption, { color: colors.primary, fontWeight: '700', fontSize: compact ? 10 : undefined }]}>
-                SUPPORT
+            <View
+              style={{
+                alignSelf: 'flex-start',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing(2),
+                paddingHorizontal: spacing(3),
+                paddingVertical: spacing(1.5),
+                borderRadius: radii.pill,
+                backgroundColor: `${colors.primary}14`,
+                borderWidth: 1,
+                borderColor: `${colors.primary}2A`,
+                marginBottom: spacing(3.5),
+              }}
+            >
+              <Ionicons name="sparkles" size={13} color={colors.primary} />
+              <Text
+                style={[
+                  typography.caption,
+                  { color: colors.primary, fontWeight: '700', letterSpacing: 0.3 },
+                ]}
+              >
+                THUTO-BRIDGE SUPPORT
               </Text>
             </View>
 
-            <Text style={[typography.hero, { color: colors.textPrimary, fontSize: compact ? 20 : undefined, lineHeight: compact ? 26 : undefined }]}>
-              We're Here to Help
+            <Text
+              style={[
+                typography.hero,
+                {
+                  color: colors.textPrimary,
+                  fontSize: isMobile ? 26 : 32,
+                  lineHeight: isMobile ? 32 : 38,
+                },
+              ]}
+            >
+              We're here to help you succeed
             </Text>
-            <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2), maxWidth: 480, lineHeight: compact ? 20 : 24, fontSize: compact ? 13 : undefined }]}>
-              Choose the support channel that works best for you. Our team is ready to assist with applications, results, and any questions about Thuto Bridge.
+            <Text
+              style={[
+                typography.body,
+                {
+                  color: colors.textSecondary,
+                  marginTop: spacing(2.5),
+                  lineHeight: 23,
+                  fontSize: 15,
+                },
+              ]}
+            >
+              Questions about applications, results, bursaries, or your account? Pick the
+              channel that works best for you – our Botswana-based student team replies fast.
             </Text>
+
+            {/* Quick chips */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginTop: spacing(3.5) }}>
+              {['Applications', 'Results', 'Bursaries', 'Account help'].map((t) => (
+                <View
+                  key={t}
+                  style={{
+                    paddingHorizontal: spacing(3),
+                    paddingVertical: spacing(1.5),
+                    borderRadius: radii.pill,
+                    backgroundColor: colors.surfaceAlt,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>
+                    {t}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </View>
 
           {/* Icon cluster — tablet/desktop */}
-          {!compact && (
-            <View style={{ gap: spacing(3), flexShrink: 0 }}>
-              {([
-                { icon: 'call-outline'  as const, color: '#60A5FA' },
-                { icon: 'mail-outline'  as const, color: '#34D399' },
-                { icon: 'logo-whatsapp' as const, color: '#4ADE80' },
-              ]).map(({ icon, color }) => (
-                <View key={icon} style={{
-                  width:           46,
-                  height:          46,
-                  borderRadius:    radii.xl,
-                  backgroundColor: `${color}1A`,
-                  borderWidth:     1,
-                  borderColor:     `${color}33`,
-                  alignItems:      'center',
-                  justifyContent:  'center',
-                }}>
-                  <Ionicons name={icon} size={20} color={color} />
+          {!isMobile && (
+            <View style={{ gap: spacing(2.5), flexShrink: 0, paddingLeft: spacing(2) }}>
+              {[
+                { icon: 'call-outline' as const, color: '#3B82F6' },
+                { icon: 'mail-outline' as const, color: '#14B8A6' },
+                { icon: 'logo-whatsapp' as const, color: '#22C55E' },
+              ].map(({ icon, color }) => (
+                <View
+                  key={icon}
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 16,
+                    backgroundColor: `${color}12`,
+                    borderWidth: 1,
+                    borderColor: `${color}28`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name={icon} size={22} color={color} />
                 </View>
               ))}
             </View>
@@ -452,110 +706,202 @@ function ContactSupportContent() {
     </View>
   );
 
-  // ── Response strip (mobile/tablet) ────────────────────────────────────────
+  // ── Response strip (mobile/tablet) ────────────────────────────────────
   const ResponseStrip = !isDesktop && (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(compact ? 2 : 3), marginBottom: spacing(compact ? 4 : 6) }}>
-      {[
-        { label: 'Phone',    time: 'Immediate', color: '#60A5FA' },
-        { label: 'WhatsApp', time: '< 1 hr',    color: '#4ADE80' },
-        { label: 'Email',    time: '< 24 hrs',  color: '#34D399' },
-      ].map(({ label, time, color }) => (
-        <View key={label} style={{
-          flex:            1,
-          minWidth:        80,
-          backgroundColor: colors.surface,
-          borderRadius:    radii.lg,
-          borderWidth:     1,
-          borderColor:     colors.border,
-          padding:         compact ? spacing(2) : spacing(3),
-          alignItems:      'center',
-          gap:             spacing(1),
-        }}>
-          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: color, marginBottom: spacing(1) }} />
-          <Text style={[typography.label, { color: colors.textPrimary, fontSize: compact ? 11 : undefined }]}>{label}</Text>
-          <Text style={[typography.caption, { color, fontWeight: '700', fontSize: compact ? 9 : undefined }]}>{time}</Text>
+    <View
+      style={{
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing(2.5),
+        marginBottom: spacing(5),
+      }}
+    >
+      {RESPONSE_TIMES.slice(0, 3).map(({ channel, time, color }) => (
+        <View
+          key={channel}
+          style={{
+            flex: 1,
+            minWidth: isMobile ? 100 : 120,
+            backgroundColor: colors.surface,
+            borderRadius: radii.xl,
+            borderWidth: 1,
+            borderColor: colors.border,
+            padding: spacing(3),
+            alignItems: 'center',
+            gap: spacing(1),
+          }}
+        >
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+          <Text style={[typography.label, { color: colors.textPrimary, fontSize: 12.5 }]}>
+            {channel}
+          </Text>
+          <Text style={[typography.caption, { color, fontWeight: '700' }]}>{time}</Text>
         </View>
       ))}
     </View>
   );
 
-  // ── Cards grid — 2-col via 48% width ──────────────────────────────────────
+  // ── Cards grid ───────────────────────────────────────────────────────
   const CardsGrid = (
     <View>
-      <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3), fontSize: compact ? 10 : undefined }]}>
-        SUPPORT CHANNELS · {SUPPORT_ITEMS.length} AVAILABLE
+      <Text
+        style={[
+          typography.caption,
+          {
+            color: colors.textMuted,
+            letterSpacing: 0.4,
+            marginBottom: spacing(3.5),
+            fontWeight: '600',
+          },
+        ]}
+      >
+        SUPPORT CHANNELS · {SUPPORT_ITEMS.length} WAYS TO REACH US
       </Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(compact ? 2 : 3) }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          gap: spacing(3.5),
+          justifyContent: 'flex-start',
+        }}
+      >
         {SUPPORT_ITEMS.map((item) => (
-          <SupportCard key={item.title} item={item} compact={compact} />
+          <SupportCard key={item.title} item={item} cardWidth={cardWidth} compact={compact} />
         ))}
       </View>
     </View>
   );
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Render — no DashboardLayout; owns SafeAreaView + ScrollView
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Footer ───────────────────────────────────────────────────────────
+  const Footer = (
+    <View
+      style={{
+        marginTop: spacing(10),
+        paddingTop: spacing(5),
+        borderTopWidth: 1,
+        borderTopColor: colors.divider,
+        alignItems: 'center',
+        gap: spacing(2),
+      }}
+    >
+      <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 14 }]}>
+        Thuto-Bridge
+      </Text>
+      <Text style={[typography.caption, { color: colors.textSecondary, textAlign: 'center', lineHeight: 18 }]}>
+        Connecting Botswana students to university opportunities.
+      </Text>
+      <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center', fontSize: 11.5 }]}>
+        Designed and developed by{' '}
+        <Text style={{ fontWeight: '700', color: colors.textSecondary }}>BrightCode Studios</Text>
+        {'\n'}© {new Date().getFullYear()} Thuto-Bridge. All rights reserved.
+      </Text>
+      <View style={{ flexDirection: 'row', gap: spacing(4), marginTop: spacing(1) }}>
+        <Pressable onPress={() => Linking.openURL('https://www.thutobridge.com/privacy')}>
+          <Text style={[typography.caption, { color: colors.textMuted }]}>Privacy</Text>
+        </Pressable>
+        <Pressable onPress={() => Linking.openURL('https://www.thutobridge.com/terms')}>
+          <Text style={[typography.caption, { color: colors.textMuted }]}>Terms</Text>
+        </Pressable>
+        <Pressable onPress={() => Linking.openURL('mailto:support@thutobridge.com')}>
+          <Text style={[typography.caption, { color: colors.textMuted }]}>Help</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  // ── Render ──────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-
         {NavBar}
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: spacing(12) }}
+          contentContainerStyle={{ paddingBottom: spacing(10) }}
         >
-          <View style={{
-            paddingHorizontal: padX,
-            paddingTop:        spacing(compact ? 5 : 7),
-            maxWidth:          1280,
-            alignSelf:         'center',
-            width:             '100%',
-          }}>
-
+          <View
+            style={{
+              paddingHorizontal: padX,
+              paddingTop: spacing(compact ? 5 : 7),
+              maxWidth: 1200,
+              alignSelf: 'center',
+              width: '100%',
+            }}
+          >
             {/* Breadcrumb */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(compact ? 4 : 6) }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing(2.5),
+                marginBottom: spacing(4),
+                flexWrap: 'wrap',
+              }}
+            >
               <Pressable
                 onPress={() => router.back()}
                 style={({ pressed }) => ({
-                  flexDirection:    'row' as const,
-                  alignItems:       'center' as const,
-                  gap:              spacing(2),
-                  paddingHorizontal: spacing(compact ? 3 : 4),
-                  paddingVertical:  spacing(2),
-                  borderRadius:     radii.lg,
-                  backgroundColor:  colors.surfaceAlt,
-                  borderWidth:      1,
-                  borderColor:      colors.border,
-                  opacity:          pressed ? 0.8 : 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing(1.5),
+                  paddingHorizontal: spacing(3),
+                  paddingVertical: spacing(1.5),
+                  borderRadius: radii.lg,
+                  backgroundColor: colors.surfaceAlt,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  opacity: pressed ? 0.8 : 1,
                 })}
               >
-                <Ionicons name="arrow-back" size={compact ? 14 : 16} color={colors.primary} />
-                <Text style={[typography.label, { color: colors.primary, fontSize: compact ? 12 : undefined }]}>Back</Text>
+                <Ionicons name="arrow-back" size={14} color={colors.primary} />
+                <Text style={[typography.label, { color: colors.primary, fontSize: 12.5 }]}>Back</Text>
               </Pressable>
-              <Text style={[typography.caption, { color: colors.textMuted, flex: 1, fontSize: compact ? 10 : undefined }]} numberOfLines={1}>
+              <Text style={[typography.caption, { color: colors.textMuted }]} numberOfLines={1}>
                 Settings › Contact Support
               </Text>
             </View>
 
-            {/* Hero */}
             {HeroBanner}
 
-            {/* Two-column on desktop, stacked otherwise */}
-            <View style={{
-              flexDirection: isDesktop ? 'row' : 'column',
-              gap:           compact ? spacing(5) : spacing(8),
-              alignItems:    'flex-start',
-            }}>
-              <View style={{ flex: 1, minWidth: 0 }}>
+            {/* Two-column on desktop */}
+            <View
+              style={{
+                flexDirection: isDesktop ? 'row' : 'column',
+                gap: spacing(isDesktop ? 8 : 5),
+                alignItems: 'flex-start',
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0, width: '100%' }}>
                 {ResponseStrip}
                 {CardsGrid}
+
+                {/* Mobile help block */}
+                {!isDesktop && (
+                  <View
+                    style={{
+                      marginTop: spacing(6),
+                      padding: spacing(4),
+                      backgroundColor: `${colors.primary}0E`,
+                      borderRadius: radii.xl,
+                      borderWidth: 1,
+                      borderColor: `${colors.primary}22`,
+                    }}
+                  >
+                    <Text style={[typography.label, { color: colors.textPrimary, marginBottom: 4 }]}>
+                      Student tip
+                    </Text>
+                    <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 20, fontSize: 13.5 }]}>
+                      For urgent matters, call or WhatsApp us. For document reviews and bursary
+                      queries, email with your Thuto-Bridge Student ID for faster help.
+                    </Text>
+                  </View>
+                )}
               </View>
 
               {isDesktop && <SidebarPanel />}
             </View>
 
+            {Footer}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -566,6 +912,7 @@ function ContactSupportContent() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Exported Screen
 // ─────────────────────────────────────────────────────────────────────────────
+
 export default function ContactSupportScreen() {
   return (
     <StudentMenuProvider>

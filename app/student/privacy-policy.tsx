@@ -1,13 +1,13 @@
-// screens/student/PrivacyPolicyScreen.tsx
 import React, { useMemo } from 'react';
 import {
   View,
   Text,
   Pressable,
-  StyleSheet,
   Platform,
   ScrollView,
+  Linking,
   useWindowDimensions,
+  type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,361 +17,624 @@ import {
   useStudentMenu,
 } from '../../components/student/StudentMenu';
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Local Design Tokens (Aligned with App Design System)
-───────────────────────────────────────────────────────────────────────────── */
-const BASE_SPACING = 4;
-const spacing = (n: number) => n * BASE_SPACING;
+import {
+  spacing,
+  typography,
+  radii,
+  useTheme,
+} from '../../components/student/DashboardLayout';
 
-const radii = {
-  sm: spacing(2),
-  md: spacing(3),
-  lg: spacing(4),
-  xl: spacing(6),
-  xxl: spacing(8),
-  pill: 9999,
+type Breakpoint = 'mobile' | 'tablet' | 'desktop';
+
+type PolicySection = {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  body: string;
+  accent: string;
 };
 
-const typography = {
-  hero: { fontSize: 32, lineHeight: 40, fontWeight: '900' as const },
-  h1: { fontSize: 28, lineHeight: 36, fontWeight: '800' as const },
-  h2: { fontSize: 22, lineHeight: 28, fontWeight: '700' as const },
-  body: { fontSize: 15, lineHeight: 22, fontWeight: '500' as const },
-  bodyStrong: { fontSize: 15, lineHeight: 22, fontWeight: '600' as const },
-  label: { fontSize: 13, lineHeight: 18, fontWeight: '700' as const },
-  caption: { fontSize: 12, lineHeight: 16, fontWeight: '500' as const },
-};
+// ─────────────────────────────────────────────────────────────────────────────
+// Content - Thuto-Bridge
+// ─────────────────────────────────────────────────────────────────────────────
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Elevation Helper
-───────────────────────────────────────────────────────────────────────────── */
-function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md') {
-  return useMemo(() => {
-    const opacity = 0.28;
-    const radius = intensity === 'sm' ? 6 : intensity === 'md' ? 14 : 22;
-    const offsetY = intensity === 'sm' ? 2 : intensity === 'md' ? 5 : 10;
-
-    return Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: offsetY },
-        shadowOpacity: opacity,
-        shadowRadius: radius,
-      },
-      android: {
-        elevation: intensity === 'sm' ? 3 : intensity === 'md' ? 6 : 12,
-      },
-      web: {
-        boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})`,
-      },
-      default: {},
-    });
-  }, [intensity]);
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   Data
-───────────────────────────────────────────────────────────────────────────── */
-const sections = [
+const SECTIONS: PolicySection[] = [
   {
     icon: 'document-text-outline',
     title: 'Information We Collect',
-    body: 'UniPathway may collect information such as your profile details, academic results, uploaded documents, application activity, preferences, and engagement within the platform experience.',
+    body: 'Thuto-Bridge collects your profile details, academic results, uploaded documents, application activity, programme preferences, and how you use the platform – so we can match you to the right universities and bursaries in Botswana and beyond.',
+    accent: '#3B82F6',
   },
   {
     icon: 'analytics-outline',
-    title: 'How Information Is Used',
-    body: 'Information is used to improve recommendations, application workflows, platform personalization, notifications, support services, and the overall student experience.',
+    title: 'How We Use Your Information',
+    body: 'Your information is used to personalise recommendations, process applications, send deadline reminders, improve the student experience, provide support, and generate anonymised insights for partner institutions.',
+    accent: '#14B8A6',
   },
   {
     icon: 'shield-checkmark-outline',
     title: 'Data Protection',
-    body: 'We aim to maintain responsible security practices through access control, secure infrastructure principles, and controlled handling of student information.',
+    body: 'We protect your data with encrypted storage, role-based access controls, secure Botswana-based infrastructure, and regular security reviews. Your academic records are never sold.',
+    accent: '#22C55E',
   },
   {
     icon: 'people-outline',
     title: 'Sharing of Information',
-    body: 'Information may only be shared where necessary for institutional processes, operational support, platform services, or applicable compliance requirements.',
+    body: 'We only share your information with universities, bursary providers, and service partners you apply to through Thuto-Bridge, or where required by law in Botswana. You control which applications go out.',
+    accent: '#6366F1',
   },
   {
     icon: 'settings-outline',
-    title: 'Your Choices',
-    body: 'Students may update selected profile details, preferences, and account information through platform settings as additional features continue to evolve.',
+    title: 'Your Choices & Rights',
+    body: 'You can view, update, or export your profile at any time in Settings. You may request correction or deletion of your data by emailing privacy@thutobridge.com. We respond within 30 days.',
+    accent: '#F59E0B',
   },
   {
     icon: 'refresh-outline',
     title: 'Policy Updates',
-    body: 'This policy may be refined and expanded over time as UniPathway grows and introduces additional services and functionality.',
+    body: 'This policy is reviewed regularly as Thuto-Bridge grows. We will notify you in-app and by email for any material changes. Last updated: January 2026.',
+    accent: '#EC4899',
   },
 ];
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Provider Wrapper
-───────────────────────────────────────────────────────────────────────────── */
-export default function PrivacyPolicyScreen() {
+const DATA_RIGHTS = [
+  { label: 'Access your data', icon: 'eye-outline' as const },
+  { label: 'Correct mistakes', icon: 'create-outline' as const },
+  { label: 'Export a copy', icon: 'download-outline' as const },
+  { label: 'Request deletion', icon: 'trash-outline' as const },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Elevation
+// ─────────────────────────────────────────────────────────────────────────────
+function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md'): ViewStyle {
+  return useMemo<ViewStyle>(() => {
+    const opacity = 0.08;
+    const radius = intensity === 'sm' ? 8 : intensity === 'md' ? 16 : 28;
+    const offsetY = intensity === 'sm' ? 2 : intensity === 'md' ? 6 : 12;
+    return (
+      Platform.select({
+        ios: {
+          shadowColor: '#0f172a',
+          shadowOffset: { width: 0, height: offsetY },
+          shadowOpacity: opacity + 0.05,
+          shadowRadius: radius,
+        },
+        android: { elevation: intensity === 'sm' ? 2 : intensity === 'md' ? 4 : 8 },
+        web: { boxShadow: `0 ${offsetY}px ${radius}px rgba(15,23,42,${opacity})` } as any,
+        default: {},
+      }) ?? {}
+    ) as ViewStyle;
+  }, [intensity]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SectionCard
+// ─────────────────────────────────────────────────────────────────────────────
+function SectionCard({
+  index,
+  icon,
+  title,
+  body,
+  accent,
+}: PolicySection & { index: number }) {
+  const colors = useTheme();
+  const elevation = useElevation('md');
+
   return (
-    <StudentMenuProvider>
-      <PrivacyPolicyContent />
-    </StudentMenuProvider>
+    <View
+      style={[
+        {
+          backgroundColor: colors.card,
+          borderRadius: radii.xxl,
+          borderWidth: 1,
+          borderColor: colors.border,
+          overflow: 'hidden',
+        },
+        elevation,
+      ]}
+    >
+      <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: 3, backgroundColor: accent }} />
+      <View style={{ padding: spacing(5.5), paddingLeft: spacing(6) }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3.5) }}>
+          <View
+            style={{
+              width: 46,
+              height: 46,
+              borderRadius: 14,
+              backgroundColor: `${accent}14`,
+              borderWidth: 1,
+              borderColor: `${accent}2A`,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              marginTop: 2,
+            }}
+          >
+            <Ionicons name={icon} size={21} color={accent} />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginBottom: spacing(1.5) }}>
+              <View
+                style={{
+                  paddingHorizontal: spacing(2),
+                  paddingVertical: 3,
+                  borderRadius: radii.pill,
+                  backgroundColor: `${accent}14`,
+                }}
+              >
+                <Text style={[typography.caption, { color: accent, fontWeight: '700', fontSize: 10.5 }]}>
+                  SECTION {index + 1}
+                </Text>
+              </View>
+            </View>
+            <Text style={[typography.h2, { color: colors.textPrimary, fontSize: 17, marginBottom: spacing(2) }]}>
+              {title}
+            </Text>
+            <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 23, fontSize: 14.5 }]}>
+              {body}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </View>
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Sidebar
+// ─────────────────────────────────────────────────────────────────────────────
+function SidebarPanel() {
+  const colors = useTheme();
+  const elevation = useElevation('md');
+
+  return (
+    <View style={{ width: 320, flexShrink: 0, gap: spacing(5) }}>
+      {/* Quick Index */}
+      <View
+        style={[
+          {
+            backgroundColor: colors.surface,
+            borderRadius: radii.xxl,
+            borderWidth: 1,
+            borderColor: colors.border,
+            overflow: 'hidden',
+          },
+          elevation,
+        ]}
+      >
+        <View style={{ height: 3, backgroundColor: colors.primary }} />
+        <View style={{ padding: spacing(5) }}>
+          <Text style={[typography.h2, { color: colors.textPrimary, fontSize: 15.5, marginBottom: spacing(3.5) }]}>
+            Privacy Index
+          </Text>
+          <View style={{ gap: spacing(2) }}>
+            {SECTIONS.map((s, i) => (
+              <View
+                key={s.title}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing(2.5),
+                  paddingVertical: spacing(1.5),
+                }}
+              >
+                <View
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 11,
+                    backgroundColor: `${s.accent}18`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={[typography.caption, { color: s.accent, fontWeight: '700', fontSize: 10 }]}>
+                    {i + 1}
+                  </Text>
+                </View>
+                <Text style={[typography.caption, { color: colors.textSecondary, flex: 1, fontWeight: '600' }]} numberOfLines={1}>
+                  {s.title}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+
+      {/* Data rights */}
+      <View
+        style={{
+          backgroundColor: colors.surface,
+          borderRadius: radii.xxl,
+          borderWidth: 1,
+          borderColor: colors.border,
+          padding: spacing(5),
+        }}
+      >
+        <Text style={[typography.label, { color: colors.textPrimary, marginBottom: spacing(3) }]}>
+          Your data rights
+        </Text>
+        <View style={{ gap: spacing(2.5) }}>
+          {DATA_RIGHTS.map(r => (
+            <View key={r.label} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2.5) }}>
+              <Ionicons name={r.icon} size={15} color={colors.textSecondary} />
+              <Text style={[typography.body, { color: colors.textSecondary, fontSize: 13.5 }]}>{r.label}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Contact DPO */}
+      <View
+        style={{
+          padding: spacing(4.5),
+          backgroundColor: `${colors.primary}0F`,
+          borderRadius: radii.xl,
+          borderWidth: 1,
+          borderColor: `${colors.primary}22`,
+          borderLeftWidth: 3,
+          borderLeftColor: colors.primary,
+        }}
+      >
+        <Text style={[typography.label, { color: colors.textPrimary, marginBottom: spacing(1.5), fontSize: 13 }]}>
+          Questions about privacy?
+        </Text>
+        <Text style={[typography.body, { color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: spacing(2.5) }]}>
+          Contact our Data Protection Officer at Thuto-Bridge.
+        </Text>
+        <Pressable onPress={() => Linking.openURL('mailto:privacy@thutobridge.com')}>
+          <Text style={[typography.label, { color: colors.primary, fontSize: 13 }]}>privacy@thutobridge.com →</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Content
+// ─────────────────────────────────────────────────────────────────────────────
 function PrivacyPolicyContent() {
   const { width } = useWindowDimensions();
+  const colors = useTheme();
   const { openMenu } = useStudentMenu();
-  const elevationMd = useElevation('md');
+  const elevMd = useElevation('md');
+  const elevLg = useElevation('lg');
 
-  const breakpoint = useMemo<'mobile' | 'tablet' | 'desktop'>(() => {
-    if (width < 768) return 'mobile';
-    if (width < 1024) return 'tablet';
+  const breakpoint = useMemo<Breakpoint>(() => {
+    if (width < 720) return 'mobile';
+    if (width < 1100) return 'tablet';
     return 'desktop';
   }, [width]);
 
   const isDesktop = breakpoint === 'desktop';
   const isMobile = breakpoint === 'mobile';
+  const isTablet = breakpoint === 'tablet';
+  const padX = isMobile ? spacing(4) : isTablet ? spacing(5) : spacing(8);
 
-  const colors = {
-    background: '#0A1428',
-    surface: '#1A2339',
-    surfaceAlt: '#25314A',
-    card: '#1A2339',
-    divider: 'rgba(255,255,255,0.08)',
-    textPrimary: '#F1F5F9',
-    textSecondary: '#94A3B8',
-    textMuted: '#64748B',
-    primary: '#60A5FA',
-    success: '#34D399',
-    border: 'rgba(255,255,255,0.10)',
-  };
+  const NavBar = (
+    <View
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: padX,
+          paddingVertical: spacing(3.5),
+          backgroundColor: colors.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+          gap: spacing(3),
+        },
+        elevMd,
+      ]}
+    >
+      <Pressable
+        onPress={() => router.back()}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        style={({ pressed }) => ({
+          width: 42,
+          height: 42,
+          borderRadius: radii.lg,
+          backgroundColor: colors.surfaceAlt,
+          borderWidth: 1,
+          borderColor: colors.border,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.78 : 1,
+        })}
+      >
+        <Ionicons name="arrow-back" size={19} color={colors.primary} />
+      </Pressable>
+
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[typography.h2, { color: colors.textPrimary, fontSize: 16.5 }]} numberOfLines={1}>
+          Privacy Policy
+        </Text>
+        {!isMobile && (
+          <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
+            Thuto-Bridge · How we protect student data
+          </Text>
+        )}
+      </View>
+
+      {!isMobile && (
+        <Pressable
+          onPress={() => router.push('/student/settings')}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing(2),
+            paddingHorizontal: spacing(3.5),
+            paddingVertical: spacing(2),
+            borderRadius: radii.lg,
+            backgroundColor: colors.surfaceAlt,
+            borderWidth: 1,
+            borderColor: colors.border,
+            opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          <Ionicons name="settings-outline" size={14} color={colors.textSecondary} />
+          <Text style={[typography.label, { color: colors.textSecondary, fontSize: 12.5 }]}>Settings</Text>
+        </Pressable>
+      )}
+
+      <Pressable
+        onPress={openMenu}
+        accessibilityLabel="Open student menu"
+        style={({ pressed }) => ({
+          width: 42,
+          height: 42,
+          borderRadius: radii.lg,
+          backgroundColor: colors.surfaceAlt,
+          borderWidth: 1,
+          borderColor: colors.border,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.8 : 1,
+        })}
+      >
+        <Ionicons name="menu" size={21} color={colors.textPrimary} />
+      </Pressable>
+    </View>
+  );
+
+  const HeroBanner = (
+    <View
+      style={[
+        {
+          backgroundColor: colors.surface,
+          borderRadius: radii.xxl,
+          borderWidth: 1,
+          borderColor: colors.border,
+          overflow: 'hidden',
+          marginBottom: spacing(7),
+        },
+        elevLg,
+      ]}
+    >
+      <View style={{ height: 4, backgroundColor: colors.primary }} />
+      <View style={{ padding: isMobile ? spacing(5) : spacing(7) }}>
+        <View
+          style={{
+            flexDirection: isMobile ? 'column' : 'row',
+            alignItems: isMobile ? 'flex-start' : 'center',
+            justifyContent: 'space-between',
+            gap: spacing(4),
+          }}
+        >
+          <View style={{ flex: 1, maxWidth: 580 }}>
+            <View
+              style={{
+                alignSelf: 'flex-start',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing(2),
+                paddingHorizontal: spacing(3),
+                paddingVertical: spacing(1.5),
+                borderRadius: radii.pill,
+                backgroundColor: `${colors.primary}14`,
+                borderWidth: 1,
+                borderColor: `${colors.primary}2A`,
+                marginBottom: spacing(3.5),
+              }}
+            >
+              <Ionicons name="shield-checkmark-outline" size={13} color={colors.primary} />
+              <Text style={[typography.caption, { color: colors.primary, fontWeight: '700', letterSpacing: 0.3 }]}>
+                PRIVACY & SECURITY
+              </Text>
+            </View>
+
+            <Text
+              style={[
+                typography.hero,
+                { color: colors.textPrimary, fontSize: isMobile ? 26 : 32, lineHeight: isMobile ? 32 : 38 },
+              ]}
+            >
+              Your information, handled responsibly
+            </Text>
+            <Text
+              style={[
+                typography.body,
+                { color: colors.textSecondary, marginTop: spacing(2.5), lineHeight: 23, fontSize: 15, maxWidth: 520 },
+              ]}
+            >
+              Thuto-Bridge is built for Botswana students first. We collect only what we need to get you into university, protect it carefully, and never sell your data.
+            </Text>
+
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing(2),
+                marginTop: spacing(4),
+                flexWrap: 'wrap',
+              }}
+            >
+              <View style={{
+                flexDirection: 'row', alignItems: 'center', gap: 6,
+                paddingHorizontal: spacing(2.5), paddingVertical: spacing(1.5),
+                borderRadius: radii.pill, backgroundColor: `${colors.success}14`,
+                borderWidth: 1, borderColor: `${colors.success}28`,
+              }}>
+                <Ionicons name="lock-closed" size={12} color={colors.success} />
+                <Text style={[typography.caption, { color: colors.success, fontWeight: '700' }]}>Encrypted</Text>
+              </View>
+              <View style={{
+                flexDirection: 'row', alignItems: 'center', gap: 6,
+                paddingHorizontal: spacing(2.5), paddingVertical: spacing(1.5),
+                borderRadius: radii.pill, backgroundColor: colors.surfaceAlt,
+                borderWidth: 1, borderColor: colors.border,
+              }}>
+                <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>
+                  Effective Jan 2026
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {!isMobile && (
+            <View
+              style={{
+                width: 120,
+                height: 120,
+                borderRadius: 28,
+                backgroundColor: `${colors.primary}10`,
+                borderWidth: 1,
+                borderColor: `${colors.primary}22`,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <Ionicons name="lock-closed-outline" size={44} color={colors.primary} />
+            </View>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+
+  const Footer = (
+    <View
+      style={{
+        marginTop: spacing(10),
+        paddingTop: spacing(5),
+        borderTopWidth: 1,
+        borderTopColor: colors.divider,
+        alignItems: 'center',
+        gap: spacing(2),
+      }}
+    >
+      <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 14 }]}>
+        Thuto-Bridge
+      </Text>
+      <Text style={[typography.caption, { color: colors.textSecondary, textAlign: 'center', lineHeight: 18 }]}>
+        Connecting Botswana students to university opportunities.
+      </Text>
+      <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center', fontSize: 11.5 }]}>
+        Designed and developed by{' '}
+        <Text style={{ fontWeight: '700', color: colors.textSecondary }}>BrightCode Studios</Text>
+        {'\n'}© {new Date().getFullYear()} Thuto-Bridge. All rights reserved.
+      </Text>
+      <View style={{ flexDirection: 'row', gap: spacing(4), marginTop: spacing(1), flexWrap: 'wrap', justifyContent: 'center' }}>
+        <Pressable onPress={() => router.push('/student/terms')}><Text style={[typography.caption, { color: colors.textMuted }]}>Terms</Text></Pressable>
+        <Pressable onPress={() => router.push('/student/contact-support')}><Text style={[typography.caption, { color: colors.textMuted }]}>Support</Text></Pressable>
+        <Pressable onPress={() => Linking.openURL('mailto:privacy@thutobridge.com')}><Text style={[typography.caption, { color: colors.textMuted }]}>privacy@thutobridge.com</Text></Pressable>
+      </View>
+    </View>
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            padding: isMobile ? spacing(5) : spacing(7),
-            maxWidth: isDesktop ? 1280 : '100%',
-            alignSelf: 'center',
-            width: '100%',
-            paddingBottom: spacing(12),
-          }}
-        >
-          {/* Top Navigation Bar */}
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        {NavBar}
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing(10) }}>
           <View
             style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: spacing(6),
-              paddingHorizontal: spacing(2),
+              paddingHorizontal: padX,
+              paddingTop: spacing(isMobile ? 5 : 7),
+              maxWidth: 1200,
+              alignSelf: 'center',
+              width: '100%',
             }}
           >
-            <View style={{ flexDirection: 'row', gap: spacing(3) }}>
+            {/* Breadcrumb */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2.5), marginBottom: spacing(4), flexWrap: 'wrap' }}>
               <Pressable
                 onPress={() => router.back()}
                 style={({ pressed }) => ({
-                  width: 48,
-                  height: 48,
-                  borderRadius: radii.lg,
-                  backgroundColor: colors.surfaceAlt,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: pressed ? 0.85 : 1,
+                  flexDirection: 'row', alignItems: 'center', gap: spacing(1.5),
+                  paddingHorizontal: spacing(3), paddingVertical: spacing(1.5),
+                  borderRadius: radii.lg, backgroundColor: colors.surfaceAlt,
+                  borderWidth: 1, borderColor: colors.border,
+                  opacity: pressed ? 0.8 : 1,
                 })}
               >
-                <Ionicons name="arrow-back" size={22} color={colors.primary} />
+                <Ionicons name="arrow-back" size={14} color={colors.primary} />
+                <Text style={[typography.label, { color: colors.primary, fontSize: 12.5 }]}>Back</Text>
               </Pressable>
-
-              <Pressable
-                onPress={openMenu}
-                style={({ pressed }) => ({
-                  width: 48,
-                  height: 48,
-                  borderRadius: radii.lg,
-                  backgroundColor: colors.surfaceAlt,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: pressed ? 0.85 : 1,
-                })}
-              >
-                <Ionicons name="menu" size={24} color={colors.textPrimary} />
-              </Pressable>
+              <Text style={[typography.caption, { color: colors.textMuted }]}>Settings › Privacy Policy</Text>
             </View>
 
-            <Text style={[typography.h1, { color: colors.textPrimary }]}>
-              Privacy Policy
-            </Text>
+            {HeroBanner}
 
-            <Pressable
-              onPress={() => router.push('/student/settings')}
-              style={({ pressed }) => ({
-                width: 48,
-                height: 48,
-                borderRadius: radii.lg,
-                backgroundColor: colors.surfaceAlt,
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: pressed ? 0.85 : 1,
-              })}
-            >
-              <Ionicons name="settings-outline" size={22} color={colors.textPrimary} />
-            </Pressable>
-          </View>
-
-          {/* Hero Section */}
-          <View
-            style={[
-              {
-                backgroundColor: colors.surface,
-                borderRadius: radii.xxl,
-                padding: spacing(7),
-                marginBottom: spacing(8),
-                borderWidth: 1,
-                borderColor: colors.border,
-              },
-              elevationMd,
-            ]}
-          >
             <View
               style={{
                 flexDirection: isDesktop ? 'row' : 'column',
-                gap: spacing(6),
+                gap: spacing(isDesktop ? 8 : 5),
                 alignItems: 'flex-start',
               }}
             >
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, minWidth: 0, width: '100%', gap: spacing(4) }}>
+                <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '600', letterSpacing: 0.4 }]}>
+                  PRIVACY SECTIONS · {SECTIONS.length} ITEMS
+                </Text>
+                {SECTIONS.map((s, i) => (
+                  <SectionCard key={s.title} index={i} {...s} />
+                ))}
+
+                {/* Student-friendly notice */}
                 <View
                   style={{
-                    backgroundColor: `${colors.primary}22`,
-                    paddingHorizontal: spacing(3),
-                    paddingVertical: spacing(1),
-                    borderRadius: radii.pill,
-                    alignSelf: 'flex-start',
-                    borderWidth: 1,
-                    borderColor: `${colors.primary}44`,
-                  }}
-                >
-                  <Text style={[typography.label, { color: colors.primary }]}>
-                    PRIVACY & SECURITY
-                  </Text>
-                </View>
-
-                <Text style={[typography.hero, { color: colors.textPrimary, marginTop: spacing(4) }]}>
-                  Your Information,{'\n'}Handled Responsibly
-                </Text>
-
-                <Text
-                  style={[
-                    typography.body,
-                    { color: colors.textSecondary, marginTop: spacing(3), maxWidth: 680 },
-                  ]}
-                >
-                  UniPathway is designed to support students through a secure, transparent, and user-focused platform experience.
-                </Text>
-              </View>
-
-              <View
-                style={{
-                  width: isDesktop ? 280 : '100%',
-                  backgroundColor: colors.surfaceAlt,
-                  borderRadius: radii.xxl,
-                  padding: spacing(6),
-                  alignItems: 'center',
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                }}
-              >
-                <Ionicons name="lock-closed-outline" size={52} color={colors.primary} />
-                <Text style={[typography.h2, { color: colors.textPrimary, marginTop: spacing(4), textAlign: 'center' }]}>
-                  Data Privacy First
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Sections */}
-          <View style={{ gap: spacing(5) }}>
-            {sections.map((section, index) => (
-              <View
-                key={index}
-                style={[
-                  {
+                    marginTop: spacing(3),
+                    padding: spacing(5),
                     backgroundColor: colors.surface,
                     borderRadius: radii.xxl,
-                    padding: spacing(6),
                     borderWidth: 1,
                     borderColor: colors.border,
-                  },
-                  elevationMd,
-                ]}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(4) }}>
-                  <View
-                    style={{
-                      width: 52,
-                      height: 52,
-                      borderRadius: radii.xl,
-                      backgroundColor: `${colors.primary}22`,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderWidth: 1,
-                      borderColor: `${colors.primary}44`,
-                    }}
-                  >
-                    <Ionicons name={section.icon as any} size={24} color={colors.primary} />
-                  </View>
-
+                    flexDirection: 'row',
+                    gap: spacing(3.5),
+                    alignItems: 'flex-start',
+                  }}
+                >
+                  <Ionicons name="information-circle-outline" size={22} color={colors.primary} />
                   <View style={{ flex: 1 }}>
-                    <Text style={[typography.h2, { color: colors.textPrimary }]}>
-                      {section.title}
+                    <Text style={[typography.label, { color: colors.textPrimary, marginBottom: spacing(1) }]}>
+                      Plain-language promise
                     </Text>
-                    <Text style={[typography.caption, { color: colors.textMuted }]}>
-                      Section {index + 1}
+                    <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 21, fontSize: 13.5 }]}>
+                      This policy is written for students, not lawyers. If anything is unclear, email privacy@thutobridge.com and we’ll explain it in Setswana or English – your choice.
                     </Text>
                   </View>
                 </View>
-
-                <Text
-                  style={[
-                    typography.body,
-                    { color: colors.textSecondary, marginTop: spacing(5), lineHeight: 24 },
-                  ]}
-                >
-                  {section.body}
-                </Text>
               </View>
-            ))}
-          </View>
 
-          {/* Footer Notice */}
-          <View
-            style={[
-              {
-                marginTop: spacing(8),
-                backgroundColor: colors.surfaceAlt,
-                borderRadius: radii.xxl,
-                padding: spacing(6),
-                borderWidth: 1,
-                borderColor: colors.border,
-                flexDirection: 'row',
-                gap: spacing(4),
-              },
-              elevationMd,
-            ]}
-          >
-            <Ionicons name="information-circle-outline" size={26} color={colors.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={[typography.h2, { color: colors.textPrimary }]}>
-                Platform Notice
-              </Text>
-              <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2) }]}>
-                This privacy policy is currently part of the frontend phase and may evolve as backend infrastructure, authentication systems, and institutional integrations are implemented.
-              </Text>
+              {isDesktop && <SidebarPanel />}
             </View>
+
+            {Footer}
           </View>
         </ScrollView>
       </SafeAreaView>
     </View>
+  );
+}
+
+export default function PrivacyPolicyScreen() {
+  return (
+    <StudentMenuProvider>
+      <PrivacyPolicyContent />
+    </StudentMenuProvider>
   );
 }
