@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../constants/firebase';
 import { StudentMenuProvider } from '../../components/student/StudentMenu';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,81 +49,22 @@ type ScholarshipDetails = {
   documents: string[];
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Data
-// ─────────────────────────────────────────────────────────────────────────────
-const DETAILS_DB: Record<string, ScholarshipDetails> = {
-  'abc-excellence': {
-    id: 'abc-excellence',
-    title: 'ABC Academic Excellence Scholarship',
-    providerName: 'ABC Foundation',
-    amount: 'BWP 12,000 / year',
-    deadline: 'May 10, 2026',
-    daysLeft: 23,
-    category: 'Local',
-    status: 'You May Qualify',
-    statusVariant: 'good',
-    description:
-      'Awarded annually to top-performing BGCSE students who demonstrate outstanding academic achievement and community leadership. This scholarship covers partial tuition fees and is renewable for up to four years subject to continued academic performance.',
-    eligibility: [
-      'Minimum 36 BGCSE points across best 6 subjects',
-      'Botswana citizen or permanent resident',
-      'Currently enrolled or accepted into an accredited undergraduate programme',
-      'Demonstrated community service or extracurricular involvement',
-      'No outstanding disciplinary record',
-    ],
-    howToApply: [
-      'Complete the online application form at www.abcfoundation.bw',
-      'Submit certified copies of your BGCSE certificate and transcript',
-      'Provide a personal statement (800–1200 words) outlining academic goals',
-      'Submit two reference letters from teachers or community leaders',
-      'Attend a shortlisting interview if selected',
-    ],
-    documents: [
-      'Certified BGCSE certificate copy',
-      'National ID or passport copy',
-      'Proof of admission / acceptance letter',
-      'Personal statement (PDF)',
-      'Two reference letters',
-    ],
-  },
-  'community-service': {
-    id: 'community-service',
-    title: 'Community Service Award',
-    providerName: 'City Education Trust',
-    amount: 'USD 5,000',
-    deadline: 'April 28, 2026',
-    daysLeft: 3,
-    category: 'International',
-    status: 'Deadline Soon',
-    statusVariant: 'warning',
-    description:
-      'Recognises students who have made a significant and sustained positive contribution to their local community. The award celebrates leadership, civic engagement, and a commitment to social impact alongside academic achievement.',
-    eligibility: [
-      'Proof of 100+ documented community service hours',
-      'Currently enrolled in a secondary or tertiary institution',
-      'Academic standing of C grade average or above',
-      'Two letters of endorsement from community organisations',
-      'Open to applicants from any country',
-    ],
-    howToApply: [
-      'Register on the City Education Trust portal',
-      'Upload proof of community service hours and activities',
-      'Write a reflective essay on your community impact (500–700 words)',
-      'Request two endorsement letters from recognised organisations',
-      'Submit before the stated deadline — late submissions not accepted',
-    ],
-    documents: [
-      'Community service log (signed)',
-      'Two endorsement letters',
-      'Reflective essay (PDF)',
-      'Student ID or enrolment proof',
-      'Recent transcript',
-    ],
-  },
-};
+// Fallback steps/documents used only when Firestore doesn't provide them
+// for a given scholarship document. Add `howToApply` / `documents` arrays
+// to your Firestore scholarship docs to override these with real data.
+const DEFAULT_HOW_TO_APPLY = [
+  'Review the eligibility requirements carefully before applying.',
+  'Prepare all required documents listed below.',
+  'Complete the application form provided by the scholarship provider.',
+  'Submit your application before the stated deadline.',
+];
 
-const FALLBACK_ID = 'abc-excellence';
+const DEFAULT_DOCUMENTS = [
+  'National ID or passport copy',
+  'Academic transcript',
+  'Proof of admission / enrolment',
+  'Personal statement or motivation letter',
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Elevation helper
@@ -151,6 +94,14 @@ function useVariantColors(variant: ScholarshipDetails['statusVariant']) {
     case 'info':    return { bg: `${colors.primary}18`, border: `${colors.primary}44`, text: colors.primary };
     default:        return { bg: colors.surfaceAlt,     border: colors.border,          text: colors.textSecondary };
   }
+}
+
+// Maps the same 'good' | 'warning' | 'neutral' | 'info' variant used on the
+// list screen into the statusVariant used here (they're actually identical,
+// this just keeps the mapping explicit/obvious at the call site).
+function toStatusVariant(variant: string | undefined): ScholarshipDetails['statusVariant'] {
+  if (variant === 'good' || variant === 'warning' || variant === 'info') return variant;
+  return 'neutral';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -244,6 +195,12 @@ function NumberedList({ items }: { items: string[] }) {
 function DocumentChecklist({ items }: { items: string[] }) {
   const colors = useTheme();
   const [checked, setChecked] = useState<boolean[]>(Array(items.length).fill(false));
+
+  // Keep checklist state in sync if the underlying items list changes
+  // (e.g. navigating from one scholarship's details straight to another's).
+  useEffect(() => {
+    setChecked(Array(items.length).fill(false));
+  }, [items.length]);
 
   const toggle = (i: number) => {
     setChecked((prev) => { const c = [...prev]; c[i] = !c[i]; return c; });
@@ -438,11 +395,75 @@ function DesktopSidebar({
 function ScholarshipDetailsContent() {
   const { width }  = useWindowDimensions();
   const colors     = useTheme();
-  const elevation  = useElevation('lg');
   const params     = useLocalSearchParams<{ id?: string }>();
+  const scholarshipId = typeof params.id === 'string' ? params.id : undefined;
 
-  const scholarshipId = typeof params.id === 'string' ? params.id : FALLBACK_ID;
-  const data          = DETAILS_DB[scholarshipId] ?? DETAILS_DB[FALLBACK_ID];
+  const [data, setData]       = useState<ScholarshipDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
+  // Fetch the exact scholarship the user clicked on, by its Firestore doc id.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchScholarship() {
+      if (!scholarshipId) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setNotFound(false);
+
+        const ref = doc(db, 'scholarships', scholarshipId);
+        const snap = await getDoc(ref);
+
+        if (!snap.exists()) {
+          if (!cancelled) {
+            setNotFound(true);
+            setData(null);
+          }
+          return;
+        }
+
+        const raw = snap.data() as any;
+        const deadlineDate = new Date(raw.deadline);
+        const daysLeft = Math.ceil((deadlineDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+
+        const mapped: ScholarshipDetails = {
+          id: snap.id,
+          title: raw.title ?? 'Untitled Scholarship',
+          providerName: raw.provider ?? raw.providerName ?? 'Unknown Provider',
+          amount: raw.amount ?? '—',
+          deadline: raw.deadline ?? '—',
+          daysLeft: Number.isFinite(daysLeft) ? daysLeft : 0,
+          category: raw.category === 'International' ? 'International' : 'Local',
+          status: raw.status ?? 'Open',
+          statusVariant: toStatusVariant(raw.variant ?? raw.statusVariant),
+          description: raw.description ?? '',
+          eligibility: Array.isArray(raw.eligibility)
+            ? raw.eligibility
+            : Array.isArray(raw.requirements)
+              ? raw.requirements
+              : [],
+          howToApply: Array.isArray(raw.howToApply) ? raw.howToApply : DEFAULT_HOW_TO_APPLY,
+          documents: Array.isArray(raw.documents) ? raw.documents : DEFAULT_DOCUMENTS,
+        };
+
+        if (!cancelled) setData(mapped);
+      } catch (error) {
+        console.error('Failed to fetch scholarship details:', error);
+        if (!cancelled) setNotFound(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchScholarship();
+    return () => { cancelled = true; };
+  }, [scholarshipId]);
 
   const breakpoint = useMemo<Breakpoint>(() => {
     if (width < 768)  return 'mobile';
@@ -453,10 +474,10 @@ function ScholarshipDetailsContent() {
   const isMobile  = breakpoint === 'mobile';
   const isDesktop = breakpoint === 'desktop';
 
-  const [saved,       setSaved]       = useState(false);
-  const [applyOpen,   setApplyOpen]   = useState(false);
+  const [saved,     setSaved]     = useState(false);
+  const [applyOpen, setApplyOpen] = useState(false);
 
-  const vc = useVariantColors(data.statusVariant);
+  const vc = useVariantColors(data?.statusVariant ?? 'neutral');
 
   const handleApply = useCallback(() => setApplyOpen(true), []);
 
@@ -469,6 +490,38 @@ function ScholarshipDetailsContent() {
     setSaved((p) => !p);
     Alert.alert(saved ? 'Removed from saved' : 'Saved!', saved ? 'Scholarship removed from your saved list.' : 'Scholarship added to your saved list.');
   }, [saved]);
+
+  // ── Loading state ───────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <DashboardLayout title="Scholarship Details" subtitle="Loading..." showPointsCard={false}>
+        <Text style={[typography.body, { color: colors.textSecondary }]}>
+          Loading scholarship details...
+        </Text>
+      </DashboardLayout>
+    );
+  }
+
+  // ── Not found state ─────────────────────────────────────────────────────
+  if (notFound || !data) {
+    return (
+      <DashboardLayout title="Scholarship Details" subtitle="Not found" showPointsCard={false}>
+        <View style={{ alignItems: 'center', padding: spacing(10), backgroundColor: colors.card, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border }}>
+          <Ionicons name="alert-circle-outline" size={32} color={colors.textMuted} />
+          <Text style={[typography.h2, { color: colors.textPrimary, marginTop: spacing(4), textAlign: 'center' }]}>
+            Scholarship Not Found
+          </Text>
+          <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2), textAlign: 'center', maxWidth: 320 }]}>
+            We couldn't find details for this scholarship. It may have been removed or the link is invalid.
+          </Text>
+          <Pressable onPress={() => router.back()} style={({ pressed }) => ({ marginTop: spacing(6), flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(6), paddingVertical: spacing(4), borderRadius: radii.lg, backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 })}>
+            <Ionicons name="arrow-back" size={17} color="#fff" />
+            <Text style={[typography.label, { color: '#fff' }]}>Back to Scholarships</Text>
+          </Pressable>
+        </View>
+      </DashboardLayout>
+    );
+  }
 
   const isUrgent = data.daysLeft <= 7 && data.daysLeft > 0;
 
@@ -550,7 +603,7 @@ function ScholarshipDetailsContent() {
   );
 
   // ── Eligibility card ───────────────────────────────────────────────────────
-  const EligibilityCard = (
+  const EligibilityCard = data.eligibility.length > 0 && (
     <Card style={{ marginBottom: spacing(6) }}>
       <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
         <SectionHeader title="Eligibility Requirements" icon="checkmark-circle-outline" label="Requirements" />
@@ -635,7 +688,7 @@ function ScholarshipDetailsContent() {
             <Text style={[typography.label, { color: colors.primary }]}>Back</Text>
           </Pressable>
           <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]} numberOfLines={1}>
-            Scholarships › {data.id === FALLBACK_ID ? 'ABC Excellence' : data.providerName}
+            Scholarships › {data.providerName}
           </Text>
         </View>
 

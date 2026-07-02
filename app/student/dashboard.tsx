@@ -94,14 +94,12 @@ function FadeIn({
 // ─── Per-action accent colours ───────────────────────────────────────────────
 const ACTION_ACCENTS = [
   '#60A5FA', // Enter Results   — blue
-  '#34D399', // Upload Results  — emerald
   '#A78BFA', // View Courses    — violet
   '#F59E0B', // Institutions    — amber
   '#FB923C', // Scholarships    — orange
   '#38BDF8', // Progress        — sky
   '#F472B6', // My Career       — pink
   '#22D3EE', // Saved           — cyan
-  '#8B5CF6', // Applications    — purple
 ];
 
 // ─── Dashboard Content ────────────────────────────────────────────────────────
@@ -121,13 +119,6 @@ function DashboardContent() {
         href:    '/student/enter-results',
         accent:  ACTION_ACCENTS[0],
         desc:    'Log your marks',
-      },
-      {
-        label:   'Upload Results',
-        icon:    'cloud-upload-outline' as const,
-        href:    '/student/upload-results',
-        accent:  ACTION_ACCENTS[1],
-        desc:    'Share certificates',
       },
       {
         label:   'View Courses',
@@ -172,13 +163,6 @@ function DashboardContent() {
         accent:  ACTION_ACCENTS[7],
         desc:    'Bookmarked items',
       },
-      {
-        label:   'Applications',
-        icon:    'document-text-outline' as const,
-        href:    '/student/applications',
-        accent:  ACTION_ACCENTS[8],
-        desc:    'Track submissions',
-      },
     ],
     [openInstitutionModal],
   );
@@ -220,7 +204,7 @@ function DashboardContent() {
       showPointsCard={true}
       points={48}
       lastUpdated="28 March 2026"
-      isEligible={true}
+     
     >
       {/* ── Activity strip ── */}
       <FadeIn delay={60}>
@@ -312,9 +296,9 @@ function DashboardContent() {
 
 // ─── Activity Strip ───────────────────────────────────────────────────────────
 const ACTIVITY_ITEMS = [
-  { icon: 'checkmark-circle-outline' as const, label: '3 results logged',   color: '#34D399' },
-  { icon: 'ribbon-outline'           as const, label: '2 scholarships open', color: '#FBBF24' },
-  { icon: 'flame-outline'            as const, label: '5-day streak',         color: '#FB923C' },
+  { icon: 'book-outline' as const, label: 'Courses available', color: '#34D399' },
+  { icon: 'ribbon-outline' as const, label: 'Scholarships open', color: '#FBBF24' },
+  { icon: 'school-outline' as const, label: 'Institutions listed', color: '#FB923C' },
 ];
 
 function ActivityStrip({ isMobile, colors }: { isMobile: boolean; colors: any }) {
@@ -694,9 +678,9 @@ function RecommendationCard({ rec, colors }: { rec: any; colors: any }) {
 
 // ─── Tips Banner ─────────────────────────────────────────────────────────────
 const TIPS = [
-  { icon: 'bulb-outline' as const,       text: 'Add your Form 5 results to unlock more course matches.' },
-  { icon: 'medal-outline' as const,      text: 'Students with complete profiles get 3× more scholarship suggestions.' },
-  { icon: 'rocket-outline' as const,     text: 'Upload your certificates to speed up the application process.' },
+  { icon: 'bulb-outline' as const, text: 'Explore courses that match your academic interests.' },
+  { icon: 'medal-outline' as const, text: 'Check scholarship opportunities regularly before deadlines close.' },
+  { icon: 'rocket-outline' as const, text: 'Save courses and institutions so you can compare them later.' },
 ];
 
 function TipsBanner({ colors, isMobile }: { colors: any; isMobile: boolean }) {

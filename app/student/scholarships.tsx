@@ -12,6 +12,9 @@ import { router } from 'expo-router';
 import {
   StudentMenuProvider,
 } from '../../components/student/StudentMenu';
+import { useEffect } from 'react';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { db } from '../../constants/firebase';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DashboardLayout & design tokens
@@ -46,86 +49,7 @@ type Scholarship = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Data
 // ─────────────────────────────────────────────────────────────────────────────
-const SCHOLARSHIPS: Scholarship[] = [
-  {
-    id: '1',
-    title: 'ABC Academic Excellence Scholarship',
-    provider: 'ABC Foundation',
-    category: 'Local',
-    deadline: 'May 10, 2026',
-    daysLeft: 23,
-    amount: 'BWP 12,000 / year',
-    status: 'You May Qualify',
-    variant: 'good',
-    description: 'Awarded to top-performing BGCSE students who demonstrate academic excellence and community leadership.',
-    requirements: ['Minimum 36 BGCSE points', 'Botswana citizen', 'Community service record'],
-  },
-  {
-    id: '2',
-    title: 'Community Service Award',
-    provider: 'City Education Trust',
-    category: 'International',
-    deadline: 'April 28, 2026',
-    daysLeft: 3,
-    amount: 'USD 5,000',
-    status: 'Deadline Soon',
-    variant: 'warning',
-    description: 'Recognises students who have made a significant positive contribution to their local community.',
-    requirements: ['Proof of 100+ community service hours', 'Two reference letters', 'Personal statement'],
-  },
-  {
-    id: '3',
-    title: 'STEM Futures Bursary',
-    provider: 'Botswana Innovation Hub',
-    category: 'Local',
-    deadline: 'June 15, 2026',
-    daysLeft: 59,
-    amount: 'BWP 20,000 / year',
-    status: 'Open',
-    variant: 'neutral',
-    description: 'Supporting students pursuing degrees in Science, Technology, Engineering, or Mathematics.',
-    requirements: ['Enrolled or accepted into STEM programme', 'Minimum 34 BGCSE points', 'Financial need statement'],
-  },
-  {
-    id: '4',
-    title: 'African Leadership University Grant',
-    provider: 'ALU Foundation',
-    category: 'International',
-    deadline: 'July 1, 2026',
-    daysLeft: 75,
-    amount: 'Full tuition',
-    status: 'Competitive',
-    variant: 'info',
-    description: 'Highly competitive full-tuition grant for exceptional African students with demonstrated leadership potential.',
-    requirements: ['Outstanding academic record', 'Leadership portfolio', 'Interview shortlist'],
-  },
-  {
-    id: '5',
-    title: 'Women in Tech Scholarship',
-    provider: 'TechWomen Botswana',
-    category: 'Local',
-    deadline: 'May 30, 2026',
-    daysLeft: 43,
-    amount: 'BWP 8,500 / year',
-    status: 'You May Qualify',
-    variant: 'good',
-    description: 'Empowering women to enter the technology sector through financial support and mentorship.',
-    requirements: ['Female applicant', 'Enrolled in IT/CS programme', 'Motivational letter'],
-  },
-  {
-    id: '6',
-    title: 'Commonwealth Distance Learning Scholarship',
-    provider: 'Commonwealth Secretariat',
-    category: 'International',
-    deadline: 'August 1, 2026',
-    daysLeft: 106,
-    amount: 'Full tuition + stipend',
-    status: 'Open',
-    variant: 'neutral',
-    description: 'Enables talented students from Commonwealth nations to study postgraduate programmes via distance learning.',
-    requirements: ['Commonwealth country citizen', 'First degree in relevant field', 'Employer endorsement'],
-  },
-];
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Elevation helper
@@ -435,30 +359,73 @@ function ScholarshipsContent() {
   const colors    = useTheme();
   const elevation = useElevation('md');
 
+  const [scholarships, setScholarships] = useState<Scholarship[]>([]);
+const [loading, setLoading] = useState(true);
+
   const breakpoint = useMemo<Breakpoint>(() => {
     if (width < 768)  return 'mobile';
     if (width < 1024) return 'tablet';
     return 'desktop';
   }, [width]);
 
+  useEffect(() => {
+  async function fetchScholarships() {
+    try {
+      setLoading(true);
+
+      const q = query(
+        collection(db, 'scholarships'),
+        where('isActive', '==', true),
+        orderBy('deadline', 'asc')
+      );
+
+      const snapshot = await getDocs(q);
+
+     const data = snapshot.docs.map((doc) => {
+  const raw = doc.data();
+  const deadlineDate = new Date(raw.deadline);
+  const daysLeft = Math.ceil((deadlineDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  return {
+    id: doc.id,
+    ...raw,
+    daysLeft,
+  };
+}) as Scholarship[];
+
+      setScholarships(data);
+    } catch (error) {
+      console.error('Failed to fetch scholarships:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  fetchScholarships();
+}, []);
+
   const isDesktop = breakpoint === 'desktop';
   const isMobile  = breakpoint === 'mobile';
 
   const [category, setCategory] = useState<Category>('ALL');
 
-  const filtered = useMemo(() => {
-    if (category === 'ALL') return SCHOLARSHIPS;
-    return SCHOLARSHIPS.filter((s) => s.category === category);
-  }, [category]);
+ const filtered = useMemo(() => {
+  if (category === 'ALL') return scholarships;
+  return scholarships.filter((s) => s.category === category);
+}, [category, scholarships]);
 
-  const handleViewScholarship = useCallback((_id: string) => {
-    router.push('/student/scholarship-details');
+  // Navigate to the details screen, passing the scholarship id so that
+  // screen can fetch and display the specific scholarship that was clicked.
+  const handleViewScholarship = useCallback((id: string) => {
+    router.push({
+      pathname: '/student/scholarship-details',
+      params: { id },
+    });
   }, []);
 
-  const urgentCount  = SCHOLARSHIPS.filter((s) => s.daysLeft <= 7).length;
-  const qualifyCount = SCHOLARSHIPS.filter((s) => s.status === 'You May Qualify').length;
-  const localCount   = SCHOLARSHIPS.filter((s) => s.category === 'Local').length;
-  const intlCount    = SCHOLARSHIPS.filter((s) => s.category === 'International').length;
+  const urgentCount  = scholarships.filter((s) => s.daysLeft <= 7).length;
+  const qualifyCount = scholarships.filter((s) => s.status === 'You May Qualify').length;
+  const localCount   = scholarships.filter((s) => s.category === 'Local').length;
+  const intlCount    = scholarships.filter((s) => s.category === 'International').length;
 
   // ── Hero banner ────────────────────────────────────────────────────────────
   const HeroBanner = (
@@ -490,7 +457,7 @@ function ScholarshipsContent() {
 
         {/* Stats strip */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3), marginTop: spacing(5) }}>
-          <StatPill icon="apps-outline"              label="Total"       value={`${SCHOLARSHIPS.length}`} color={colors.primary} />
+          <StatPill icon="apps-outline"              label="Total"       value={`${scholarships.length}`} color={colors.primary} />
           <StatPill icon="checkmark-circle-outline"  label="You Qualify" value={`${qualifyCount}`}        color={colors.success} />
           <StatPill icon="time-outline"              label="Urgent"      value={`${urgentCount}`}          color={colors.danger}  />
           <StatPill icon="location-outline"          label="Local"       value={`${localCount}`}           color={colors.warning} />
@@ -517,6 +484,20 @@ function ScholarshipsContent() {
       })}
     </View>
   );
+
+  if (loading) {
+  return (
+    <DashboardLayout
+      title="Scholarships"
+      subtitle="Discover opportunities and stay on top of deadlines"
+      showPointsCard={false}
+    >
+      <Text style={[typography.body, { color: colors.textSecondary }]}>
+        Loading scholarships...
+      </Text>
+    </DashboardLayout>
+  );
+}
 
   // ── Card grid — 2 columns on ALL screen sizes via 48% width ───────────────
   const CardGrid = filtered.length === 0
@@ -578,7 +559,7 @@ function ScholarshipsContent() {
         {/* Sidebar — desktop only */}
         {isDesktop && (
           <SidebarPanel
-            scholarships={SCHOLARSHIPS}
+            scholarships={scholarships}
             filtered={filtered}
             category={category}
             onCategory={setCategory}
