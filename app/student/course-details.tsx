@@ -1,5 +1,4 @@
-
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,16 +6,13 @@ import {
   useWindowDimensions,
   Platform,
   Alert,
-  Modal,
-  ScrollView,
   ActivityIndicator,
   type ViewStyle,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import {
-  StudentMenuProvider,
-} from '../../components/student/StudentMenu';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { router, useLocalSearchParams } from "expo-router";
+import { StudentMenuProvider } from "../../components/student/StudentMenu";
+import ApplyRedirectModal from "../../components/student/ApplyRedirectModal";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DashboardLayout & design tokens
@@ -26,18 +22,18 @@ import DashboardLayout, {
   typography,
   radii,
   useTheme,
-} from '../../components/student/DashboardLayout';
+} from "../../components/student/DashboardLayout";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Firebase
 // ─────────────────────────────────────────────────────────────────────────────
-import { db } from '../../constants/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { db } from "../../constants/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
-type Breakpoint = 'mobile' | 'tablet' | 'desktop';
+type Breakpoint = "mobile" | "tablet" | "desktop";
 
 type Course = {
   id: string;
@@ -71,15 +67,24 @@ type Faculty = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Elevation helper
 // ─────────────────────────────────────────────────────────────────────────────
-function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md'): ViewStyle {
+function useElevation(intensity: "sm" | "md" | "lg" = "md"): ViewStyle {
   return useMemo<ViewStyle>(() => {
     const opacity = 0.28;
-    const radius = intensity === 'sm' ? 6 : intensity === 'md' ? 14 : 22;
-    const offsetY = intensity === 'sm' ? 2 : intensity === 'md' ? 5 : 10;
+    const radius = intensity === "sm" ? 6 : intensity === "md" ? 14 : 22;
+    const offsetY = intensity === "sm" ? 2 : intensity === "md" ? 5 : 10;
     return (Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: offsetY }, shadowOpacity: opacity, shadowRadius: radius },
-      android: { elevation: intensity === 'sm' ? 3 : intensity === 'md' ? 6 : 12 },
-      web: { boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})` } as any,
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: offsetY },
+        shadowOpacity: opacity,
+        shadowRadius: radius,
+      },
+      android: {
+        elevation: intensity === "sm" ? 3 : intensity === "md" ? 6 : 12,
+      },
+      web: {
+        boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})`,
+      } as any,
       default: {},
     }) ?? {}) as ViewStyle;
   }, [intensity]);
@@ -91,19 +96,33 @@ function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md'): ViewStyle {
 function Card({
   children,
   style,
-  intensity = 'md',
+  intensity = "md",
   accentColor,
 }: {
   children: React.ReactNode;
   style?: ViewStyle;
-  intensity?: 'sm' | 'md' | 'lg';
+  intensity?: "sm" | "md" | "lg";
   accentColor?: string;
 }) {
   const elevation = useElevation(intensity);
   const colors = useTheme();
   return (
-    <View style={[{ backgroundColor: colors.card, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }, elevation, style]}>
-      {accentColor && <View style={{ height: 3, backgroundColor: accentColor }} />}
+    <View
+      style={[
+        {
+          backgroundColor: colors.card,
+          borderRadius: radii.xxl,
+          borderWidth: 1,
+          borderColor: colors.border,
+          overflow: "hidden",
+        },
+        elevation,
+        style,
+      ]}
+    >
+      {accentColor && (
+        <View style={{ height: 3, backgroundColor: accentColor }} />
+      )}
       {children}
     </View>
   );
@@ -112,32 +131,91 @@ function Card({
 function SectionLabel({ title }: { title: string }) {
   const colors = useTheme();
   return (
-    <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>
+    <Text
+      style={[
+        typography.caption,
+        {
+          color: colors.textMuted,
+          letterSpacing: 0.5,
+          marginBottom: spacing(3),
+        },
+      ]}
+    >
       {title.toUpperCase()}
     </Text>
   );
 }
 
-function SectionTitle({ title, icon }: { title: string; icon?: keyof typeof Ionicons.glyphMap }) {
+function SectionTitle({
+  title,
+  icon,
+}: {
+  title: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+}) {
   const colors = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(4) }}>
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing(3),
+        marginBottom: spacing(4),
+      }}
+    >
       {icon && <Ionicons name={icon} size={20} color={colors.primary} />}
-      <Text style={[typography.h2, { color: colors.textPrimary }]}>{title}</Text>
+      <Text style={[typography.h2, { color: colors.textPrimary }]}>
+        {title}
+      </Text>
     </View>
   );
 }
 
-function FactItem({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
+function FactItem({
+  icon,
+  label,
+  value,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+}) {
   const colors = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), paddingVertical: spacing(2), flex: 1, minWidth: 160 }}>
-      <View style={{ width: 38, height: 38, borderRadius: radii.lg, backgroundColor: `${colors.primary}22`, alignItems: 'center', justifyContent: 'center' }}>
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing(3),
+        paddingVertical: spacing(2),
+        flex: 1,
+        minWidth: 160,
+      }}
+    >
+      <View
+        style={{
+          width: 38,
+          height: 38,
+          borderRadius: radii.lg,
+          backgroundColor: `${colors.primary}22`,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
         <Ionicons name={icon} size={18} color={colors.primary} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={[typography.caption, { color: colors.textSecondary }]}>{label}</Text>
-        <Text style={[typography.bodyStrong, { color: colors.textPrimary, marginTop: 2 }]}>{value}</Text>
+        <Text style={[typography.caption, { color: colors.textSecondary }]}>
+          {label}
+        </Text>
+        <Text
+          style={[
+            typography.bodyStrong,
+            { color: colors.textPrimary, marginTop: 2 },
+          ]}
+        >
+          {value}
+        </Text>
       </View>
     </View>
   );
@@ -148,9 +226,30 @@ function BulletList({ items }: { items: string[] }) {
   return (
     <View style={{ gap: spacing(3) }}>
       {items.map((item, idx) => (
-        <View key={idx} style={{ flexDirection: 'row', gap: spacing(3), alignItems: 'flex-start' }}>
-          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: colors.primary, marginTop: 8, flexShrink: 0 }} />
-          <Text style={[typography.body, { color: colors.textSecondary, flex: 1, lineHeight: 22 }]}>
+        <View
+          key={idx}
+          style={{
+            flexDirection: "row",
+            gap: spacing(3),
+            alignItems: "flex-start",
+          }}
+        >
+          <View
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: 4,
+              backgroundColor: colors.primary,
+              marginTop: 8,
+              flexShrink: 0,
+            }}
+          />
+          <Text
+            style={[
+              typography.body,
+              { color: colors.textSecondary, flex: 1, lineHeight: 22 },
+            ]}
+          >
             {item}
           </Text>
         </View>
@@ -166,7 +265,7 @@ function CourseDetailsContent() {
   const { width } = useWindowDimensions();
   const colors = useTheme();
   const params = useLocalSearchParams<{ id?: string }>();
-  const courseId = typeof params.id === 'string' ? params.id : '';
+  const courseId = typeof params.id === "string" ? params.id : "";
 
   const [course, setCourse] = useState<Course | null>(null);
   const [institution, setInstitution] = useState<any>(null);
@@ -174,11 +273,14 @@ function CourseDetailsContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [noteVisible, setNoteVisible] = useState(false);
+  const [applyModalVisible, setApplyModalVisible] = useState(false);
 
-  const breakpoint = useMemo<Breakpoint>(() => (width < 768 ? 'mobile' : width < 1024 ? 'tablet' : 'desktop'), [width]);
-  const isMobile = breakpoint === 'mobile';
-  const isDesktop = breakpoint === 'desktop';
+  const breakpoint = useMemo<Breakpoint>(
+    () => (width < 768 ? "mobile" : width < 1024 ? "tablet" : "desktop"),
+    [width],
+  );
+  const isMobile = breakpoint === "mobile";
+  const isDesktop = breakpoint === "desktop";
 
   // Fetch full course data
   useEffect(() => {
@@ -193,7 +295,7 @@ function CourseDetailsContent() {
         setLoading(true);
         setError(null);
 
-        const courseDoc = await getDoc(doc(db, 'courses', courseId));
+        const courseDoc = await getDoc(doc(db, "courses", courseId));
         if (!courseDoc.exists()) {
           setError("Course not found");
           return;
@@ -203,50 +305,53 @@ function CourseDetailsContent() {
 
         const courseData: Course = {
           id: courseDoc.id,
-          title: c.title || 'Untitled Course',
-          qualificationLevel: c.qualificationLevel || 'Bachelor Degree',
-          duration: c.duration || '4 Years',
+          title: c.title || "Untitled Course",
+          qualificationLevel: c.qualificationLevel || "Bachelor Degree",
+          duration: c.duration || "4 Years",
           requiredPoints: c.requiredPoints || 0,
           tuitionPerYear: c.tuitionPerYear || 25000,
-          mode: c.mode || 'Full-time',
-          about: c.about || 'No detailed description available.',
+          mode: c.mode || "Full-time",
+          about: c.about || "No detailed description available.",
           institutionId: c.institutionId,
           facultyId: c.facultyId,
           entryRequirements: c.entryRequirements?.subjectRequirements?.map(
-            (s: any) => `${s.subject} - Minimum ${s.minimumGrade}`
-          ) || ['Meet minimum entry points'],
-          careers: Array.isArray(c.careers) && c.careers.length > 0
-            ? c.careers
-            : ['Various career opportunities'],
+            (s: any) => `${s.subject} - Minimum ${s.minimumGrade}`,
+          ) || ["Meet minimum entry points"],
+          careers:
+            Array.isArray(c.careers) && c.careers.length > 0
+              ? c.careers
+              : ["Various career opportunities"],
         };
         setCourse(courseData);
 
         // Fetch Institution
         if (c.institutionId) {
-          const instDoc = await getDoc(doc(db, 'institutions', c.institutionId));
+          const instDoc = await getDoc(
+            doc(db, "institutions", c.institutionId),
+          );
           if (instDoc.exists()) {
             const i = instDoc.data();
             setInstitution({
               id: instDoc.id,
               name: i.name,
-              badge: i.badge || 'INST',
-              location: i.location || 'Botswana',
-              ownership: i.ownership || 'Public',
-              accentColor: i.ownership === 'Private' ? '#34D399' : '#60A5FA',
+              badge: i.badge || "INST",
+              location: i.location || "Botswana",
+              ownership: i.ownership || "Public",
+              accentColor: i.ownership === "Private" ? "#34D399" : "#60A5FA",
             });
           }
         }
 
         // Fetch Faculty
         if (c.facultyId) {
-          const facDoc = await getDoc(doc(db, 'faculties', c.facultyId));
+          const facDoc = await getDoc(doc(db, "faculties", c.facultyId));
           if (facDoc.exists()) {
-            setFaculty({ name: facDoc.data().name || 'General Faculty' });
+            setFaculty({ name: facDoc.data().name || "General Faculty" });
           }
         }
       } catch (err: any) {
-        console.error('COURSE DETAILS ERROR:', err);
-        setError('Failed to load course information');
+        console.error("COURSE DETAILS ERROR:", err);
+        setError("Failed to load course information");
       } finally {
         setLoading(false);
       }
@@ -255,16 +360,35 @@ function CourseDetailsContent() {
     fetchFullCourse();
   }, [courseId]);
 
-  const handleApply = () => Alert.alert('Application', `Application process for ${course?.title} is being prepared.`);
+  const handleApply = () => setApplyModalVisible(true);
+  const handleCloseApplyModal = () => setApplyModalVisible(false);
   const handleSave = () => setSaved(!saved);
-  const handleShare = () => Alert.alert('Share', `Sharing ${course?.title}`);
+  const handleShare = () => Alert.alert("Share", `Sharing ${course?.title}`);
 
   if (loading) {
     return (
-      <DashboardLayout title="Course Details" subtitle="Loading..." showPointsCard={false}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing(12) }}>
+      <DashboardLayout
+        title="Course Details"
+        subtitle="Loading..."
+        showPointsCard={false}
+      >
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: spacing(12),
+          }}
+        >
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(4) }]}>Loading comprehensive course details...</Text>
+          <Text
+            style={[
+              typography.body,
+              { color: colors.textSecondary, marginTop: spacing(4) },
+            ]}
+          >
+            Loading comprehensive course details...
+          </Text>
         </View>
       </DashboardLayout>
     );
@@ -272,12 +396,40 @@ function CourseDetailsContent() {
 
   if (error || !course) {
     return (
-      <DashboardLayout title="Course Details" subtitle="Error" showPointsCard={false}>
-        <View style={{ padding: spacing(8), alignItems: 'center' }}>
-          <Ionicons name="alert-circle-outline" size={64} color={colors.danger} />
-          <Text style={[typography.h2, { color: colors.textPrimary, marginTop: spacing(4), textAlign: 'center' }]}>{error || 'Course not found'}</Text>
-          <Pressable onPress={() => router.back()} style={{ marginTop: spacing(6), paddingHorizontal: spacing(6), paddingVertical: spacing(3), backgroundColor: colors.primary, borderRadius: radii.lg }}>
-            <Text style={[typography.label, { color: '#fff' }]}>Go Back</Text>
+      <DashboardLayout
+        title="Course Details"
+        subtitle="Error"
+        showPointsCard={false}
+      >
+        <View style={{ padding: spacing(8), alignItems: "center" }}>
+          <Ionicons
+            name="alert-circle-outline"
+            size={64}
+            color={colors.danger}
+          />
+          <Text
+            style={[
+              typography.h2,
+              {
+                color: colors.textPrimary,
+                marginTop: spacing(4),
+                textAlign: "center",
+              },
+            ]}
+          >
+            {error || "Course not found"}
+          </Text>
+          <Pressable
+            onPress={() => router.back()}
+            style={{
+              marginTop: spacing(6),
+              paddingHorizontal: spacing(6),
+              paddingVertical: spacing(3),
+              backgroundColor: colors.primary,
+              borderRadius: radii.lg,
+            }}
+          >
+            <Text style={[typography.label, { color: "#fff" }]}>Go Back</Text>
           </Pressable>
         </View>
       </DashboardLayout>
@@ -286,59 +438,218 @@ function CourseDetailsContent() {
 
   return (
     <>
-      <DashboardLayout title="Course Details" subtitle={course.title} showPointsCard={false}>
+      <DashboardLayout
+        title="Course Details"
+        subtitle={course.title}
+        showPointsCard={false}
+      >
         {/* Back + Breadcrumb */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
-          <Pressable onPress={() => router.back()} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(4), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing(3),
+            marginBottom: spacing(6),
+          }}
+        >
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing(2),
+              paddingHorizontal: spacing(4),
+              paddingVertical: spacing(2),
+              borderRadius: radii.lg,
+              backgroundColor: colors.surfaceAlt,
+              borderWidth: 1,
+              borderColor: colors.border,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
             <Ionicons name="arrow-back" size={17} color={colors.primary} />
-            <Text style={[typography.label, { color: colors.primary }]}>Back</Text>
+            <Text style={[typography.label, { color: colors.primary }]}>
+              Back
+            </Text>
           </Pressable>
-          <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]} numberOfLines={1}>
-            Courses › {institution?.badge || ''} › {course.title}
+          <Text
+            style={[typography.caption, { color: colors.textMuted, flex: 1 }]}
+            numberOfLines={1}
+          >
+            Courses › {institution?.badge || ""} › {course.title}
           </Text>
         </View>
 
-        <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: spacing(8) }}>
+        <View
+          style={{
+            flexDirection: isDesktop ? "row" : "column",
+            gap: spacing(8),
+          }}
+        >
           {/* Main Content */}
           <View style={{ flex: 1 }}>
             {/* Hero Card */}
-            <Card intensity="lg" accentColor={institution?.accentColor} style={{ marginBottom: spacing(7) }}>
-              <View style={{ padding: isMobile ? spacing(5) : spacing(7), gap: spacing(5) }}>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) }}>
-                  <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: `${institution?.accentColor}1A`, borderWidth: 1, borderColor: `${institution?.accentColor}44` }}>
-                    <Text style={[typography.label, { color: institution?.accentColor }]}>{institution?.badge}</Text>
+            <Card
+              intensity="lg"
+              accentColor={institution?.accentColor}
+              style={{ marginBottom: spacing(7) }}
+            >
+              <View
+                style={{
+                  padding: isMobile ? spacing(5) : spacing(7),
+                  gap: spacing(5),
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: spacing(2),
+                  }}
+                >
+                  <View
+                    style={{
+                      paddingHorizontal: spacing(3),
+                      paddingVertical: spacing(2),
+                      borderRadius: radii.pill,
+                      backgroundColor: `${institution?.accentColor}1A`,
+                      borderWidth: 1,
+                      borderColor: `${institution?.accentColor}44`,
+                    }}
+                  >
+                    <Text
+                      style={[
+                        typography.label,
+                        { color: institution?.accentColor },
+                      ]}
+                    >
+                      {institution?.badge}
+                    </Text>
                   </View>
-                  <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border }}>
-                    <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>
+                  <View
+                    style={{
+                      paddingHorizontal: spacing(3),
+                      paddingVertical: spacing(2),
+                      borderRadius: radii.pill,
+                      backgroundColor: colors.surfaceAlt,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    }}
+                  >
+                    <Text
+                      style={[
+                        typography.caption,
+                        { color: colors.textSecondary, fontWeight: "700" },
+                      ]}
+                    >
                       {course.qualificationLevel} • {course.duration}
                     </Text>
                   </View>
                 </View>
 
-                <Text style={[typography.hero, { color: colors.textPrimary, fontSize: isMobile ? 24 : 32, lineHeight: isMobile ? 30 : 38 }]}>
+                <Text
+                  style={[
+                    typography.hero,
+                    {
+                      color: colors.textPrimary,
+                      fontSize: isMobile ? 24 : 32,
+                      lineHeight: isMobile ? 30 : 38,
+                    },
+                  ]}
+                >
                   {course.title}
                 </Text>
 
-                <Text style={[typography.subtitle, { color: colors.textSecondary }]}>{institution?.name}</Text>
+                <Text
+                  style={[typography.subtitle, { color: colors.textSecondary }]}
+                >
+                  {institution?.name}
+                </Text>
 
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(4), marginTop: spacing(1) }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
-                    <Ionicons name="location-outline" size={14} color={institution?.accentColor} />
-                    <Text style={[typography.caption, { color: colors.textSecondary }]}>{institution?.location}</Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: spacing(4),
+                    marginTop: spacing(1),
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: spacing(2),
+                    }}
+                  >
+                    <Ionicons
+                      name="location-outline"
+                      size={14}
+                      color={institution?.accentColor}
+                    />
+                    <Text
+                      style={[
+                        typography.caption,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      {institution?.location}
+                    </Text>
                   </View>
                   {faculty && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
-                      <Ionicons name="layers-outline" size={14} color={colors.primary} />
-                      <Text style={[typography.caption, { color: colors.textSecondary }]}>{faculty.name}</Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: spacing(2),
+                      }}
+                    >
+                      <Ionicons
+                        name="layers-outline"
+                        size={14}
+                        color={colors.primary}
+                      />
+                      <Text
+                        style={[
+                          typography.caption,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        {faculty.name}
+                      </Text>
                     </View>
                   )}
                 </View>
 
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(4), paddingTop: spacing(4), borderTopWidth: 1, borderTopColor: colors.divider }}>
-                  <FactItem icon="analytics-outline" label="Required Points" value={course.requiredPoints.toString()} />
-                  <FactItem icon="time-outline" label="Duration" value={course.duration} />
-                  <FactItem icon="calendar-outline" label="Mode" value={course.mode} />
-                  <FactItem icon="cash-outline" label="Tuition / Year" value={`BWP ${course.tuitionPerYear?.toLocaleString() || '25,000'}`} />
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: spacing(4),
+                    paddingTop: spacing(4),
+                    borderTopWidth: 1,
+                    borderTopColor: colors.divider,
+                  }}
+                >
+                  <FactItem
+                    icon="analytics-outline"
+                    label="Required Points"
+                    value={course.requiredPoints.toString()}
+                  />
+                  <FactItem
+                    icon="time-outline"
+                    label="Duration"
+                    value={course.duration}
+                  />
+                  <FactItem
+                    icon="calendar-outline"
+                    label="Mode"
+                    value={course.mode}
+                  />
+                  <FactItem
+                    icon="cash-outline"
+                    label="Tuition / Year"
+                    value={`BWP ${course.tuitionPerYear?.toLocaleString() || "25,000"}`}
+                  />
                 </View>
               </View>
             </Card>
@@ -347,8 +658,16 @@ function CourseDetailsContent() {
             <Card style={{ marginBottom: spacing(6) }}>
               <View style={{ padding: spacing(6) }}>
                 <SectionLabel title="Programme Overview" />
-                <SectionTitle title="About this Course" icon="information-circle-outline" />
-                <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 24 }]}>
+                <SectionTitle
+                  title="About this Course"
+                  icon="information-circle-outline"
+                />
+                <Text
+                  style={[
+                    typography.body,
+                    { color: colors.textSecondary, lineHeight: 24 },
+                  ]}
+                >
                   {course.about}
                 </Text>
               </View>
@@ -358,8 +677,17 @@ function CourseDetailsContent() {
             <Card style={{ marginBottom: spacing(6) }}>
               <View style={{ padding: spacing(6) }}>
                 <SectionLabel title="Admission" />
-                <SectionTitle title="Entry Requirements" icon="school-outline" />
-                <BulletList items={course.entryRequirements || ['Minimum required points must be met']} />
+                <SectionTitle
+                  title="Entry Requirements"
+                  icon="school-outline"
+                />
+                <BulletList
+                  items={
+                    course.entryRequirements || [
+                      "Minimum required points must be met",
+                    ]
+                  }
+                />
               </View>
             </Card>
 
@@ -368,12 +696,37 @@ function CourseDetailsContent() {
               <View style={{ padding: spacing(6) }}>
                 <SectionLabel title="Future Opportunities" />
                 <SectionTitle title="Careers" icon="briefcase-outline" />
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) }}>
-                  {(course.careers || ['Excellent career prospects']).map((career, idx) => (
-                    <View key={idx} style={{ paddingHorizontal: spacing(4), paddingVertical: spacing(2), backgroundColor: colors.surfaceAlt, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border }}>
-                      <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: '600' }]}>{career}</Text>
-                    </View>
-                  ))}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: spacing(2),
+                  }}
+                >
+                  {(course.careers || ["Excellent career prospects"]).map(
+                    (career, idx) => (
+                      <View
+                        key={idx}
+                        style={{
+                          paddingHorizontal: spacing(4),
+                          paddingVertical: spacing(2),
+                          backgroundColor: colors.surfaceAlt,
+                          borderRadius: radii.pill,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                        }}
+                      >
+                        <Text
+                          style={[
+                            typography.caption,
+                            { color: colors.textPrimary, fontWeight: "600" },
+                          ]}
+                        >
+                          {career}
+                        </Text>
+                      </View>
+                    ),
+                  )}
                 </View>
               </View>
             </Card>
@@ -386,14 +739,56 @@ function CourseDetailsContent() {
                 <View style={{ padding: spacing(6), gap: spacing(4) }}>
                   <SectionLabel title="Actions" />
                   <SectionTitle title="Quick Actions" />
-                  <Pressable onPress={handleApply} style={({ pressed }) => ({ padding: spacing(4), backgroundColor: colors.primary, borderRadius: radii.lg, alignItems: 'center', opacity: pressed ? 0.9 : 1 })}>
-                    <Text style={[typography.label, { color: '#fff' }]}>Apply Now</Text>
+                  <Pressable
+                    onPress={handleApply}
+                    style={({ pressed }) => ({
+                      padding: spacing(4),
+                      backgroundColor: colors.primary,
+                      borderRadius: radii.lg,
+                      alignItems: "center",
+                      opacity: pressed ? 0.9 : 1,
+                    })}
+                  >
+                    <Text style={[typography.label, { color: "#fff" }]}>
+                      Apply Now
+                    </Text>
                   </Pressable>
-                  <Pressable onPress={handleSave} style={({ pressed }) => ({ padding: spacing(4), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, alignItems: 'center', opacity: pressed ? 0.9 : 1 })}>
-                    <Text style={[typography.label, { color: colors.primary }]}>{saved ? 'Saved ✓' : 'Save for Later'}</Text>
+                  <Pressable
+                    onPress={handleSave}
+                    style={({ pressed }) => ({
+                      padding: spacing(4),
+                      backgroundColor: colors.surfaceAlt,
+                      borderRadius: radii.lg,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      alignItems: "center",
+                      opacity: pressed ? 0.9 : 1,
+                    })}
+                  >
+                    <Text style={[typography.label, { color: colors.primary }]}>
+                      {saved ? "Saved ✓" : "Save for Later"}
+                    </Text>
                   </Pressable>
-                  <Pressable onPress={handleShare} style={({ pressed }) => ({ padding: spacing(4), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, alignItems: 'center', opacity: pressed ? 0.9 : 1 })}>
-                    <Text style={[typography.label, { color: colors.textSecondary }]}>Share Course</Text>
+                  <Pressable
+                    onPress={handleShare}
+                    style={({ pressed }) => ({
+                      padding: spacing(4),
+                      backgroundColor: colors.surfaceAlt,
+                      borderRadius: radii.lg,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      alignItems: "center",
+                      opacity: pressed ? 0.9 : 1,
+                    })}
+                  >
+                    <Text
+                      style={[
+                        typography.label,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Share Course
+                    </Text>
                   </Pressable>
                 </View>
               </Card>
@@ -404,15 +799,63 @@ function CourseDetailsContent() {
 
       {/* Mobile Sticky Bar */}
       {isMobile && (
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', padding: spacing(5), paddingBottom: spacing(8), backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing(3) }}>
-          <Pressable onPress={handleSave} style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.85 : 1 })}>
-            <Text style={[typography.label, { color: colors.primary }]}>{saved ? 'Saved' : 'Save'}</Text>
+        <View
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            flexDirection: "row",
+            padding: spacing(5),
+            paddingBottom: spacing(8),
+            backgroundColor: colors.surface,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            gap: spacing(3),
+          }}
+        >
+          <Pressable
+            onPress={handleSave}
+            style={({ pressed }) => ({
+              flex: 1,
+              height: 52,
+              borderRadius: radii.lg,
+              backgroundColor: colors.surfaceAlt,
+              borderWidth: 1,
+              borderColor: colors.border,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={[typography.label, { color: colors.primary }]}>
+              {saved ? "Saved" : "Save"}
+            </Text>
           </Pressable>
-          <Pressable onPress={handleApply} style={({ pressed }) => ({ flex: 2, height: 52, borderRadius: radii.lg, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.9 : 1 })}>
-            <Text style={[typography.label, { color: '#fff' }]}>Apply Now</Text>
+          <Pressable
+            onPress={handleApply}
+            style={({ pressed }) => ({
+              flex: 2,
+              height: 52,
+              borderRadius: radii.lg,
+              backgroundColor: colors.primary,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: pressed ? 0.9 : 1,
+            })}
+          >
+            <Text style={[typography.label, { color: "#fff" }]}>Apply Now</Text>
           </Pressable>
         </View>
       )}
+
+      <ApplyRedirectModal
+        visible={applyModalVisible}
+        onClose={handleCloseApplyModal}
+        targetType="course"
+        targetTitle={course.title}
+        providerName={institution?.name}
+      />
     </>
   );
 }
@@ -427,5 +870,3 @@ export default function CourseDetailsScreen() {
     </StudentMenuProvider>
   );
 }
-
-

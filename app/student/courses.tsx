@@ -1,4 +1,3 @@
-
 import React, {
   useMemo, useState, useCallback, useEffect, useRef, memo,
 } from 'react';
@@ -31,11 +30,13 @@ import { db } from '../../constants/firebase';
 import {
   collection,
   getDocs,
+  getCountFromServer,
   query,
   where,
   limit,
   startAfter,
   type Query,
+  type QueryConstraint,
   type CollectionReference,
   type QuerySnapshot,
   type QueryDocumentSnapshot,
@@ -48,25 +49,42 @@ import {
 // hardcoded literals scattered through the component.
 // ─────────────────────────────────────────────────────────────────────────────
 const CONFIG = {
-  FIRESTORE_TIMEOUT_MS:            8_000,
+  FIRESTORE_TIMEOUT_MS:            20_000,
   FIRESTORE_RETRY_DELAY_MS:        1_500,
   SLOW_CONNECTION_BANNER_DELAY_MS: 4_000,
   INFINITE_SCROLL_THROTTLE_MS:     600,
   LOAD_MORE_DELAY_MS:              180,
   SEARCH_DEBOUNCE_MS:              200,
 
-  // INITIAL_COURSE_BATCH: how many course docs we fetch before first paint.
-  // This is what actually determines how long the user stares at a skeleton
-  // — NOT how many we display (see PAGE_SIZE in the component). Kept small
-  // and flat across breakpoints because perceived load time is a function of
-  // round-trip latency, not screen width.
+  // INITIAL_COURSE_BATCH: how many course docs we fetch before first paint
+  // on desktop/tablet. This is what actually determines how long the user
+  // stares at a skeleton — NOT how many we display (see PAGE_SIZE in the
+  // component). Kept small and flat across breakpoints because perceived
+  // load time is a function of round-trip latency, not screen width.
   INITIAL_COURSE_BATCH: 20,
 
   // BACKGROUND_COURSE_BATCH: chunk size for the follow-up cursor fetches that
-  // run silently after first paint, so search / filters / "load more"
-  // eventually see every course without the user ever waiting on the full
-  // collection.
+  // run silently after first paint on desktop/tablet, so search / filters /
+  // "load more" eventually see every course without the user ever waiting
+  // on the full collection.
+  //
+  // IMPORTANT: this full-catalogue background hydration is DESKTOP/TABLET
+  // ONLY. On mobile it is exactly what was destabilizing the app — pulling
+  // the entire courses collection into memory on a phone. The mobile flow
+  // below (MobileCoursesView) never runs this; it only ever fetches courses
+  // scoped to one institution (optionally one faculty) and paginates that
+  // narrow slice with MOBILE_COURSES_PAGE_SIZE.
   BACKGROUND_COURSE_BATCH: 75,
+
+  // ── Mobile drill-down flow ────────────────────────────────────────────
+  // How many faculties we fetch per institution. Faculties are a small,
+  // bounded list per institution, so one capped fetch (no follow-up
+  // pagination) is safe and keeps the flow simple.
+  MOBILE_FACULTIES_LIMIT: 60,
+  // How many course cards are fetched per "page" once the user has drilled
+  // down to a specific institution (+ optionally a faculty). This is a
+  // server-side limit()/startAfter() query — never the whole collection.
+  MOBILE_COURSES_PAGE_SIZE: 12,
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,6 +93,7 @@ const CONFIG = {
 type Breakpoint      = 'mobile' | 'tablet' | 'desktop';
 type InstitutionType = 'university' | 'college' | 'brigade';
 type FetchStatus     = 'idle' | 'loading' | 'success' | 'error';
+type IconName        = keyof typeof Ionicons.glyphMap;
 
 type Institution = {
   id: string; name: string; type: InstitutionType; badge: string; location: string;
@@ -90,12 +109,7 @@ type Course = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// safeDocs — 8s timeout, one retry after 1.5s.
-//
-// Why 8s, not 15s:
-//   On mobile, a Firestore WebChannel that hasn't responded in 8s won't
-//   respond in 15s. Failing fast and retrying on a fresh connection is
-//   almost always faster than waiting for the stale one.
+// safeDocs — 20s timeout, one retry after 1.5s.
 //
 // Why explicitly typed instead of `getDocs(ref as any)`:
 //   Casting through `any` erases the document-shape generic, so every
@@ -107,16 +121,19 @@ type Course = {
 //   chain type-safe.
 // ─────────────────────────────────────────────────────────────────────────────
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  const race = Promise.race([
-    p,
-    new Promise<T>((_, rej) => {
-      timer = setTimeout(() => rej(new Error('firestore_timeout')), ms);
-    }),
-  ]);
-  // Always clear the timer so it doesn't keep Node/RN alive
-  race.finally(() => clearTimeout(timer));
-  return race;
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('firestore_timeout'));
+    }, ms);
+
+    p.then((value) => {
+      clearTimeout(timer);
+      resolve(value);
+    }).catch((error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
 }
 
 async function safeDocs(
@@ -127,6 +144,19 @@ async function safeDocs(
   } catch {
     await new Promise((res) => setTimeout(res, CONFIG.FIRESTORE_RETRY_DELAY_MS));
     return await withTimeout(getDocs(ref), CONFIG.FIRESTORE_TIMEOUT_MS);
+  }
+}
+
+/** Best-effort count query. Never throws — callers just get `null` back on
+ *  failure (older Firestore SDKs, permission issues, etc.) and degrade the
+ *  UI gracefully rather than losing the whole screen over a "nice to have"
+ *  number. */
+async function safeCount(q: Query<DocumentData>): Promise<number | null> {
+  try {
+    const snap = await withTimeout(getCountFromServer(q), CONFIG.FIRESTORE_TIMEOUT_MS);
+    return snap.data().count;
+  } catch {
+    return null;
   }
 }
 
@@ -201,6 +231,34 @@ function mapCourseDocs(
   });
 }
 
+/** Same shape as mapCourseDocs, but for the mobile drill-down flow where we
+ *  already know the exact institution (and possibly faculty) the courses
+ *  belong to — no join map needed, since there's only one institution in
+ *  scope for the whole query. */
+function mapScopedCourseDocs(
+  docs: QueryDocumentSnapshot<DocumentData>[],
+  institution: Institution,
+  facultyNameOverride?: string,
+): Course[] {
+  return docs.map((doc) => {
+    const c = doc.data();
+    return {
+      id:                 doc.id,
+      title:              c.title              ?? 'Untitled',
+      qualificationLevel: c.qualificationLevel ?? 'Certificate',
+      duration:           c.duration           ?? 'N/A',
+      requiredPoints:     Number(c.requiredPoints ?? 0),
+      institutionId:      institution.id,
+      institutionName:    institution.name,
+      institutionType:    institution.type,
+      institutionBadge:   institution.badge,
+      facultyId:          c.facultyId           ?? '',
+      facultyName:        facultyNameOverride ?? c.facultyName ?? 'General',
+      location:           institution.location,
+    };
+  });
+}
+
 // Static filter config — module scope so it isn't reallocated every render,
 // and typed up front so selecting a filter never needs an `as any` cast.
 const TYPE_FILTERS: ReadonlyArray<{ key: 'All' | InstitutionType; label: string }> = [
@@ -209,6 +267,15 @@ const TYPE_FILTERS: ReadonlyArray<{ key: 'All' | InstitutionType; label: string 
   { key: 'college',    label: 'Colleges'     },
   { key: 'brigade',    label: 'Brigades'     },
 ];
+
+// Presentation metadata for the mobile "what are you looking for?" step —
+// one place that owns the label, icon, accent color, and blurb per type, so
+// the type-selection cards and the rest of the flow always agree visually.
+const TYPE_META: Record<InstitutionType, { label: string; singular: string; icon: IconName; color: string; blurb: string }> = {
+  university: { label: 'Universities', singular: 'university', icon: 'school-outline',    color: '#60A5FA', blurb: 'Degree programs at accredited universities' },
+  college:    { label: 'Colleges',     singular: 'college',    icon: 'ribbon-outline',     color: '#34D399', blurb: 'Diplomas and certificates at colleges' },
+  brigade:    { label: 'Brigades',     singular: 'brigade',    icon: 'construct-outline',  color: '#FBBF24', blurb: 'Vocational and technical skills training' },
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Elevation helper
@@ -332,6 +399,34 @@ function SkeletonGrid({ count, numCols, cardGap }: { count: number; numCols: num
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SkeletonRow — placeholder for a single list row (used by the mobile
+// institution/faculty lists, which are simpler than course cards)
+// ─────────────────────────────────────────────────────────────────────────────
+function SkeletonRow() {
+  const colors    = useTheme();
+  const elevation = useElevation('sm');
+  return (
+    <View
+      style={[
+        {
+          flexDirection: 'row', alignItems: 'center', gap: spacing(3),
+          backgroundColor: colors.surface, borderRadius: radii.xl,
+          borderWidth: 1, borderColor: colors.border,
+          padding: spacing(4), marginBottom: spacing(3),
+        },
+        elevation,
+      ]}
+    >
+      <SkeletonPulse width={40} height={40} style={{ borderRadius: radii.lg }} />
+      <View style={{ flex: 1, gap: spacing(2) }}>
+        <SkeletonPulse width="70%" height={14} />
+        <SkeletonPulse width="40%" height={11} />
+      </View>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SlowConnectionBanner — appears after CONFIG.SLOW_CONNECTION_BANNER_DELAY_MS
 // if still loading
 // ─────────────────────────────────────────────────────────────────────────────
@@ -409,13 +504,75 @@ function InfiniteScrollSentinel({
   );
 }
 
+/** Simpler load-more footer for the mobile drill-down course list, where we
+ *  may or may not know the total (count aggregation is best-effort). Shown
+ *  under a scrollable list rather than relying on onLayout auto-trigger, so
+ *  it works reliably inside the ScrollView-based mobile screen. */
+function MobileLoadMoreFooter({
+  onPress, loading, hasMore, total, shown,
+}: {
+  onPress: () => void; loading: boolean; hasMore: boolean; total: number | null; shown: number;
+}) {
+  const colors    = useTheme();
+  const elevation = useElevation('sm');
+
+  if (!hasMore) {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), paddingVertical: spacing(6) }}>
+        <View style={{ flex: 1, height: 1, backgroundColor: colors.divider }} />
+        <Text style={[typography.caption, { color: colors.textMuted }]}>
+          {total != null ? `All ${total} courses loaded` : `${shown} courses loaded`}
+        </Text>
+        <View style={{ flex: 1, height: 1, backgroundColor: colors.divider }} />
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={loading}
+      accessibilityRole="button"
+      style={({ pressed }) => ([
+        {
+          marginTop: spacing(2),
+          marginBottom: spacing(6),
+          paddingVertical: spacing(4),
+          backgroundColor: colors.surfaceAlt,
+          borderRadius: radii.lg,
+          borderWidth: 1,
+          borderColor: colors.border,
+          flexDirection: 'row' as const,
+          alignItems: 'center' as const,
+          justifyContent: 'center' as const,
+          gap: spacing(2),
+          opacity: pressed ? 0.85 : 1,
+        },
+        elevation,
+      ])}
+    >
+      {loading ? (
+        <>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={[typography.label, { color: colors.primary }]}>Loading more…</Text>
+        </>
+      ) : (
+        <>
+          <Ionicons name="chevron-down" size={16} color={colors.primary} />
+          <Text style={[typography.label, { color: colors.primary }]}>
+            Load More{total != null ? ` (${Math.max(total - shown, 0)} remaining)` : ''}
+          </Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CourseCard — memoized. It receives a stable `onPress(id)` callback from the
-// parent (see CoursesContent's handleOpenCourse) rather than a fresh inline
-// arrow function per render, so React.memo can actually skip re-rendering
-// cards whose underlying course object reference hasn't changed — which
-// matters here because background hydration periodically updates the course
-// list as more data streams in.
+// parent rather than a fresh inline arrow function per render, so React.memo
+// can actually skip re-rendering cards whose underlying course object
+// reference hasn't changed.
 // ─────────────────────────────────────────────────────────────────────────────
 const CourseCard = memo(function CourseCard({
   course, onPress,
@@ -512,9 +669,620 @@ function StatPill({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CoursesContent
+// Shared: header row with a back control + breadcrumb, used across every
+// step of the mobile flow so navigation always looks and behaves the same.
 // ─────────────────────────────────────────────────────────────────────────────
-function CoursesContent() {
+function StepHeader({
+  onBack, crumbs,
+}: {
+  onBack: () => void;
+  crumbs: string[];
+}) {
+  const colors = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
+      <Pressable
+        onPress={onBack}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}
+      >
+        <Ionicons name="arrow-back" size={15} color={colors.primary} />
+        <Text style={[typography.label, { color: colors.primary, fontSize: 12 }]}>Back</Text>
+      </Pressable>
+      <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11, flex: 1 }]} numberOfLines={1}>
+        {crumbs.join(' › ')}
+      </Text>
+    </View>
+  );
+}
+
+/** Generic error card reused across every step of the mobile flow. */
+function InlineErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const colors    = useTheme();
+  const elevation = useElevation('sm');
+  return (
+    <View style={[{ alignItems: 'center', padding: spacing(8), backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: `${colors.danger}33` }, elevation]}>
+      <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: `${colors.danger}18`, borderWidth: 1, borderColor: `${colors.danger}33`, alignItems: 'center', justifyContent: 'center', marginBottom: spacing(4) }}>
+        <Ionicons name="cloud-offline-outline" size={24} color={colors.danger} />
+      </View>
+      <Text style={[typography.h2, { color: colors.textPrimary, textAlign: 'center', fontSize: 16 }]}>Something went wrong</Text>
+      <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2), textAlign: 'center', fontSize: 13, lineHeight: 19 }]}>
+        {message}
+      </Text>
+      <Pressable
+        onPress={onRetry}
+        accessibilityRole="button"
+        style={({ pressed }) => ({ marginTop: spacing(5), flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(5), paddingVertical: spacing(3), borderRadius: radii.lg, backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 })}
+      >
+        <Ionicons name="refresh-outline" size={15} color="#fff" />
+        <Text style={[typography.label, { color: '#fff' }]}>Try Again</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// MOBILE FLOW — Type → Institutions → Faculties → Courses
+//
+// Design goal: never load the full courses collection on a phone. The
+// institutions collection is fetched once, in full (it's small — a fixed
+// list of Botswana institutions, not thousands of rows), which is enough to
+// power the type-selection counts and the institution list entirely from
+// memory with zero extra network calls. Courses, the genuinely large
+// collection, are only ever queried scoped to one institution (optionally
+// one faculty), paginated MOBILE_COURSES_PAGE_SIZE at a time.
+// ═════════════════════════════════════════════════════════════════════════════
+type MobileStep = 'type' | 'institutions' | 'faculties' | 'courses';
+
+function MobileCoursesView() {
+  const colors    = useTheme();
+  const elevation = useElevation('md');
+
+  const [step, setStep] = useState<MobileStep>('type');
+
+  // ── Institutions (fetched once, in full) ─────────────────────────────────
+  const [institutions, setInstitutions] = useState<Institution[]>([]);
+  const [instStatus,   setInstStatus]   = useState<FetchStatus>('idle');
+  const [instErrorMsg, setInstErrorMsg] = useState('');
+
+  const loadInstitutions = useCallback(async () => {
+    setInstStatus('loading');
+    setInstErrorMsg('');
+    try {
+      const snap = await safeDocs(collection(db, 'institutions'));
+      setInstitutions(mapInstitutionDocs(snap.docs));
+      setInstStatus('success');
+    } catch (err: unknown) {
+      console.error('[MobileCourses] institutions fetch failed:', err);
+      setInstErrorMsg(getFriendlyErrorMessage(err));
+      setInstStatus('error');
+    }
+  }, []);
+
+  useEffect(() => { loadInstitutions(); }, [loadInstitutions]);
+
+  const typeCounts = useMemo(() => {
+    const counts: Record<InstitutionType, number> = { university: 0, college: 0, brigade: 0 };
+    institutions.forEach((inst) => { counts[inst.type] = (counts[inst.type] ?? 0) + 1; });
+    return counts;
+  }, [institutions]);
+
+  // ── Step 2: institutions of the selected type ────────────────────────────
+  const [selectedType, setSelectedType] = useState<InstitutionType | null>(null);
+  const [instSearch,   setInstSearch]   = useState('');
+
+  const institutionsForType = useMemo(() => {
+    if (!selectedType) return [];
+    let list = institutions.filter((i) => i.type === selectedType);
+    const q = instSearch.trim().toLowerCase();
+    if (q) list = list.filter((i) => i.name.toLowerCase().includes(q) || i.location.toLowerCase().includes(q));
+    return [...list].sort((a, b) => a.name.localeCompare(b.name));
+  }, [institutions, selectedType, instSearch]);
+
+  // ── Step 3: faculties of the selected institution ────────────────────────
+  const [selectedInstitution, setSelectedInstitution] = useState<Institution | null>(null);
+  const [faculties,   setFaculties]   = useState<Faculty[]>([]);
+  const [facStatus,   setFacStatus]   = useState<FetchStatus>('idle');
+  const [facErrorMsg, setFacErrorMsg] = useState('');
+
+  const loadFaculties = useCallback(async (institution: Institution) => {
+    setFacStatus('loading');
+    setFacErrorMsg('');
+    try {
+      const q = query(
+        collection(db, 'faculties'),
+        where('institutionId', '==', institution.id),
+        limit(CONFIG.MOBILE_FACULTIES_LIMIT),
+      );
+      const snap = await safeDocs(q);
+      const list = snap.docs
+        .map((doc) => {
+          const d = doc.data();
+          return { id: doc.id, name: d.name ?? 'Unknown Faculty', institutionId: institution.id };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+      setFaculties(list);
+      setFacStatus('success');
+    } catch (err: unknown) {
+      console.error('[MobileCourses] faculties fetch failed:', err);
+      setFacErrorMsg(getFriendlyErrorMessage(err));
+      setFacStatus('error');
+    }
+  }, []);
+
+  // ── Step 4: courses scoped to institution (+ optional faculty), paginated
+  const [selectedFaculty, setSelectedFaculty] = useState<Faculty | 'ALL' | null>(null);
+  const [courses,          setCourses]          = useState<Course[]>([]);
+  const [courseCursor,     setCourseCursor]     = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [courseHasMore,    setCourseHasMore]    = useState(true);
+  const [courseStatus,     setCourseStatus]     = useState<FetchStatus>('idle');
+  const [courseErrorMsg,   setCourseErrorMsg]   = useState('');
+  const [courseLoadingMore, setCourseLoadingMore] = useState(false);
+  const [courseTotal,      setCourseTotal]      = useState<number | null>(null);
+  const [courseSearch,     setCourseSearch]     = useState('');
+
+  const buildCourseConstraints = useCallback((institution: Institution, faculty: Faculty | 'ALL' | null): QueryConstraint[] => {
+    const constraints: QueryConstraint[] = [where('institutionId', '==', institution.id)];
+    if (faculty && faculty !== 'ALL') constraints.push(where('facultyId', '==', faculty.id));
+    return constraints;
+  }, []);
+
+  const loadFirstCoursePage = useCallback(async (institution: Institution, faculty: Faculty | 'ALL' | null) => {
+    setCourseStatus('loading');
+    setCourseErrorMsg('');
+    setCourses([]);
+    setCourseCursor(null);
+    setCourseHasMore(true);
+    setCourseTotal(null);
+
+    const baseConstraints = buildCourseConstraints(institution, faculty);
+    const facultyName = faculty && faculty !== 'ALL' ? faculty.name : undefined;
+
+    try {
+      const snap = await safeDocs(
+        query(collection(db, 'courses'), ...baseConstraints, limit(CONFIG.MOBILE_COURSES_PAGE_SIZE)),
+      );
+      const mapped = mapScopedCourseDocs(snap.docs, institution, facultyName);
+      setCourses(mapped);
+      setCourseCursor(snap.docs[snap.docs.length - 1] ?? null);
+      setCourseHasMore(snap.docs.length === CONFIG.MOBILE_COURSES_PAGE_SIZE);
+      setCourseStatus('success');
+
+      // Best-effort total count for a nicer "X of Y" readout — never blocks
+      // or fails the actual course list if it doesn't work.
+      const total = await safeCount(query(collection(db, 'courses'), ...baseConstraints));
+      setCourseTotal(total);
+    } catch (err: unknown) {
+      console.error('[MobileCourses] course page fetch failed:', err);
+      setCourseErrorMsg(getFriendlyErrorMessage(err));
+      setCourseStatus('error');
+    }
+  }, [buildCourseConstraints]);
+
+  const loadMoreCourses = useCallback(async () => {
+    if (!selectedInstitution || !courseHasMore || courseLoadingMore || !courseCursor) return;
+    setCourseLoadingMore(true);
+    const baseConstraints = buildCourseConstraints(selectedInstitution, selectedFaculty);
+    const facultyName = selectedFaculty && selectedFaculty !== 'ALL' ? selectedFaculty.name : undefined;
+
+    try {
+      const snap = await safeDocs(
+        query(collection(db, 'courses'), ...baseConstraints, startAfter(courseCursor), limit(CONFIG.MOBILE_COURSES_PAGE_SIZE)),
+      );
+      const mapped = mapScopedCourseDocs(snap.docs, selectedInstitution, facultyName);
+      setCourses((prev) => [...prev, ...mapped]);
+      setCourseCursor(snap.docs[snap.docs.length - 1] ?? courseCursor);
+      setCourseHasMore(snap.docs.length === CONFIG.MOBILE_COURSES_PAGE_SIZE);
+    } catch (err: unknown) {
+      console.error('[MobileCourses] load more courses failed:', err);
+      // Non-fatal: the list the user already has keeps working. Surface a
+      // one-line notice without wiping existing results.
+      setCourseErrorMsg('Could not load more courses. Please try again.');
+    } finally {
+      setCourseLoadingMore(false);
+    }
+  }, [selectedInstitution, selectedFaculty, courseCursor, courseHasMore, courseLoadingMore, buildCourseConstraints]);
+
+  const visibleCourses = useMemo(() => {
+    const q = courseSearch.trim().toLowerCase();
+    if (!q) return courses;
+    return courses.filter((c) => c.title.toLowerCase().includes(q) || c.facultyName.toLowerCase().includes(q));
+  }, [courses, courseSearch]);
+
+  // ── Navigation between steps ──────────────────────────────────────────────
+  const handleSelectType = useCallback((type: InstitutionType) => {
+    setSelectedType(type);
+    setInstSearch('');
+    setStep('institutions');
+  }, []);
+
+  const handleSelectInstitution = useCallback((institution: Institution) => {
+    setSelectedInstitution(institution);
+    setSelectedFaculty(null);
+    setStep('faculties');
+    loadFaculties(institution);
+  }, [loadFaculties]);
+
+  const handleSelectFaculty = useCallback((faculty: Faculty | 'ALL') => {
+    if (!selectedInstitution) return;
+    setSelectedFaculty(faculty);
+    setStep('courses');
+    loadFirstCoursePage(selectedInstitution, faculty);
+  }, [selectedInstitution, loadFirstCoursePage]);
+
+  const goBackAStep = useCallback(() => {
+    if (step === 'courses') {
+      setStep('faculties');
+      setSelectedFaculty(null);
+      setCourseSearch('');
+    } else if (step === 'faculties') {
+      setStep('institutions');
+      setSelectedInstitution(null);
+      setFaculties([]);
+    } else if (step === 'institutions') {
+      setStep('type');
+      setSelectedType(null);
+      setInstSearch('');
+    } else {
+      router.back();
+    }
+  }, [step]);
+
+  const handleOpenCourse = useCallback((id: string) => {
+    router.push({ pathname: '/student/course-details', params: { id } });
+  }, []);
+
+  const subtitle =
+    step === 'type'         ? 'Choose where you’d like to look' :
+    step === 'institutions' ? `Browsing ${selectedType ? TYPE_META[selectedType].label.toLowerCase() : ''}` :
+    step === 'faculties'    ? selectedInstitution?.name ?? 'Choose a faculty' :
+    selectedFaculty === 'ALL' ? `All courses at ${selectedInstitution?.name ?? ''}` :
+    selectedFaculty ? `${selectedFaculty.name} at ${selectedInstitution?.name ?? ''}` : 'Courses';
+
+  return (
+    <DashboardLayout title="Courses" subtitle={subtitle} showPointsCard={false}>
+
+      {/* ══ STEP 1 — What are you looking for? ══ */}
+      {step === 'type' && (
+        <View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
+            <Pressable
+              onPress={() => router.back()}
+              accessibilityRole="button"
+              style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}
+            >
+              <Ionicons name="arrow-back" size={15} color={colors.primary} />
+              <Text style={[typography.label, { color: colors.primary, fontSize: 12 }]}>Back</Text>
+            </Pressable>
+            <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>Dashboard › Courses</Text>
+          </View>
+
+          {/* Hero */}
+          <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing(5), marginBottom: spacing(6), overflow: 'hidden' }, elevation]}>
+            <View style={{ height: 3, backgroundColor: colors.primary, borderRadius: 2, marginBottom: spacing(4) }} />
+            <Text style={[typography.hero, { color: colors.textPrimary, fontSize: 22 }]}>Find Your Program</Text>
+            <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2), fontSize: 13.5, lineHeight: 20 }]}>
+              Let's narrow things down. Start by choosing the type of institution you're interested in.
+            </Text>
+          </View>
+
+          {instStatus === 'error' ? (
+            <InlineErrorState message={instErrorMsg} onRetry={loadInstitutions} />
+          ) : (
+            <View style={{ gap: spacing(4) }}>
+              {(Object.keys(TYPE_META) as InstitutionType[]).map((type) => {
+                const meta  = TYPE_META[type];
+                const count = typeCounts[type];
+                return (
+                  <Pressable
+                    key={type}
+                    onPress={() => handleSelectType(type)}
+                    disabled={instStatus === 'loading'}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Browse ${meta.label}`}
+                    style={({ pressed }) => ([
+                      {
+                        flexDirection: 'row' as const,
+                        alignItems: 'center' as const,
+                        gap: spacing(4),
+                        backgroundColor: colors.surface,
+                        borderRadius: radii.xxl,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        padding: spacing(5),
+                        opacity: pressed ? 0.9 : 1,
+                      },
+                      elevation,
+                    ])}
+                  >
+                    <View style={{ width: 52, height: 52, borderRadius: radii.xl, backgroundColor: `${meta.color}1E`, borderWidth: 1, borderColor: `${meta.color}44`, alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name={meta.icon} size={24} color={meta.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[typography.h2, { color: colors.textPrimary, fontSize: 16 }]}>{meta.label}</Text>
+                      <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2, fontSize: 12, lineHeight: 16 }]} numberOfLines={2}>
+                        {meta.blurb}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1), marginTop: spacing(2) }}>
+                        {instStatus === 'loading' ? (
+                          <SkeletonPulse width={70} height={18} />
+                        ) : (
+                          <View style={{ paddingHorizontal: spacing(2), paddingVertical: 2, borderRadius: radii.pill, backgroundColor: `${meta.color}18`, borderWidth: 1, borderColor: `${meta.color}33` }}>
+                            <Text style={[typography.caption, { color: meta.color, fontWeight: '700', fontSize: 10.5 }]}>
+                              {count} {count === 1 ? meta.singular : meta.label.toLowerCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* ══ STEP 2 — Institutions of the selected type ══ */}
+      {step === 'institutions' && selectedType && (
+        <View>
+          <StepHeader onBack={goBackAStep} crumbs={['Courses', TYPE_META[selectedType].label]} />
+
+          <View style={[{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing(4), minHeight: 48, marginBottom: spacing(5) }, elevation]}>
+            <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
+            <TextInput
+              value={instSearch}
+              onChangeText={setInstSearch}
+              placeholder={`Search ${TYPE_META[selectedType].label.toLowerCase()}…`}
+              placeholderTextColor={colors.textMuted}
+              style={[typography.body, { flex: 1, marginLeft: spacing(3), paddingVertical: spacing(3), color: colors.textPrimary, fontSize: 14 }]}
+              returnKeyType="search"
+            />
+            {instSearch.length > 0 && (
+              <Pressable onPress={() => setInstSearch('')} accessibilityRole="button" accessibilityLabel="Clear search" style={{ padding: spacing(2) }}>
+                <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+              </Pressable>
+            )}
+          </View>
+
+          <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(4), fontSize: 10.5 }]}>
+            {institutionsForType.length} {institutionsForType.length === 1 ? 'RESULT' : 'RESULTS'}
+          </Text>
+
+          {institutionsForType.length === 0 ? (
+            <View style={[{ alignItems: 'center', padding: spacing(8), backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border }, elevation]}>
+              <Ionicons name="business-outline" size={26} color={colors.textMuted} />
+              <Text style={[typography.h2, { color: colors.textPrimary, marginTop: spacing(3), fontSize: 15, textAlign: 'center' }]}>No matches</Text>
+              <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing(1), textAlign: 'center' }]}>
+                Try a different search term.
+              </Text>
+            </View>
+          ) : (
+            institutionsForType.map((inst) => (
+              <Pressable
+                key={inst.id}
+                onPress={() => handleSelectInstitution(inst)}
+                accessibilityRole="button"
+                accessibilityLabel={`View faculties at ${inst.name}`}
+                style={({ pressed }) => ([
+                  {
+                    flexDirection: 'row' as const,
+                    alignItems: 'center' as const,
+                    gap: spacing(3),
+                    backgroundColor: colors.surface,
+                    borderRadius: radii.xl,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    padding: spacing(4),
+                    marginBottom: spacing(3),
+                    opacity: pressed ? 0.9 : 1,
+                  },
+                  elevation,
+                ])}
+              >
+                <View style={{ width: 44, height: 44, borderRadius: radii.lg, backgroundColor: `${colors.primary}18`, borderWidth: 1, borderColor: `${colors.primary}33`, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={[typography.label, { color: colors.primary, fontSize: 10.5 }]} numberOfLines={1}>{inst.badge}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 14 }]} numberOfLines={1}>{inst.name}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1), marginTop: 2 }}>
+                    <Ionicons name="location-outline" size={11} color={colors.textMuted} />
+                    <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]} numberOfLines={1}>{inst.location}</Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
+              </Pressable>
+            ))
+          )}
+        </View>
+      )}
+
+      {/* ══ STEP 3 — Faculties of the selected institution ══ */}
+      {step === 'faculties' && selectedType && selectedInstitution && (
+        <View>
+          <StepHeader onBack={goBackAStep} crumbs={['Courses', TYPE_META[selectedType].label, selectedInstitution.name]} />
+
+          <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing(5), marginBottom: spacing(6), flexDirection: 'row', alignItems: 'center', gap: spacing(4) }, elevation]}>
+            <View style={{ width: 48, height: 48, borderRadius: radii.lg, backgroundColor: `${colors.primary}18`, borderWidth: 1, borderColor: `${colors.primary}33`, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={[typography.label, { color: colors.primary, fontSize: 11 }]} numberOfLines={1}>{selectedInstitution.badge}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[typography.h2, { color: colors.textPrimary, fontSize: 16 }]} numberOfLines={2}>{selectedInstitution.name}</Text>
+              <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2, fontSize: 11.5 }]}>{selectedInstitution.location}</Text>
+            </View>
+          </View>
+
+          <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(4), fontSize: 10.5 }]}>
+            CHOOSE A FACULTY
+          </Text>
+
+          {facStatus === 'loading' && (
+            <View>
+              <SkeletonRow /><SkeletonRow /><SkeletonRow />
+            </View>
+          )}
+
+          {facStatus === 'error' && (
+            <InlineErrorState message={facErrorMsg} onRetry={() => loadFaculties(selectedInstitution)} />
+          )}
+
+          {facStatus === 'success' && (
+            <View>
+              {/* Pinned "All Faculties" option — always available so the
+                  user is never blocked from browsing every course at this
+                  institution, even if faculties haven't been catalogued. */}
+              <Pressable
+                onPress={() => handleSelectFaculty('ALL')}
+                accessibilityRole="button"
+                style={({ pressed }) => ([
+                  { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(3), backgroundColor: `${colors.primary}0F`, borderRadius: radii.xl, borderWidth: 1, borderColor: `${colors.primary}44`, padding: spacing(4), marginBottom: spacing(3), opacity: pressed ? 0.9 : 1 },
+                  elevation,
+                ])}
+              >
+                <View style={{ width: 40, height: 40, borderRadius: radii.lg, backgroundColor: `${colors.primary}22`, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="apps-outline" size={19} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[typography.bodyStrong, { color: colors.primary, fontSize: 14 }]}>All Faculties</Text>
+                  <Text style={[typography.caption, { color: colors.textSecondary, fontSize: 11, marginTop: 1 }]}>Browse every course at this institution</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={17} color={colors.primary} />
+              </Pressable>
+
+              {faculties.length === 0 ? (
+                <View style={[{ alignItems: 'center', padding: spacing(6), backgroundColor: colors.surfaceAlt, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, marginTop: spacing(2) }]}>
+                  <Ionicons name="library-outline" size={22} color={colors.textMuted} />
+                  <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing(2), textAlign: 'center', fontSize: 12 }]}>
+                    No individual faculties listed yet for this institution — tap "All Faculties" above to see its courses.
+                  </Text>
+                </View>
+              ) : (
+                faculties.map((fac) => (
+                  <Pressable
+                    key={fac.id}
+                    onPress={() => handleSelectFaculty(fac)}
+                    accessibilityRole="button"
+                    style={({ pressed }) => ([
+                      { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(3), backgroundColor: colors.surface, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, padding: spacing(4), marginBottom: spacing(3), opacity: pressed ? 0.9 : 1 },
+                      elevation,
+                    ])}
+                  >
+                    <View style={{ width: 40, height: 40, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name="library-outline" size={18} color={colors.textSecondary} />
+                    </View>
+                    <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 14, flex: 1 }]} numberOfLines={2}>{fac.name}</Text>
+                    <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
+                  </Pressable>
+                ))
+              )}
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* ══ STEP 4 — Courses, paginated ══ */}
+      {step === 'courses' && selectedType && selectedInstitution && (
+        <View>
+          <StepHeader
+            onBack={goBackAStep}
+            crumbs={[
+              TYPE_META[selectedType].label,
+              selectedInstitution.name,
+              selectedFaculty === 'ALL' ? 'All Faculties' : selectedFaculty?.name ?? '',
+            ]}
+          />
+
+          {/* Search within this scope */}
+          <View style={[{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing(4), minHeight: 48, marginBottom: spacing(5) }, elevation]}>
+            <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
+            <TextInput
+              value={courseSearch}
+              onChangeText={setCourseSearch}
+              placeholder="Search loaded courses…"
+              placeholderTextColor={colors.textMuted}
+              style={[typography.body, { flex: 1, marginLeft: spacing(3), paddingVertical: spacing(3), color: colors.textPrimary, fontSize: 14 }]}
+              returnKeyType="search"
+            />
+            {courseSearch.length > 0 && (
+              <Pressable onPress={() => setCourseSearch('')} accessibilityRole="button" accessibilityLabel="Clear search" style={{ padding: spacing(2) }}>
+                <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+              </Pressable>
+            )}
+          </View>
+
+          {courseStatus === 'loading' && (
+            <View>
+              <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(4), fontSize: 10.5 }]}>LOADING COURSES…</Text>
+              <SkeletonGrid count={4} numCols={1} cardGap={spacing(4)} />
+            </View>
+          )}
+
+          {courseStatus === 'error' && (
+            <InlineErrorState
+              message={courseErrorMsg}
+              onRetry={() => loadFirstCoursePage(selectedInstitution, selectedFaculty)}
+            />
+          )}
+
+          {courseStatus === 'success' && (
+            <View>
+              <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(4), fontSize: 10.5 }]}>
+                {courseTotal != null
+                  ? `SHOWING ${visibleCourses.length} OF ${courseTotal} COURSE${courseTotal === 1 ? '' : 'S'}`
+                  : `${visibleCourses.length} COURSE${visibleCourses.length === 1 ? '' : 'S'} LOADED`}
+              </Text>
+
+              {visibleCourses.length === 0 ? (
+                <View style={[{ alignItems: 'center', padding: spacing(8), backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border }, elevation]}>
+                  <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: `${colors.primary}18`, alignItems: 'center', justifyContent: 'center', marginBottom: spacing(4) }}>
+                    <Ionicons name="book-outline" size={24} color={colors.primary} />
+                  </View>
+                  <Text style={[typography.h2, { color: colors.textPrimary, textAlign: 'center', fontSize: 15 }]}>
+                    {courseSearch ? 'No matches in loaded courses' : 'No courses found'}
+                  </Text>
+                  <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing(2), textAlign: 'center' }]}>
+                    {courseSearch
+                      ? 'Try clearing your search, or load more courses below.'
+                      : 'This faculty doesn\u2019t have any courses listed yet.'}
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ gap: spacing(4) }}>
+                  {visibleCourses.map((course) => (
+                    <CourseCard key={course.id} course={course} onPress={handleOpenCourse} />
+                  ))}
+                </View>
+              )}
+
+              {/* Pagination — only relevant when not actively text-searching
+                  the already-loaded set, since search filters client-side. */}
+              {!courseSearch && (
+                <MobileLoadMoreFooter
+                  onPress={loadMoreCourses}
+                  loading={courseLoadingMore}
+                  hasMore={courseHasMore}
+                  total={courseTotal}
+                  shown={courses.length}
+                />
+              )}
+            </View>
+          )}
+        </View>
+      )}
+    </DashboardLayout>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DesktopCoursesView — tablet + desktop. Unchanged from the original
+// single-page filter/search experience: fetch a fast first page of courses,
+// hydrate the rest of the catalogue in the background, filter/search/paginate
+// entirely client-side. This is intentionally left as-is; only the mobile
+// experience (< 768px) was replaced with the guided drill-down above.
+// ─────────────────────────────────────────────────────────────────────────────
+function DesktopCoursesView() {
   const { width } = useWindowDimensions();
   const colors    = useTheme();
   const elevation = useElevation('md');
@@ -524,16 +1292,9 @@ function CoursesContent() {
     [width],
   );
   const isDesktop = breakpoint === 'desktop';
-  const isMobile  = breakpoint === 'mobile';
+  const isMobile  = breakpoint === 'mobile'; // retained for parity; this view only mounts for >= 768
 
-  // PAGE_SIZE: how many cards are visible at once / revealed per "load more".
-  // Independent from CONFIG.INITIAL_COURSE_BATCH — display pagination and
-  // network pagination are two different concerns.
   const PAGE_SIZE = isMobile ? 20 : 12;
-
-  // SKELETON_COUNT: deliberately small and independent of PAGE_SIZE. Each
-  // skeleton card runs its own looping animation, so rendering 20 of them on
-  // a low-end Android device during the loading phase would itself be slow.
   const SKELETON_COUNT = isMobile ? 6 : 8;
 
   const [search,            setSearch]           = useState('');
@@ -550,17 +1311,10 @@ function CoursesContent() {
   const [status,       setStatus]       = useState<FetchStatus>('idle');
   const [errorMsg,     setErrorMsg]     = useState('');
 
-  // True while the background fetch is still pulling the rest of the
-  // catalogue in after the fast first page has already been shown.
   const [hydrating,           setHydrating]           = useState(false);
-  // True if that background fetch failed partway through — the user still
-  // has a working screen, but the catalogue may be incomplete, so we surface
-  // a retry affordance instead of failing silently.
   const [hydrationIncomplete, setHydrationIncomplete] = useState(false);
 
   const mountedRef = useRef(true);
-  // Bumped on every loadData() call so a stale background-hydration loop
-  // (from a previous load / reload) knows to stop writing to state.
   const bgTokenRef  = useRef(0);
 
   useEffect(() => {
@@ -568,19 +1322,11 @@ function CoursesContent() {
     return () => { mountedRef.current = false; };
   }, []);
 
-  // Debounce search input — filtering runs over the full in-memory course
-  // list on every change, so we don't want to re-filter on every keystroke.
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), CONFIG.SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [search]);
 
-  // ── Background hydration: pulls the rest of the courses collection in
-  //    chunks after the first fast page has already rendered, so search /
-  //    filters / "load more" eventually see every course. Failures here are
-  //    non-fatal — the user already has a working screen — but we do
-  //    surface them via hydrationIncomplete rather than failing silently.
-  // ───────────────────────────────────────────────────────────────────────
   const hydrateRemainingCourses = useCallback(async (
     token: number,
     initialCursor: QueryDocumentSnapshot<DocumentData>,
@@ -591,10 +1337,6 @@ function CoursesContent() {
     let cursor = initialCursor;
 
     try {
-      // Keep pulling batches until Firestore hands back fewer docs than we
-      // asked for — our signal we've reached the end of the collection. No
-      // orderBy is used (see note above mapCourseDocs), so nothing is ever
-      // silently excluded, and no batch can ever truncate the catalogue.
       while (mountedRef.current && bgTokenRef.current === token) {
         const snap = await safeDocs(
           query(collection(db, 'courses'), startAfter(cursor), limit(CONFIG.BACKGROUND_COURSE_BATCH)),
@@ -610,7 +1352,7 @@ function CoursesContent() {
         });
 
         cursor = snap.docs[snap.docs.length - 1];
-        if (snap.docs.length < CONFIG.BACKGROUND_COURSE_BATCH) break; // reached the end
+        if (snap.docs.length < CONFIG.BACKGROUND_COURSE_BATCH) break;
       }
     } catch (err: unknown) {
       console.error('[Courses] background hydration failed:', err);
@@ -620,20 +1362,15 @@ function CoursesContent() {
     }
   }, []);
 
-  // ── Load institutions + the FIRST page of courses in parallel ─────────────
-  //    This is the query that gates the loading skeleton, so it's kept as
-  //    cheap as possible: a small, fixed-size batch instead of the whole
-  //    collection. The rest streams in afterwards via hydrateRemainingCourses.
   const loadData = useCallback(async () => {
     if (!mountedRef.current) return;
     setStatus('loading');
     setErrorMsg('');
     setHydrating(false);
     setHydrationIncomplete(false);
-    const myToken = ++bgTokenRef.current; // invalidate any prior background loop
+    const myToken = ++bgTokenRef.current;
 
     try {
-      // Both queries fire simultaneously — total wait = max(t_inst, t_courses)
       const [instSnap, firstCourseSnap] = await Promise.all([
         safeDocs(collection(db, 'institutions')),
         safeDocs(query(collection(db, 'courses'), limit(CONFIG.INITIAL_COURSE_BATCH))),
@@ -651,8 +1388,6 @@ function CoursesContent() {
       setPage(1);
       setStatus('success');
 
-      // If we got a full batch back, there's likely more on the server —
-      // go fetch it quietly in the background.
       const mayHaveMore = firstCourseSnap.docs.length === CONFIG.INITIAL_COURSE_BATCH;
       if (mayHaveMore) {
         hydrateRemainingCourses(
@@ -671,7 +1406,6 @@ function CoursesContent() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // ── Faculties ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!selectedInstId) { setFaculties([]); setSelectedFacultyId(null); return; }
     let active = true;
@@ -690,7 +1424,6 @@ function CoursesContent() {
     return () => { active = false; };
   }, [selectedInstId]);
 
-  // ── Derived ───────────────────────────────────────────────────────────────
   const filteredInstitutions = useMemo(() => {
     if (typeFilter === 'All') return institutions;
     return institutions.filter((i) => i.type === typeFilter);
@@ -740,13 +1473,9 @@ function CoursesContent() {
   const cardWrapperWidth = numCols === 1 ? '100%' : '50%';
   const cardGap          = spacing(4);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Render — single DashboardLayout always, so menu always works
-  // ─────────────────────────────────────────────────────────────────────────
   return (
     <DashboardLayout title="Courses" subtitle="Explore programs across Botswana" showPointsCard={false}>
 
-      {/* Back nav */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
         <Pressable
           onPress={() => router.back()}
@@ -759,13 +1488,10 @@ function CoursesContent() {
         <Text style={[typography.caption, { color: colors.textMuted }]}>Dashboard › Courses</Text>
       </View>
 
-      {/* ══ LOADING — skeleton replaces blank spinner ══ */}
       {(status === 'idle' || status === 'loading') && (
         <View>
-          {/* Slow connection warning after CONFIG.SLOW_CONNECTION_BANNER_DELAY_MS */}
           <SlowConnectionBanner />
 
-          {/* Hero skeleton */}
           <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: isMobile ? spacing(5) : spacing(7), marginBottom: spacing(6), overflow: 'hidden', gap: spacing(3) }, elevation]}>
             <SkeletonPulse width="100%" height={3} />
             <SkeletonPulse width="55%" height={28} />
@@ -777,12 +1503,10 @@ function CoursesContent() {
             </View>
           </View>
 
-          {/* Filter pills skeleton */}
           <View style={{ flexDirection: 'row', gap: spacing(2), marginBottom: spacing(5) }}>
             {[80, 100, 80, 80].map((w, i) => <SkeletonPulse key={i} width={w} height={34} />)}
           </View>
 
-          {/* Card skeletons — same grid as real cards, but a lighter count */}
           <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(4) }]}>
             LOADING COURSES…
           </Text>
@@ -790,7 +1514,6 @@ function CoursesContent() {
         </View>
       )}
 
-      {/* ══ ERROR ══ */}
       {status === 'error' && (
         <View style={[{ alignItems: 'center', padding: spacing(10), backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: `${colors.danger}33`, marginTop: spacing(4) }, elevation]}>
           <View style={{ width: 68, height: 68, borderRadius: 34, backgroundColor: `${colors.danger}18`, borderWidth: 1, borderColor: `${colors.danger}33`, alignItems: 'center', justifyContent: 'center', marginBottom: spacing(5) }}>
@@ -811,14 +1534,11 @@ function CoursesContent() {
         </View>
       )}
 
-      {/* ══ SUCCESS ══ */}
       {status === 'success' && (
         <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: spacing(8), alignItems: 'flex-start' }}>
 
-          {/* Main column */}
           <View style={{ flex: 1, minWidth: 0, width: '100%' }}>
 
-            {/* Hero */}
             <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: isMobile ? spacing(5) : spacing(7), marginBottom: spacing(6), overflow: 'hidden' }, elevation]}>
               <View style={{ height: 3, backgroundColor: colors.primary, borderRadius: 2, marginBottom: spacing(4) }} />
               <Text style={[typography.hero, { color: colors.textPrimary }]}>Find Your Program</Text>
@@ -854,7 +1574,6 @@ function CoursesContent() {
               </View>
             </View>
 
-            {/* Mobile progress bar */}
             {isMobile && filteredCourses.length > 0 && (
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing(1), marginBottom: spacing(4) }}>
                 <Text style={[typography.caption, { color: colors.textMuted, marginRight: spacing(3) }]}>
@@ -869,7 +1588,6 @@ function CoursesContent() {
               </View>
             )}
 
-            {/* Type filter */}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginBottom: spacing(5) }}>
               {TYPE_FILTERS.map(({ key, label }) => {
                 const active = typeFilter === key;
@@ -887,7 +1605,6 @@ function CoursesContent() {
               })}
             </View>
 
-            {/* Institution selector */}
             {typeFilter !== 'All' && filteredInstitutions.length > 0 && (
               <View style={{ marginBottom: spacing(6) }}>
                 <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>SELECT INSTITUTION</Text>
@@ -909,7 +1626,6 @@ function CoursesContent() {
               </View>
             )}
 
-            {/* Faculty selector */}
             {selectedInstId && faculties.length > 0 && (
               <View style={{ marginBottom: spacing(6) }}>
                 <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>BROWSE BY FACULTY</Text>
@@ -922,7 +1638,6 @@ function CoursesContent() {
               </View>
             )}
 
-            {/* Search */}
             <View style={{ marginBottom: spacing(6) }}>
               <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(2) }]}>SEARCH</Text>
               <View style={[{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing(4), minHeight: 52 }, elevation]}>
@@ -950,7 +1665,6 @@ function CoursesContent() {
               )}
             </View>
 
-            {/* Results */}
             {filteredCourses.length === 0 ? (
               <View style={[{ alignItems: 'center', padding: spacing(10), backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border }, elevation]}>
                 <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: `${colors.primary}18`, alignItems: 'center', justifyContent: 'center', marginBottom: spacing(5) }}>
@@ -969,7 +1683,6 @@ function CoursesContent() {
                   SHOWING {paginatedCourses.length} OF {filteredCourses.length} COURSES
                 </Text>
 
-                {/* Grid */}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginRight: numCols > 1 ? -cardGap : 0 }}>
                   {paginatedCourses.map((course) => (
                     <View key={course.id} style={{ width: cardWrapperWidth as any, paddingRight: numCols > 1 ? cardGap : 0, paddingBottom: cardGap }}>
@@ -978,7 +1691,6 @@ function CoursesContent() {
                   ))}
                 </View>
 
-                {/* Mobile: infinite scroll sentinel | Desktop: explicit button */}
                 {isMobile ? (
                   <InfiniteScrollSentinel
                     onVisible={loadNextPage}
@@ -1003,7 +1715,6 @@ function CoursesContent() {
             )}
           </View>
 
-          {/* Desktop sidebar */}
           {isDesktop && (
             <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
               <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing(6), overflow: 'hidden' }, elevation]}>
@@ -1032,6 +1743,17 @@ function CoursesContent() {
       )}
     </DashboardLayout>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CoursesContent — picks the mobile drill-down flow or the desktop/tablet
+// filter experience based on viewport width. Each branch is a separate
+// component so their very different hook/state shapes never collide.
+// ─────────────────────────────────────────────────────────────────────────────
+function CoursesContent() {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  return isMobile ? <MobileCoursesView /> : <DesktopCoursesView />;
 }
 
 export default function CoursesScreen() {

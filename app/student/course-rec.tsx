@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../../constants/firebase';
 import DashboardLayout, {
@@ -794,136 +794,165 @@ function CourseRecContent() {
     loadSaved();
   }, []);
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
+useEffect(() => {
+  const loadData = async () => {
+    try {
+      setLoading(true);
 
-        const instSnapshot = await getDocs(collection(db, 'institutions'));
-        const instMap = new Map<string, { name: string; category?: 'university' | 'college' | 'brigade' }>();
-        instSnapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          instMap.set(docSnap.id, {
-            name: data.name || data.institutionName || 'Unknown Institution',
-            category: data.category || data.type,
-          });
+      const [instSnapshot, courseSnapshot] = await Promise.all([
+        getDocs(collection(db, 'institutions')),
+        getDocs(collection(db, 'courses')),
+      ]);
+
+      const instMap = new Map<
+        string,
+        { name: string; category?: 'university' | 'college' | 'brigade' }
+      >();
+
+      instSnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        instMap.set(docSnap.id, {
+          name: data.name || data.institutionName || 'Unknown Institution',
+          category: data.category || data.type,
         });
+      });
 
-        const courseSnapshot = await getDocs(collection(db, 'courses'));
-        const loaded: Course[] = [];
+      const loaded: Course[] = [];
 
-        courseSnapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          const institution = instMap.get(data.institutionId);
+      courseSnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const institution = instMap.get(data.institutionId);
 
-          let instType = institution?.category || data.institutionType;
-          if (!instType || typeof instType !== 'string' || instType.trim() === '') {
-            const instId = (data.institutionId || '').toLowerCase();
-            if (instId.includes('uni')) instType = 'university';
-            else if (instId.includes('col')) instType = 'college';
-            else instType = 'brigade';
+        let instType = institution?.category || data.institutionType;
+
+        if (!instType || typeof instType !== 'string' || instType.trim() === '') {
+          const instId = (data.institutionId || '').toLowerCase();
+
+          if (instId.includes('uni')) {
+            instType = 'university';
+          } else if (instId.includes('col')) {
+            instType = 'college';
+          } else {
+            instType = 'brigade';
+          }
+        }
+
+        loaded.push({
+          id: docSnap.id,
+          title: data.title || 'Untitled Course',
+          qualificationLevel: data.qualificationLevel || 'Programme',
+          duration: data.duration || 'Duration not listed',
+          requiredPoints: data.requiredPoints || getCourseMinimumPoints(data),
+          tuitionPerYear: data.tuitionPerYear,
+          mode: data.mode || 'Full-time',
+          about: data.about || '',
+          institutionId: data.institutionId,
+          facultyId: data.facultyId,
+          institutionName: institution?.name || 'Unknown Institution',
+          institutionType: instType as 'university' | 'college' | 'brigade',
+          facultyName: data.facultyName,
+          careers: data.careers || [],
+          subjectRequirements: getCourseSubjectRequirements(data),
+          minimumPoints: getCourseMinimumPoints(data),
+        });
+      });
+
+      const studentSubjectsMap = new Map(
+        userBestSubjects.map((s) => [
+          normalizeSubjectName(s.subject),
+          { grade: s.grade, originalSubject: s.subject },
+        ])
+      );
+
+      const scoredCourses = loaded
+        .map((course) => {
+          let requiredMet = 0;
+          const totalRequired = course.subjectRequirements?.length || 0;
+
+          const matchedSubjects: MatchedSubject[] =
+            course.subjectRequirements?.map((req) => {
+              const normSubj = normalizeSubjectName(req.subject);
+              const studentSubject = studentSubjectsMap.get(normSubj);
+
+              const met = Boolean(
+                studentSubject &&
+                  meetsMinimumGrade(studentSubject.grade, req.minimumGrade)
+              );
+
+              if (met) requiredMet++;
+
+              return {
+                subject: req.subject,
+                studentGrade: studentSubject?.grade || 'Not taken',
+                requiredGrade: req.minimumGrade,
+                met,
+              };
+            }) || [];
+
+          const minPts = course.minimumPoints || course.requiredPoints;
+          const pointsDifference = userPoints - minPts;
+          const pointsMet = userPoints >= minPts;
+
+          const allSubjectsMet = totalRequired === 0 || requiredMet === totalRequired;
+          const subjectRatio = totalRequired > 0 ? requiredMet / totalRequired : 1;
+
+          let score = 20;
+
+          if (pointsMet) {
+            score += 45;
+            score += Math.min(15, Math.max(0, pointsDifference));
+          } else {
+            score += Math.max(0, 30 - Math.abs(pointsDifference) * 3);
           }
 
-          loaded.push({
-            id: docSnap.id,
-            title: data.title || 'Untitled Course',
-            qualificationLevel: data.qualificationLevel || 'Programme',
-            duration: data.duration || 'Duration not listed',
-            requiredPoints: data.requiredPoints || getCourseMinimumPoints(data),
-            tuitionPerYear: data.tuitionPerYear,
-            mode: data.mode || 'Full-time',
-            about: data.about || '',
-            institutionId: data.institutionId,
-            facultyId: data.facultyId,
-            institutionName: institution?.name || 'Unknown Institution',
-            institutionType: instType as 'university' | 'college' | 'brigade',
-            facultyName: data.facultyName,
-            careers: data.careers || [],
-            subjectRequirements: getCourseSubjectRequirements(data),
-            minimumPoints: getCourseMinimumPoints(data),
-          });
-        });
+          score += Math.round(subjectRatio * 35);
 
-        const hasStudentSubjects = userBestSubjects.length > 0;
+          if (pointsMet && allSubjectsMet) {
+            score += 15;
+          }
 
-        const scoredCourses = loaded
-          .map((course) => {
-            const studentSubjectsMap = new Map(
-              userBestSubjects.map((s) => [
-                normalizeSubjectName(s.subject),
-                { grade: s.grade, originalSubject: s.subject },
-              ])
-            );
+          let finalScore = Math.min(100, Math.round(score));
 
-            let requiredMet = 0;
-            const totalRequired = course.subjectRequirements?.length || 0;
+          if (!pointsMet) {
+            finalScore = Math.min(finalScore, 69);
+          }
 
-            const matchedSubjects: MatchedSubject[] =
-              course.subjectRequirements?.map((req) => {
-                const normSubj = normalizeSubjectName(req.subject);
-                const studentSubject = studentSubjectsMap.get(normSubj);
-                const met = Boolean(
-                  studentSubject && meetsMinimumGrade(studentSubject.grade, req.minimumGrade)
-                );
-                if (met) requiredMet++;
-                return {
-                  subject: req.subject,
-                  studentGrade: studentSubject?.grade || 'Not taken',
-                  requiredGrade: req.minimumGrade,
-                  met,
-                };
-              }) || [];
+          if (!allSubjectsMet && totalRequired > 0) {
+            finalScore = Math.min(finalScore, 84);
+          }
 
-            const minPts = course.minimumPoints || course.requiredPoints;
-            const pointsDifference = userPoints - minPts;
-            const pointsMet = userPoints >= minPts;
+          const eligibilityMet = pointsMet && allSubjectsMet;
 
-            let score = 25;
-            if (pointsMet) {
-              score += 45;
-              score += Math.min(20, Math.max(0, pointsDifference));
-            } else {
-              score += Math.max(0, 35 - Math.abs(pointsDifference) * 3);
-            }
+          const courseWithReason: Course = {
+            ...course,
+            matchScore: finalScore,
+            eligibilityMet,
+            matchedSubjects,
+            pointsMet,
+            pointsDifference,
+          };
 
-            const subjectRatio = totalRequired > 0 ? requiredMet / totalRequired : 0.65;
-            score += Math.round(subjectRatio * 35);
-            if (requiredMet === totalRequired && totalRequired > 0) score += 20;
-            if (pointsMet && subjectRatio >= 0.8) score += 15;
+          return {
+            ...courseWithReason,
+            recommendationSummary: buildRecommendationSummary(courseWithReason, userPoints),
+          };
+        })
+        .filter((course) => {
+          if (!course.pointsMet) return false;
+          return (course.matchScore || 0) >= 45;
+        })
+        .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
 
-            const eligibilityMet =
-              pointsMet &&
-              (totalRequired === 0 ||
-                !hasStudentSubjects ||
-                requiredMet >= Math.ceil(totalRequired * 0.8));
+      setCourses(scoredCourses);
+    } catch (err) {
+      console.error('Failed to load data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-            const courseWithReason: Course = {
-              ...course,
-              matchScore: Math.min(100, Math.round(score)),
-              eligibilityMet,
-              matchedSubjects,
-              pointsMet,
-              pointsDifference,
-            };
-
-            return {
-              ...courseWithReason,
-              recommendationSummary: buildRecommendationSummary(courseWithReason, userPoints),
-            };
-          })
-          .filter((course) => (course.matchScore || 0) >= 45)
-          .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
-
-        setCourses(scoredCourses);
-      } catch (err) {
-        console.error('Failed to load data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, [userPoints, userBestSubjects]);
+  loadData();
+}, [userPoints, userBestSubjects]);
 
   const displayedCourses = useMemo(() => {
     let result = [...courses];

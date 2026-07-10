@@ -62,20 +62,29 @@ export function useTheme() {
 
 type DashboardLayoutProps = {
   children: ReactNode;
+  /** If omitted/empty, no title line is rendered (e.g. user hasn't set a name yet). */
   title?: string;
   subtitle?: string;
+  /** Only renders the points hero card when true AND `points` is a real number. */
   showPointsCard?: boolean;
   points?: number;
+  /** Human readable date string, e.g. "8 July 2026". */
   lastUpdated?: string;
+  /** Whether the calculated points meet the eligibility threshold. Omit to hide the badge. */
+  eligible?: boolean;
+  /** Optional alert/banner rendered directly under the header (e.g. "finish your profile"). */
+  banner?: ReactNode;
 };
 
 export default function DashboardLayout({
   children,
-  title = "Welcome back, Katlo",
+  title,
   subtitle = "Here's your latest overview",
   showPointsCard = false,
-  points = 48,
-  lastUpdated = "28 March 2026",
+  points,
+  lastUpdated,
+  eligible,
+  banner,
 }: DashboardLayoutProps) {
   const { width } = useWindowDimensions();
   const colors = useTheme();
@@ -117,6 +126,8 @@ export default function DashboardLayout({
     { key: 'saved', label: 'Saved', icon: 'bookmark-outline' as const, href: '/student/saved' },
   ], [openInstitutionModal]);
 
+  const hasPoints = showPointsCard && typeof points === 'number';
+
   return (
     <View style={[styles.page, { backgroundColor: colors.background }]}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -132,9 +143,11 @@ export default function DashboardLayout({
         >
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <Text style={[typography.h1, { color: colors.textPrimary }]}>{title}</Text>
+              {!!title && (
+                <Text style={[typography.h1, { color: colors.textPrimary }]}>{title}</Text>
+              )}
               {subtitle && (
-                <Text style={[typography.subtitle, { color: colors.textSecondary, marginTop: spacing(1) }]}>
+                <Text style={[typography.subtitle, { color: colors.textSecondary, marginTop: title ? spacing(1) : 0 }]}>
                   {subtitle}
                 </Text>
               )}
@@ -156,6 +169,12 @@ export default function DashboardLayout({
               )}
             </Pressable>
           </View>
+
+          {banner && (
+            <View style={{ marginBottom: spacing(6) }}>
+              {banner}
+            </View>
+          )}
 
           <View style={[styles.main, isDesktop && { flexDirection: 'row', gap: spacing(8) }]}>
             {isDesktop && (
@@ -216,7 +235,7 @@ export default function DashboardLayout({
             )}
 
             <View style={{ flex: 1 }}>
-              {showPointsCard && (
+              {hasPoints && (
                 <View style={[styles.card, styles.heroCard, { backgroundColor: colors.surface }]}>
                   <View style={styles.pointsRow}>
                     <View>
@@ -224,16 +243,29 @@ export default function DashboardLayout({
                       <Text style={[typography.h1, { color: colors.primary, marginTop: spacing(1) }]}>
                         {points}
                       </Text>
-                      <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(1) }]}>
-                        Last updated {lastUpdated}
-                      </Text>
+                      {lastUpdated && (
+                        <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(1) }]}>
+                          Calculated {lastUpdated}
+                        </Text>
+                      )}
                     </View>
 
-                    <View style={styles.pointsRight}>
-                      <View style={[styles.badge, { backgroundColor: `${colors.success}22`, borderColor: colors.success }]}>
-                        <Text style={{ color: colors.success, fontWeight: '700' }}>Eligible</Text>
+                    {typeof eligible === 'boolean' && (
+                      <View style={styles.pointsRight}>
+                        <View
+                          style={[
+                            styles.badge,
+                            eligible
+                              ? { backgroundColor: `${colors.success}22`, borderColor: colors.success }
+                              : { backgroundColor: `${colors.danger}22`, borderColor: colors.danger },
+                          ]}
+                        >
+                          <Text style={{ color: eligible ? colors.success : colors.danger, fontWeight: '700' }}>
+                            {eligible ? 'Eligible' : 'Below threshold'}
+                          </Text>
+                        </View>
                       </View>
-                    </View>
+                    )}
                   </View>
                 </View>
               )}
@@ -337,7 +369,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.10)',
     overflow: 'hidden',
   },
-  heroCard: { padding: spacing(6) },
+  heroCard: { padding: spacing(6), marginBottom: spacing(6) },
   pointsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

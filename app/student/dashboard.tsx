@@ -28,6 +28,10 @@ import DashboardLayout, {
 } from '../../components/student/DashboardLayout';
 import { StudentMenuProvider } from '../../components/student/StudentMenu';
 
+import { db, auth } from '../../constants/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged, type User } from 'firebase/auth';
+
 export default function StudentDashboardScreen() {
   return (
     <StudentMenuProvider>
@@ -102,6 +106,101 @@ const ACTION_ACCENTS = [
   '#22D3EE', // Saved           — cyan
 ];
 
+// ─── Profile / points data shape stored in Firestore (users/{uid}) ──────────
+type DashboardProfileData = {
+  name?: string;
+  phone?: string;
+  school?: string;
+  yearForm?: string;
+  bio?: string;
+  pointsTotal?: number;
+  pointsEligible?: boolean;
+  pointsCalculatedAt?: string; // ISO date string
+};
+
+// Mirrors the completeness weighting used on the profile screen.
+function computeCompleteness(data: DashboardProfileData): number {
+  let s = 0;
+  if (data.name?.trim())     s += 25;
+  if (data.phone?.trim())    s += 15;
+  if (data.school?.trim())   s += 20;
+  if (data.yearForm?.trim()) s += 15;
+  if (data.bio?.trim())      s += 25;
+  return s;
+}
+
+function formatCalculatedDate(iso?: string): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return new Intl.DateTimeFormat('en-GB', {
+    day:   'numeric',
+    month: 'long',
+    year:  'numeric',
+  }).format(d);
+}
+
+// ─── Profile completion alert banner ─────────────────────────────────────────
+function ProfileAlertBanner({ colors, isMobile }: { colors: any; isMobile: boolean }) {
+  return (
+    <View
+      style={{
+        flexDirection:     'row',
+        alignItems:        'center',
+        gap:               spacing(3),
+        padding:           spacing(isMobile ? 4 : 5),
+        backgroundColor:   `${colors.warning}14`,
+        borderRadius:      radii.xl,
+        borderWidth:       1,
+        borderColor:       `${colors.warning}40`,
+        borderLeftWidth:   3,
+        borderLeftColor:   colors.warning,
+      }}
+    >
+      <View
+        style={{
+          width:           isMobile ? 34 : 38,
+          height:          isMobile ? 34 : 38,
+          borderRadius:    radii.md,
+          backgroundColor: `${colors.warning}22`,
+          alignItems:      'center',
+          justifyContent:  'center',
+          flexShrink:      0,
+        }}
+      >
+        <Ionicons name="alert-circle-outline" size={isMobile ? 16 : 18} color={colors.warning} />
+      </View>
+
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontSize: isMobile ? 12.5 : 13.5, fontWeight: '700', color: colors.textPrimary }}>
+          Finish updating your profile
+        </Text>
+        <Text style={{ fontSize: isMobile ? 11 : 12, color: colors.textSecondary, marginTop: 2, lineHeight: 16 }}>
+          Complete your profile to unlock stronger recommendations.
+        </Text>
+      </View>
+
+      <Pressable
+        onPress={() => router.push('/student/profile')}
+        style={({ pressed }) => ({
+          flexDirection:     'row',
+          alignItems:        'center',
+          gap:               spacing(1),
+          paddingHorizontal: spacing(3),
+          paddingVertical:   spacing(2),
+          borderRadius:      radii.pill,
+          backgroundColor:   colors.warning,
+          opacity:           pressed ? 0.85 : 1,
+          flexShrink:        0,
+        })}
+      >
+        <Text style={{ fontSize: 11, fontWeight: '800', color: '#000' }}>UPDATE</Text>
+        <Ionicons name="chevron-forward" size={12} color="#000" />
+      </Pressable>
+    </View>
+  );
+}
+
 // ─── Dashboard Content ────────────────────────────────────────────────────────
 function DashboardContent() {
   const colors = useTheme();
@@ -110,6 +209,41 @@ function DashboardContent() {
   const [showInstitutionModal, setShowInstitutionModal] = useState(false);
   const openInstitutionModal  = useCallback(() => setShowInstitutionModal(true),  []);
   const closeInstitutionModal = useCallback(() => setShowInstitutionModal(false), []);
+
+  // ── Firestore-backed profile/points state ──────────────────────────────
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [profileData, setProfileData] = useState<DashboardProfileData>({});
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      if (!user) {
+        setProfileData({});
+        setProfileLoaded(true);
+        return;
+      }
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        setProfileData(snap.exists() ? (snap.data() as DashboardProfileData) : {});
+      } catch (err) {
+        console.error('[Dashboard] failed to load profile/points:', err);
+        setProfileData({});
+      } finally {
+        setProfileLoaded(true);
+      }
+    });
+    return unsub;
+  }, []);
+
+  const name          = profileData.name?.trim() || '';
+  const completeness  = useMemo(() => computeCompleteness(profileData), [profileData]);
+  const hasPoints     = profileLoaded && typeof profileData.pointsTotal === 'number';
+  const lastUpdated   = formatCalculatedDate(profileData.pointsCalculatedAt);
+
+  const title = name ? `Welcome back, ${name}` : undefined;
+
+  const showProfileBanner = profileLoaded && !!currentUser && completeness < 100;
 
   const quickActions = useMemo(
     () => [
@@ -167,44 +301,16 @@ function DashboardContent() {
     [openInstitutionModal],
   );
 
-  const recommended = useMemo(
-    () => [
-      {
-        title:      'Biology',
-        subtitle:   'University of Botswana',
-        badge:      'Highly Suitable',
-        badgeColor: '#34D399',
-        icon:       'leaf-outline'      as const,
-        match:      96,
-      },
-      {
-        title:      'Economics',
-        subtitle:   'Botswana Accountancy College',
-        badge:      'Highly Suitable',
-        badgeColor: '#34D399',
-        icon:       'bar-chart-outline' as const,
-        match:      91,
-      },
-      {
-        title:      'Computer Science',
-        subtitle:   'University of Botswana',
-        badge:      'Good Match',
-        badgeColor: '#FBBF24',
-        icon:       'code-slash-outline' as const,
-        match:      78,
-      },
-    ],
-    [],
-  );
-
-  const { actionCols, recCols, isMobile } = layout;
+  const { actionCols, isMobile } = layout;
 
   return (
     <DashboardLayout
-      showPointsCard={true}
-      points={48}
-      lastUpdated="28 March 2026"
-     
+      title={title}
+      showPointsCard={hasPoints}
+      points={profileData.pointsTotal}
+      lastUpdated={lastUpdated}
+      eligible={profileData.pointsEligible}
+      banner={showProfileBanner ? <ProfileAlertBanner colors={colors} isMobile={isMobile} /> : undefined}
     >
       {/* ── Activity strip ── */}
       <FadeIn delay={60}>
@@ -241,41 +347,6 @@ function DashboardContent() {
             </FadeIn>
           ))}
         </View>
-      </FadeIn>
-
-      {/* ── Recommended ── */}
-      <FadeIn delay={400} style={{ marginTop: spacing(10), marginBottom: spacing(6) }}>
-        <SectionHeader
-          title="Recommended for You"
-          subtitle="Based on your academic profile"
-          colors={colors}
-          isMobile={isMobile}
-          action={{ label: 'See all', onPress: () => router.push('/student/courses') }}
-        />
-
-        {isMobile ? (
-          /* Mobile: vertical feed */
-          <View style={{ gap: spacing(3) }}>
-            {recommended.map((rec, idx) => (
-              <FadeIn key={idx} delay={440 + idx * 60}>
-                <RecommendationRow rec={rec} colors={colors} />
-              </FadeIn>
-            ))}
-          </View>
-        ) : (
-          /* Tablet/Desktop: grid */
-          <View style={[styles.grid, { marginHorizontal: -spacing(2) }]}>
-            {recommended.map((rec, idx) => (
-              <FadeIn
-                key={idx}
-                delay={440 + idx * 60}
-                style={[styles.gridItem, { width: `${100 / recCols}%`, paddingHorizontal: spacing(2) }]}
-              >
-                <RecommendationCard rec={rec} colors={colors} />
-              </FadeIn>
-            ))}
-          </View>
-        )}
       </FadeIn>
 
       {/* ── Tips banner ── */}
@@ -523,152 +594,6 @@ function ActionCard({
             numberOfLines={1}
           >
             {action.desc}
-          </Text>
-        </View>
-      </Animated.View>
-    </Pressable>
-  );
-}
-
-// ─── Recommendation Row (mobile) ──────────────────────────────────────────────
-function RecommendationRow({ rec, colors }: { rec: any; colors: any }) {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  return (
-    <Pressable
-      onPressIn={() =>
-        Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, damping: 15, stiffness: 300 }).start()
-      }
-      onPressOut={() =>
-        Animated.spring(scale, { toValue: 1,    useNativeDriver: true, damping: 12, stiffness: 200 }).start()
-      }
-    >
-      <Animated.View
-        style={[
-          {
-            flexDirection:     'row',
-            alignItems:        'center',
-            gap:               spacing(4),
-            paddingVertical:   spacing(4),
-            paddingHorizontal: spacing(4),
-            backgroundColor:   colors.surface,
-            borderRadius:      radii.xl,
-            borderWidth:       1,
-            borderColor:       colors.divider,
-            transform:         [{ scale }],
-          },
-          Platform.OS === 'web' && { cursor: 'pointer' } as any,
-        ]}
-      >
-        {/* Icon */}
-        <View style={{
-          width:           46,
-          height:          46,
-          borderRadius:    radii.lg,
-          backgroundColor: `${rec.badgeColor}18`,
-          borderWidth:     1,
-          borderColor:     `${rec.badgeColor}35`,
-          alignItems:      'center',
-          justifyContent:  'center',
-          flexShrink:      0,
-        }}>
-          <Ionicons name={rec.icon} size={20} color={rec.badgeColor} />
-        </View>
-
-        {/* Text */}
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary }} numberOfLines={1}>
-            {rec.title}
-          </Text>
-          <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }} numberOfLines={1}>
-            {rec.subtitle}
-          </Text>
-          <View style={[styles.badge, { backgroundColor: `${rec.badgeColor}1A`, borderColor: `${rec.badgeColor}44`, marginTop: spacing(2) }]}>
-            <View style={[styles.badgeDot, { backgroundColor: rec.badgeColor }]} />
-            <Text style={{ color: rec.badgeColor, fontWeight: '700', fontSize: 10, letterSpacing: 0.3 }}>
-              {rec.badge}
-            </Text>
-          </View>
-        </View>
-
-        {/* Match score */}
-        <View style={{ alignItems: 'center', gap: spacing(1) }}>
-          <Text style={{ fontSize: 18, fontWeight: '900', color: rec.badgeColor }}>{rec.match}%</Text>
-          <Text style={{ fontSize: 9, color: colors.textMuted, fontWeight: '600', letterSpacing: 0.3 }}>MATCH</Text>
-        </View>
-      </Animated.View>
-    </Pressable>
-  );
-}
-
-// ─── Recommendation Card (tablet/desktop) ────────────────────────────────────
-function RecommendationCard({ rec, colors }: { rec: any; colors: any }) {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  return (
-    <Pressable
-      onPressIn={() =>
-        Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, damping: 15, stiffness: 300 }).start()
-      }
-      onPressOut={() =>
-        Animated.spring(scale, { toValue: 1,    useNativeDriver: true, damping: 12, stiffness: 200 }).start()
-      }
-    >
-      <Animated.View
-        style={[
-          styles.recCard,
-          {
-            backgroundColor: colors.surface,
-            borderColor:     `${rec.badgeColor}28`,
-            transform:       [{ scale }],
-            padding:         spacing(5),
-          },
-          Platform.OS === 'web' && { cursor: 'pointer', transition: 'box-shadow 0.18s ease' } as any,
-        ]}
-      >
-        {/* Match score pill (top-right) */}
-        <View style={{
-          position:        'absolute',
-          top:             spacing(4),
-          right:           spacing(4),
-          paddingHorizontal: spacing(2),
-          paddingVertical:  spacing(0.5),
-          borderRadius:    radii.pill,
-          backgroundColor: `${rec.badgeColor}20`,
-          borderWidth:     1,
-          borderColor:     `${rec.badgeColor}44`,
-        }}>
-          <Text style={{ fontSize: 11, fontWeight: '800', color: rec.badgeColor }}>
-            {rec.match}%
-          </Text>
-        </View>
-
-        {/* Icon */}
-        <View style={{
-          width:           52,
-          height:          52,
-          borderRadius:    radii.lg,
-          backgroundColor: `${rec.badgeColor}18`,
-          borderWidth:     1,
-          borderColor:     `${rec.badgeColor}35`,
-          alignItems:      'center',
-          justifyContent:  'center',
-          marginBottom:    spacing(3),
-        }}>
-          <Ionicons name={rec.icon} size={24} color={rec.badgeColor} />
-        </View>
-
-        <Text style={{ fontSize: 15, fontWeight: '700', color: colors.textPrimary }} numberOfLines={1}>
-          {rec.title}
-        </Text>
-        <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: spacing(1), lineHeight: 16 }} numberOfLines={2}>
-          {rec.subtitle}
-        </Text>
-
-        <View style={[styles.badge, { backgroundColor: `${rec.badgeColor}1A`, borderColor: `${rec.badgeColor}44`, marginTop: spacing(3) }]}>
-          <View style={[styles.badgeDot, { backgroundColor: rec.badgeColor }]} />
-          <Text style={{ color: rec.badgeColor, fontWeight: '700', fontSize: 11, letterSpacing: 0.3 }}>
-            {rec.badge}
           </Text>
         </View>
       </Animated.View>
@@ -993,28 +918,6 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     borderWidth:  1,
     overflow:     'hidden',
-  },
-
-  recCard: {
-    borderRadius: radii.xl,
-    borderWidth:  1,
-    overflow:     'hidden',
-  },
-
-  badge: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    paddingHorizontal: spacing(3),
-    paddingVertical:   spacing(1),
-    borderRadius:      radii.pill,
-    borderWidth:       1,
-    alignSelf:         'flex-start',
-    gap:               spacing(1),
-  },
-  badgeDot: {
-    width:        5,
-    height:       5,
-    borderRadius: 3,
   },
 });
 

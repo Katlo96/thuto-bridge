@@ -1,14 +1,14 @@
-
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   Pressable,
+  Image,
+  Modal,
   Platform,
   ScrollView,
   useWindowDimensions,
   TextInput,
-  Alert,
   KeyboardAvoidingView,
   ActivityIndicator,
   Animated,
@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { StudentMenuProvider, useStudentMenu } from '../../components/student/StudentMenu';
 
 import {
@@ -27,8 +28,9 @@ import {
   useTheme,
 } from '../../components/student/DashboardLayout';
 
-import { db, auth } from '../../constants/firebase';
+import { db, auth, storage } from '../../constants/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,6 +44,7 @@ type UserProfile = {
   school: string;
   yearForm: string;
   bio: string;
+  photoURL: string;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -60,7 +63,27 @@ async function fetchProfile(uid: string): Promise<Partial<UserProfile>> {
 }
 
 async function saveProfile(uid: string, data: UserProfile): Promise<void> {
-  await setDoc(doc(db, USERS_COLLECTION, uid), data, { merge: true });
+  await setDoc(
+    doc(db, USERS_COLLECTION, uid),
+    {
+      ...data,
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true },
+  );
+}
+
+async function uploadProfilePhoto(uid: string, imageUri: string): Promise<string> {
+  const response = await fetch(imageUri);
+  const blob = await response.blob();
+
+  const imageRef = ref(storage, `users/${uid}/profile/profile-photo.jpg`);
+
+  await uploadBytes(imageRef, blob, {
+    contentType: blob.type || 'image/jpeg',
+  });
+
+  return getDownloadURL(imageRef);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -337,29 +360,584 @@ function StatusBadge({ label, icon, color, compact }: { label: string; icon: key
 // ─────────────────────────────────────────────────────────────────────────────
 // Avatar
 // ─────────────────────────────────────────────────────────────────────────────
-function Avatar({ initials, onPress, size = 88 }: { initials: string; onPress: () => void; size?: number }) {
+function Avatar({
+  initials,
+  photoURL,
+  onPress,
+  uploading,
+  size = 88,
+}: {
+  initials: string;
+  photoURL?: string;
+  onPress: () => void;
+  uploading?: boolean;
+  size?: number;
+}) {
   const colors    = useTheme();
   const elevation = useElevation('md');
+
   return (
     <Pressable
       onPress={onPress}
+      disabled={uploading}
       accessibilityRole="button"
-      accessibilityLabel="Change profile photo"
+      accessibilityLabel="View profile picture"
       style={({ pressed }) => ({
-        width: size, height: size, borderRadius: size / 2,
-        alignItems: 'center' as const, justifyContent: 'center' as const,
-        backgroundColor: `${colors.primary}22`, borderWidth: 2, borderColor: `${colors.primary}55`,
-        opacity: pressed ? 0.85 : 1, transform: pressed ? [{ scale: 0.96 }] : [],
-        ...Platform.select({ ios: { shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12 }, android: { elevation: 6 }, web: { boxShadow: `0 4px 18px ${colors.primary}44` } as any, default: {} }),
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        alignItems: 'center' as const,
+        justifyContent: 'center' as const,
+        backgroundColor: `${colors.primary}22`,
+        borderWidth: 2,
+        borderColor: `${colors.primary}55`,
+        opacity: uploading ? 0.7 : pressed ? 0.85 : 1,
+        transform: pressed && !uploading ? [{ scale: 0.96 }] : [],
+        ...Platform.select({
+          ios: { shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12 },
+          android: { elevation: 6 },
+          web: { boxShadow: `0 4px 18px ${colors.primary}44` } as any,
+          default: {},
+        }),
       })}
     >
-      <View style={[{ width: size - 8, height: size - 8, borderRadius: (size - 8) / 2, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }, elevation]}>
-        <Text style={{ fontSize: size * 0.28, fontWeight: '900', color: colors.primary, letterSpacing: 1 }}>{initials}</Text>
+      <View
+        style={[
+          {
+            width: size - 8,
+            height: size - 8,
+            borderRadius: (size - 8) / 2,
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+          },
+          elevation,
+        ]}
+      >
+        {photoURL ? (
+          <Image
+            source={{ uri: photoURL }}
+            style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+          />
+        ) : (
+          <Text style={{ fontSize: size * 0.28, fontWeight: '900', color: colors.primary, letterSpacing: 1 }}>
+            {initials}
+          </Text>
+        )}
+
+        {uploading && (
+          <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator color="#fff" />
+          </View>
+        )}
       </View>
+
       <View style={{ position: 'absolute', right: 2, bottom: 2, width: size * 0.3, height: size * 0.3, borderRadius: size * 0.15, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surface }}>
-        <Ionicons name="camera-outline" size={size * 0.14} color="#fff" />
+        {uploading ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Ionicons name="camera-outline" size={size * 0.14} color="#fff" />
+        )}
       </View>
     </Pressable>
+  );
+}
+
+
+function ProfilePhotoPreviewModal({
+  visible,
+  onClose,
+  onChangePhoto,
+  photoURL,
+  initials,
+  compact,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onChangePhoto: () => void;
+  photoURL?: string;
+  initials: string;
+  compact?: boolean;
+}) {
+  const colors = useTheme();
+  const elevation = useElevation('lg');
+  const { width, height } = useWindowDimensions();
+
+  const horizontalPadding = compact ? spacing(4) : spacing(8);
+  const availableWidth = Math.max(220, width - horizontalPadding * 2);
+  const availableHeight = Math.max(240, height - (compact ? 220 : 180));
+  const imageSize = Math.min(availableWidth, availableHeight, compact ? 560 : 760);
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: 'rgba(5, 8, 14, 0.94)',
+        }}
+      >
+        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+          <View
+            style={{
+              flex: 1,
+              paddingHorizontal: horizontalPadding,
+              paddingTop: compact ? spacing(3) : spacing(5),
+              paddingBottom: compact ? spacing(4) : spacing(6),
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: spacing(3),
+                marginBottom: compact ? spacing(4) : spacing(5),
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={[
+                    typography.h2,
+                    {
+                      color: '#fff',
+                      fontSize: compact ? 17 : 21,
+                    },
+                  ]}
+                >
+                  Profile Picture
+                </Text>
+                <Text
+                  style={[
+                    typography.caption,
+                    {
+                      color: 'rgba(255,255,255,0.68)',
+                      marginTop: 2,
+                    },
+                  ]}
+                >
+                  Tap Change Photo to upload a different picture.
+                </Text>
+              </View>
+
+              <Pressable
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel="Close profile picture"
+                hitSlop={10}
+                style={({ pressed }) => ({
+                  width: compact ? 40 : 44,
+                  height: compact ? 40 : 44,
+                  borderRadius: radii.lg,
+                  backgroundColor: pressed
+                    ? 'rgba(255,255,255,0.18)'
+                    : 'rgba(255,255,255,0.1)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.18)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                })}
+              >
+                <Ionicons name="close" size={compact ? 20 : 23} color="#fff" />
+              </Pressable>
+            </View>
+
+            <View
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 0,
+              }}
+            >
+              <View
+                style={[
+                  {
+                    width: imageSize,
+                    height: imageSize,
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    borderRadius: compact ? radii.xl : radii.xxl,
+                    overflow: 'hidden',
+                    backgroundColor: '#0D1420',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.16)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  },
+                  elevation,
+                ]}
+              >
+                {photoURL ? (
+                  <Image
+                    source={{ uri: photoURL }}
+                    resizeMode="contain"
+                    accessibilityLabel="Large profile picture"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                    }}
+                  />
+                ) : (
+                  <View
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: `${colors.primary}24`,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: Math.min(imageSize * 0.48, 260),
+                        height: Math.min(imageSize * 0.48, 260),
+                        borderRadius: Math.min(imageSize * 0.24, 130),
+                        backgroundColor: `${colors.primary}26`,
+                        borderWidth: 2,
+                        borderColor: `${colors.primary}66`,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: Math.min(imageSize * 0.18, 92),
+                          color: colors.primary,
+                          fontWeight: '900',
+                          letterSpacing: 2,
+                        }}
+                      >
+                        {initials}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        typography.body,
+                        {
+                          color: 'rgba(255,255,255,0.72)',
+                          marginTop: spacing(5),
+                          textAlign: 'center',
+                        },
+                      ]}
+                    >
+                      No profile picture uploaded yet
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            <View
+              style={{
+                flexDirection: compact ? 'column' : 'row',
+                alignItems: 'stretch',
+                justifyContent: 'center',
+                gap: spacing(3),
+                marginTop: compact ? spacing(4) : spacing(5),
+              }}
+            >
+              <Pressable
+                onPress={onClose}
+                style={({ pressed }) => ({
+                  minWidth: compact ? undefined : 150,
+                  height: 52,
+                  paddingHorizontal: spacing(5),
+                  borderRadius: radii.lg,
+                  backgroundColor: pressed
+                    ? 'rgba(255,255,255,0.16)'
+                    : 'rgba(255,255,255,0.09)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.18)',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: spacing(2),
+                })}
+              >
+                <Ionicons name="close-circle-outline" size={18} color="#fff" />
+                <Text style={[typography.label, { color: '#fff' }]}>Close</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={onChangePhoto}
+                style={({ pressed }) => ({
+                  minWidth: compact ? undefined : 210,
+                  height: 52,
+                  paddingHorizontal: spacing(5),
+                  borderRadius: radii.lg,
+                  backgroundColor: colors.primary,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: spacing(2),
+                  opacity: pressed ? 0.88 : 1,
+                  transform: pressed ? [{ scale: 0.985 }] : [],
+                })}
+              >
+                <Ionicons name="camera-outline" size={19} color="#fff" />
+                <Text style={[typography.label, { color: '#fff' }]}>
+                  {photoURL ? 'Change Photo' : 'Add Photo'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </SafeAreaView>
+      </View>
+    </Modal>
+  );
+}
+
+function PhotoActionSheet({
+  visible,
+  onClose,
+  onCamera,
+  onLibrary,
+  uploading,
+  compact,
+  photoURL,
+  initials,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onCamera: () => void;
+  onLibrary: () => void;
+  uploading: boolean;
+  compact?: boolean;
+  photoURL?: string;
+  initials: string;
+}) {
+  const colors    = useTheme();
+  const elevation = useElevation('lg');
+  const { width, height } = useWindowDimensions();
+
+  const previewSize = Math.max(
+    220,
+    Math.min(
+      compact ? width - spacing(12) : width * 0.42,
+      height * 0.5,
+      520,
+    ),
+  );
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        onPress={uploading ? undefined : onClose}
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: spacing(5) }}
+      >
+        <Pressable
+          onPress={(event) => event.stopPropagation()}
+          style={[
+            {
+              width: '100%',
+              maxWidth: compact ? 520 : 720,
+              backgroundColor: colors.surface,
+              borderRadius: radii.xxl,
+              borderWidth: 1,
+              borderColor: colors.border,
+              overflow: 'hidden',
+            },
+            elevation,
+          ]}
+        >
+          <View style={{ height: 4, backgroundColor: colors.primary }} />
+
+          <View style={{ padding: compact ? spacing(5) : spacing(6), gap: spacing(4) }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3) }}>
+              <View style={{ width: 42, height: 42, borderRadius: radii.lg, backgroundColor: `${colors.primary}18`, borderWidth: 1, borderColor: `${colors.primary}33`, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="camera-outline" size={20} color={colors.primary} />
+              </View>
+
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[typography.h2, { color: colors.textPrimary, fontSize: compact ? 16 : 18 }]}>
+                  Update profile picture
+                </Text>
+                <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(1), fontSize: compact ? 12 : 13, lineHeight: 19 }]}>
+                  Take a new photo or choose one from your device. The image will be uploaded and saved to your account.
+                </Text>
+              </View>
+
+              <Pressable
+                onPress={onClose}
+                disabled={uploading}
+                style={({ pressed }) => ({
+                  width: 34,
+                  height: 34,
+                  borderRadius: radii.lg,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.surfaceAlt,
+                  opacity: pressed || uploading ? 0.7 : 1,
+                })}
+              >
+                <Ionicons name="close" size={18} color={colors.textPrimary} />
+              </Pressable>
+            </View>
+
+            <View
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: compact ? spacing(3) : spacing(4),
+                backgroundColor: colors.surfaceAlt,
+                borderRadius: radii.xl,
+                borderWidth: 1,
+                borderColor: colors.border,
+                overflow: 'hidden',
+              }}
+            >
+              <View
+                style={[
+                  {
+                    width: previewSize,
+                    height: previewSize,
+                    maxWidth: '100%',
+                    borderRadius: radii.xl,
+                    backgroundColor: `${colors.primary}16`,
+                    borderWidth: 1,
+                    borderColor: `${colors.primary}33`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                  },
+                  elevation,
+                ]}
+              >
+                {photoURL ? (
+                  <Image
+                    source={{ uri: photoURL }}
+                    style={{ width: '100%', height: '100%', resizeMode: 'contain' }}
+                    accessibilityLabel="Full-size profile picture"
+                  />
+                ) : (
+                  <View
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: `${colors.primary}18`,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: previewSize * 0.24,
+                        fontWeight: '900',
+                        color: colors.primary,
+                        letterSpacing: 2,
+                      }}
+                    >
+                      {initials}
+                    </Text>
+                  </View>
+                )}
+
+                {uploading && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      left: 0,
+                      backgroundColor: 'rgba(0,0,0,0.5)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: spacing(3),
+                    }}
+                  >
+                    <ActivityIndicator size="large" color="#fff" />
+                    <Text style={[typography.label, { color: '#fff' }]}>
+                      Updating profile picture…
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <Text
+                style={[
+                  typography.caption,
+                  {
+                    color: colors.textMuted,
+                    textAlign: 'center',
+                    marginTop: spacing(3),
+                    lineHeight: 18,
+                  },
+                ]}
+              >
+                Your profile picture is shown at the largest comfortable size for this screen.
+              </Text>
+            </View>
+
+            <View style={{ gap: spacing(3) }}>
+              <Pressable
+                onPress={onCamera}
+                disabled={uploading}
+                style={({ pressed }) => ({
+                  minHeight: 54,
+                  borderRadius: radii.xl,
+                  borderWidth: 1,
+                  borderColor: `${colors.primary}44`,
+                  backgroundColor: pressed ? `${colors.primary}22` : `${colors.primary}12`,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: spacing(4),
+                  gap: spacing(3),
+                  opacity: uploading ? 0.6 : 1,
+                })}
+              >
+                <Ionicons name="camera" size={20} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>Take a photo</Text>
+                  <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>Use your camera</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
+              </Pressable>
+
+              <Pressable
+                onPress={onLibrary}
+                disabled={uploading}
+                style={({ pressed }) => ({
+                  minHeight: 54,
+                  borderRadius: radii.xl,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: pressed ? colors.surfaceAlt : colors.surface,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: spacing(4),
+                  gap: spacing(3),
+                  opacity: uploading ? 0.6 : 1,
+                })}
+              >
+                <Ionicons name="image-outline" size={20} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>Choose from gallery</Text>
+                  <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>Upload an existing image</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
+              </Pressable>
+            </View>
+
+            {uploading && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), padding: spacing(3), borderRadius: radii.lg, backgroundColor: `${colors.primary}12`, borderWidth: 1, borderColor: `${colors.primary}22` }}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>Uploading photo…</Text>
+              </View>
+            )}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -431,16 +1009,19 @@ function StudentProfileContent() {
   const [school,   setSchool]   = useState('');
   const [yearForm, setYearForm] = useState('');
   const [bio,      setBio]      = useState('');
+  const [photoURL, setPhotoURL] = useState('');
   const [saving,   setSaving]   = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
+  const [photoPickerOpen, setPhotoPickerOpen] = useState(false);
 
-  const emptyProfile: UserProfile = useMemo(() => ({ name: '', phone: '', school: '', yearForm: '', bio: '' }), []);
-  const savedRef = useRef<UserProfile>({ name: '', phone: '', school: '', yearForm: '', bio: '' });
+  const savedRef = useRef<UserProfile>({ name: '', phone: '', school: '', yearForm: '', bio: '', photoURL: '' });
 
   const isDirty = useMemo(() =>
     name !== savedRef.current.name || phone !== savedRef.current.phone ||
     school !== savedRef.current.school || yearForm !== savedRef.current.yearForm ||
-    bio !== savedRef.current.bio,
-    [name, phone, school, yearForm, bio],
+    bio !== savedRef.current.bio || photoURL !== savedRef.current.photoURL,
+    [name, phone, school, yearForm, bio, photoURL],
   );
 
   useEffect(() => {
@@ -457,9 +1038,10 @@ function StudentProfileContent() {
           school:   data.school   ?? '',
           yearForm: data.yearForm ?? '',
           bio:      data.bio      ?? '',
+          photoURL: data.photoURL ?? '',
         };
         setName(loaded.name); setPhone(loaded.phone);
-        setSchool(loaded.school); setYearForm(loaded.yearForm); setBio(loaded.bio);
+        setSchool(loaded.school); setYearForm(loaded.yearForm); setBio(loaded.bio); setPhotoURL(loaded.photoURL);
         savedRef.current = { ...loaded };
       } catch (err) {
         console.error('[Profile] load error:', err);
@@ -476,12 +1058,12 @@ function StudentProfileContent() {
     if (saving || !currentUser) return;
     if (!name.trim()) { showToast('Full name is required', 'error'); return; }
     setSaving(true);
-    const payload: UserProfile = { name: name.trim(), phone: phone.trim(), school: school.trim(), yearForm: yearForm.trim(), bio: bio.trim() };
+    const payload: UserProfile = { name: name.trim(), phone: phone.trim(), school: school.trim(), yearForm: yearForm.trim(), bio: bio.trim(), photoURL: photoURL.trim() };
     try {
       await saveProfile(currentUser.uid, payload);
       savedRef.current = { ...payload };
       setName(payload.name); setPhone(payload.phone);
-      setSchool(payload.school); setYearForm(payload.yearForm); setBio(payload.bio);
+      setSchool(payload.school); setYearForm(payload.yearForm); setBio(payload.bio); setPhotoURL(payload.photoURL);
       showToast('Profile saved successfully', 'success');
     } catch (err) {
       console.error('[Profile] save error:', err);
@@ -489,11 +1071,80 @@ function StudentProfileContent() {
     } finally {
       setSaving(false);
     }
-  }, [saving, currentUser, name, phone, school, yearForm, bio, showToast]);
+  }, [saving, currentUser, name, phone, school, yearForm, bio, photoURL, showToast]);
+
+  const handleUploadPhoto = useCallback(async (source: 'camera' | 'library') => {
+    if (!currentUser || photoUploading) return;
+
+    try {
+      const permission =
+        source === 'camera'
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permission.granted) {
+        showToast(
+          source === 'camera'
+            ? 'Camera permission is required to take a profile photo'
+            : 'Gallery permission is required to upload a profile photo',
+          'error',
+        );
+        return;
+      }
+
+      const pickerOptions: ImagePicker.ImagePickerOptions = {
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.78,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      };
+
+      const result =
+        source === 'camera'
+          ? await ImagePicker.launchCameraAsync(pickerOptions)
+          : await ImagePicker.launchImageLibraryAsync(pickerOptions);
+
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+
+      const localUri = result.assets[0].uri;
+
+      setPhotoPickerOpen(false);
+      setPhotoUploading(true);
+      setPhotoURL(localUri);
+
+      const downloadURL = await uploadProfilePhoto(currentUser.uid, localUri);
+
+      await setDoc(
+        doc(db, USERS_COLLECTION, currentUser.uid),
+        {
+          photoURL: downloadURL,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true },
+      );
+
+      setPhotoURL(downloadURL);
+      savedRef.current = { ...savedRef.current, photoURL: downloadURL };
+      showToast('Profile photo saved successfully', 'success');
+    } catch (err) {
+      console.error('[Profile] photo upload error:', err);
+      setPhotoURL(savedRef.current.photoURL || '');
+      showToast('Failed to save profile photo', 'error');
+    } finally {
+      setPhotoUploading(false);
+    }
+  }, [currentUser, photoUploading, photoURL, showToast]);
+
+  const handleOpenPhotoPreview = useCallback(() => {
+    if (photoUploading) return;
+    setPhotoPreviewOpen(true);
+  }, [photoUploading]);
 
   const handleChangePhoto = useCallback(() => {
-    Alert.alert('Coming Soon', 'Profile photo upload will be available soon.');
-  }, []);
+    if (photoUploading) return;
+    setPhotoPreviewOpen(false);
+    setPhotoPickerOpen(true);
+  }, [photoUploading]);
 
   const email      = currentUser?.email ?? '';
   const initials   = useMemo(() => {
@@ -502,10 +1153,11 @@ function StudentProfileContent() {
   }, [name]);
   const completeness = useMemo(() => {
     let s = 0;
-    if (name.trim()) s += 25; if (phone.trim()) s += 15;
-    if (school.trim()) s += 20; if (yearForm.trim()) s += 15; if (bio.trim()) s += 25;
-    return s;
-  }, [name, phone, school, yearForm, bio]);
+    if (photoURL.trim()) s += 10;
+    if (name.trim()) s += 20; if (phone.trim()) s += 15;
+    if (school.trim()) s += 20; if (yearForm.trim()) s += 15; if (bio.trim()) s += 20;
+    return Math.min(s, 100);
+  }, [name, phone, school, yearForm, bio, photoURL]);
   const schoolAbbr = useMemo(() =>
     school.trim().split(' ').filter(Boolean).map((w) => w[0]).join('').slice(0, 5) || '—',
     [school],
@@ -588,7 +1240,7 @@ function StudentProfileContent() {
       ) : (
         <View style={{ padding: compact ? spacing(4) : spacing(7) }}>
           <View style={{ flexDirection: 'row', alignItems: compact ? 'center' : 'flex-start', gap: spacing(compact ? 4 : 6) }}>
-            <Avatar initials={initials || '?'} onPress={handleChangePhoto} size={compact ? 72 : 96} />
+            <Avatar initials={initials || '?'} photoURL={photoURL} onPress={handleOpenPhotoPreview} uploading={photoUploading} size={compact ? 72 : 96} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginBottom: spacing(compact ? 2 : 3) }}>
                 <StatusBadge label="STUDENT"  icon="school-outline"           color={colors.primary} compact={compact} />
@@ -820,6 +1472,27 @@ function StudentProfileContent() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <ProfilePhotoPreviewModal
+        visible={photoPreviewOpen}
+        onClose={() => setPhotoPreviewOpen(false)}
+        onChangePhoto={handleChangePhoto}
+        photoURL={photoURL}
+        initials={initials || '?'}
+        compact={compact}
+      />
+
+      <PhotoActionSheet
+        visible={photoPickerOpen}
+        onClose={() => setPhotoPickerOpen(false)}
+        onCamera={() => handleUploadPhoto('camera')}
+        onLibrary={() => handleUploadPhoto('library')}
+        uploading={photoUploading}
+        compact={compact}
+        photoURL={photoURL}
+        initials={initials || '?'}
+      />
+
       {Toast}
     </View>
   );

@@ -67,6 +67,14 @@ export default function Login() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showResend, setShowResend]     = useState(false);
 
+  // Biometric availability is split into two checks on purpose:
+  //  - biometricAvailable: the device HAS the hardware (sensor) at all.
+  //  - biometricEnrolled:  the user has actually SAVED a face/fingerprint
+  //    in the device's OS settings.
+  // The sign-in button below is only ever shown when both are true — a
+  // phone with a fingerprint sensor but nothing enrolled yet should not
+  // show a biometric option, since there's nothing on-device to match
+  // against.
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricTypes, setBiometricTypes]         = useState<LocalAuthentication.AuthenticationType[]>([]);
   const [biometricEnrolled, setBiometricEnrolled]   = useState(false);
@@ -75,6 +83,10 @@ export default function Login() {
   const fadeAnim      = useRef(new Animated.Value(0)).current;
   const translateAnim = useRef(new Animated.Value(24)).current;
   const tabSlide      = useRef(new Animated.Value(0)).current;
+
+  // Refs for keyboard-driven navigation between fields (see handleIdentifierSubmit).
+  const identifierInputRef = useRef<TextInput>(null);
+  const passwordInputRef   = useRef<TextInput>(null);
 
   useEffect(() => {
     Animated.parallel([
@@ -137,6 +149,26 @@ export default function Login() {
     }
   }, [validate, inputMode, identifier, password]);
 
+  // ── Keyboard "Enter"/"Return" chaining ────────────────────────────────────
+  // Email mode: pressing enter on the identifier field moves focus straight
+  // to the password field (never submits early, since we still need the
+  // password). Pressing enter on the password field submits the form —
+  // exactly like tapping "Sign In" — because at that point every field the
+  // form needs has been filled in.
+  // Phone mode: there's only one field, so pressing enter on it submits
+  // immediately (equivalent to tapping "Send OTP Code").
+  const handleIdentifierSubmit = useCallback(() => {
+    if (inputMode === 'email') {
+      passwordInputRef.current?.focus();
+    } else {
+      handleLogin();
+    }
+  }, [inputMode, handleLogin]);
+
+  const handlePasswordSubmit = useCallback(() => {
+    handleLogin();
+  }, [handleLogin]);
+
   const handleResend = useCallback(async () => {
     if (!identifier.trim() || !password.trim()) {
       Alert.alert('Required', 'Please enter your email and password first.');
@@ -155,7 +187,7 @@ export default function Login() {
   }, [identifier, password]);
 
   const handleBiometric = useCallback(async () => {
-    if (!biometricEnrolled) { Alert.alert('Not Set Up', 'Please set up biometrics in your device settings first.'); return; }
+    if (!biometricEnrolled) { Alert.alert('Not Set Up', 'Please set up Face ID or fingerprint in your device settings first.'); return; }
     setBiometricLoading(true); setErrorMessage(null);
     try {
       const result = await LocalAuthentication.authenticateAsync({
@@ -168,7 +200,10 @@ export default function Login() {
     finally { setBiometricLoading(false); }
   }, [biometricEnrolled, biometricTypes]);
 
-  const showBiometric = isMobile && biometricAvailable && Platform.OS !== 'web';
+  // Only show the biometric option on a phone that both HAS a sensor and
+  // has an actual face/fingerprint saved on it — never on hardware that's
+  // merely capable but unset-up, and never on web/desktop/tablet.
+  const showBiometric = isMobile && biometricAvailable && biometricEnrolled && Platform.OS !== 'web';
   const bioLabel = getBiometricLabel(biometricTypes);
 
   return (
@@ -227,10 +262,26 @@ export default function Login() {
                 {/* Identifier input */}
                 <View style={[s.input, { borderColor: focusedField === 'id' ? colors.borderFocus : colors.border, backgroundColor: colors.surfaceAlt, marginTop: sp(4), borderWidth: focusedField === 'id' ? 1.5 : 1 }]}>
                   <Ionicons name={inputMode === 'email' ? 'mail-outline' : 'call-outline'} size={20} color={focusedField === 'id' ? colors.primary : colors.textMuted} style={{ marginRight: sp(2) }} />
-                  <TextInput value={identifier} onChangeText={(t) => { setIdentifier(t); setErrorMessage(null); setShowResend(false); }} onFocus={() => setFocusedField('id')} onBlur={() => setFocusedField(null)}
-                    placeholder={inputMode === 'email' ? 'Email address' : '71 234 567  or  +267 71 234 567'} placeholderTextColor={colors.textMuted}
-                    keyboardType={inputMode === 'email' ? 'email-address' : 'phone-pad'} autoCapitalize="none" autoCorrect={false}
-                    style={[typo.body, { flex: 1, color: colors.textPrimary }]} />
+                  <TextInput
+                    ref={identifierInputRef}
+                    value={identifier}
+                    onChangeText={(t) => { setIdentifier(t); setErrorMessage(null); setShowResend(false); }}
+                    onFocus={() => setFocusedField('id')}
+                    onBlur={() => setFocusedField(null)}
+                    placeholder={inputMode === 'email' ? 'Email address' : '71 234 567  or  +267 71 234 567'}
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType={inputMode === 'email' ? 'email-address' : 'phone-pad'}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    // Email mode: "next" hands off to the password field
+                    // without dismissing the keyboard. Phone mode: "go"
+                    // submits directly, since phone sign-in has no
+                    // password field to move to.
+                    returnKeyType={inputMode === 'email' ? 'next' : 'go'}
+                    onSubmitEditing={handleIdentifierSubmit}
+                    blurOnSubmit={inputMode !== 'email'}
+                    style={[typo.body, { flex: 1, color: colors.textPrimary }]}
+                  />
                   {identifier.length > 0 && <Pressable onPress={() => setIdentifier('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textMuted} /></Pressable>}
                 </View>
 
@@ -238,9 +289,23 @@ export default function Login() {
                 {inputMode === 'email' && (
                   <View style={[s.input, { borderColor: focusedField === 'pw' ? colors.borderFocus : colors.border, backgroundColor: colors.surfaceAlt, marginTop: sp(3), borderWidth: focusedField === 'pw' ? 1.5 : 1 }]}>
                     <Ionicons name="lock-closed-outline" size={20} color={focusedField === 'pw' ? colors.primary : colors.textMuted} style={{ marginRight: sp(2) }} />
-                    <TextInput value={password} onChangeText={(t) => { setPassword(t); setErrorMessage(null); }} onFocus={() => setFocusedField('pw')} onBlur={() => setFocusedField(null)}
-                      placeholder="Password" placeholderTextColor={colors.textMuted} secureTextEntry={!showPassword} autoCapitalize="none" autoCorrect={false}
-                      style={[typo.body, { flex: 1, color: colors.textPrimary }]} />
+                    <TextInput
+                      ref={passwordInputRef}
+                      value={password}
+                      onChangeText={(t) => { setPassword(t); setErrorMessage(null); }}
+                      onFocus={() => setFocusedField('pw')}
+                      onBlur={() => setFocusedField(null)}
+                      placeholder="Password"
+                      placeholderTextColor={colors.textMuted}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      // Last field in the form — pressing enter here submits,
+                      // same as tapping the Sign In button.
+                      returnKeyType="go"
+                      onSubmitEditing={handlePasswordSubmit}
+                      style={[typo.body, { flex: 1, color: colors.textPrimary }]}
+                    />
                     <Pressable onPress={() => setShowPassword((p) => !p)} hitSlop={8}><Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} /></Pressable>
                   </View>
                 )}
@@ -285,7 +350,8 @@ export default function Login() {
                   {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={[typo.body, { color: '#fff', fontWeight: '700' }]}>{inputMode === 'phone' ? 'Send OTP Code' : 'Sign In'}</Text>}
                 </Pressable>
 
-                {/* Biometric */}
+                {/* Biometric — only rendered when the device has Face ID or
+                    a fingerprint actually saved (see showBiometric above) */}
                 {showBiometric && (
                   <View style={{ marginTop: sp(4) }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp(3), marginBottom: sp(4) }}>
@@ -294,19 +360,14 @@ export default function Login() {
                       <View style={{ flex: 1, height: 1, backgroundColor: colors.divider }} />
                     </View>
                     <Pressable onPress={handleBiometric} disabled={biometricLoading}
-                      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: sp(3), paddingVertical: sp(4), paddingHorizontal: sp(5), borderRadius: radii.lg, borderWidth: 1.5, borderColor: biometricEnrolled ? `${colors.primary}55` : colors.border, backgroundColor: biometricEnrolled ? colors.biometricBg : colors.surfaceAlt, opacity: pressed || biometricLoading ? 0.8 : 1, transform: pressed ? [{ scale: 0.97 }] : [] })}>
-                      {biometricLoading ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name={bioLabel.icon} size={26} color={biometricEnrolled ? colors.primary : colors.textMuted} />}
-                      <View>
-                        <Text style={[typo.label, { color: biometricEnrolled ? colors.primary : colors.textMuted, fontSize: 14 }]}>{biometricLoading ? 'Authenticating…' : `Sign in with ${bioLabel.label}`}</Text>
-                        {!biometricEnrolled && <Text style={[typo.caption, { color: colors.textMuted, fontSize: 10, marginTop: 2 }]}>Not set up on this device</Text>}
-                      </View>
+                      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: sp(3), paddingVertical: sp(4), paddingHorizontal: sp(5), borderRadius: radii.lg, borderWidth: 1.5, borderColor: `${colors.primary}55`, backgroundColor: colors.biometricBg, opacity: pressed || biometricLoading ? 0.8 : 1, transform: pressed ? [{ scale: 0.97 }] : [] })}>
+                      {biometricLoading ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name={bioLabel.icon} size={26} color={colors.primary} />}
+                      <Text style={[typo.label, { color: colors.primary, fontSize: 14 }]}>{biometricLoading ? 'Authenticating…' : `Sign in with ${bioLabel.label}`}</Text>
                     </Pressable>
-                    {biometricEnrolled && (
-                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sp(2), marginTop: sp(3), padding: sp(3), backgroundColor: `${colors.primary}0A`, borderRadius: radii.md, borderWidth: 1, borderColor: `${colors.primary}22` }}>
-                        <Ionicons name="information-circle-outline" size={14} color={colors.primary} style={{ marginTop: 1 }} />
-                        <Text style={[typo.caption, { color: colors.textSecondary, flex: 1, fontSize: 11, lineHeight: 16 }]}>{bioLabel.label} uses your device's secure hardware. No biometric data is sent to Thuto Bridge.</Text>
-                      </View>
-                    )}
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sp(2), marginTop: sp(3), padding: sp(3), backgroundColor: `${colors.primary}0A`, borderRadius: radii.md, borderWidth: 1, borderColor: `${colors.primary}22` }}>
+                      <Ionicons name="information-circle-outline" size={14} color={colors.primary} style={{ marginTop: 1 }} />
+                      <Text style={[typo.caption, { color: colors.textSecondary, flex: 1, fontSize: 11, lineHeight: 16 }]}>{bioLabel.label} uses your device's secure hardware. No biometric data is sent to Thuto Bridge.</Text>
+                    </View>
                   </View>
                 )}
 
