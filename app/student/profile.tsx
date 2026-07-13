@@ -47,6 +47,8 @@ type UserProfile = {
   photoURL: string;
 };
 
+const EMPTY_PROFILE: UserProfile = { name: '', phone: '', school: '', yearForm: '', bio: '', photoURL: '' };
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Firestore helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1015,13 +1017,24 @@ function StudentProfileContent() {
   const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
   const [photoPickerOpen, setPhotoPickerOpen] = useState(false);
 
-  const savedRef = useRef<UserProfile>({ name: '', phone: '', school: '', yearForm: '', bio: '', photoURL: '' });
+  // ── Saved-state tracking ────────────────────────────────────────────────
+  // This used to be a plain `useRef`. That was the actual bug behind the
+  // Save button/banner staying "active" after a successful save: mutating
+  // a ref (`savedRef.current = {...}`) never triggers a re-render, and the
+  // `setName(payload.name)` etc. calls right after it are frequently no-ops
+  // (the field already held that exact trimmed value), so React sees no
+  // state change and skips re-rendering entirely. With nothing re-rendering,
+  // the `isDirty` memo below never recomputes, so it keeps returning the
+  // stale `true` from just before the save — even though the save actually
+  // succeeded. Using real state here means updating it always triggers the
+  // re-render that clears the dirty flag and fades the Save controls.
+  const [savedProfile, setSavedProfile] = useState<UserProfile>(EMPTY_PROFILE);
 
   const isDirty = useMemo(() =>
-    name !== savedRef.current.name || phone !== savedRef.current.phone ||
-    school !== savedRef.current.school || yearForm !== savedRef.current.yearForm ||
-    bio !== savedRef.current.bio || photoURL !== savedRef.current.photoURL,
-    [name, phone, school, yearForm, bio, photoURL],
+    name !== savedProfile.name || phone !== savedProfile.phone ||
+    school !== savedProfile.school || yearForm !== savedProfile.yearForm ||
+    bio !== savedProfile.bio || photoURL !== savedProfile.photoURL,
+    [name, phone, school, yearForm, bio, photoURL, savedProfile],
   );
 
   useEffect(() => {
@@ -1042,7 +1055,7 @@ function StudentProfileContent() {
         };
         setName(loaded.name); setPhone(loaded.phone);
         setSchool(loaded.school); setYearForm(loaded.yearForm); setBio(loaded.bio); setPhotoURL(loaded.photoURL);
-        savedRef.current = { ...loaded };
+        setSavedProfile({ ...loaded });
       } catch (err) {
         console.error('[Profile] load error:', err);
         showToast('Could not load profile data', 'error');
@@ -1061,9 +1074,13 @@ function StudentProfileContent() {
     const payload: UserProfile = { name: name.trim(), phone: phone.trim(), school: school.trim(), yearForm: yearForm.trim(), bio: bio.trim(), photoURL: photoURL.trim() };
     try {
       await saveProfile(currentUser.uid, payload);
-      savedRef.current = { ...payload };
       setName(payload.name); setPhone(payload.phone);
       setSchool(payload.school); setYearForm(payload.yearForm); setBio(payload.bio); setPhotoURL(payload.photoURL);
+      // Updating this as real state (not a ref mutation) is what guarantees
+      // isDirty recomputes to false and the Save UI actually fades out,
+      // even when the setState calls above are no-ops because the fields
+      // already matched the trimmed payload.
+      setSavedProfile({ ...payload });
       showToast('Profile saved successfully', 'success');
     } catch (err) {
       console.error('[Profile] save error:', err);
@@ -1124,16 +1141,16 @@ function StudentProfileContent() {
       );
 
       setPhotoURL(downloadURL);
-      savedRef.current = { ...savedRef.current, photoURL: downloadURL };
+      setSavedProfile((prev) => ({ ...prev, photoURL: downloadURL }));
       showToast('Profile photo saved successfully', 'success');
     } catch (err) {
       console.error('[Profile] photo upload error:', err);
-      setPhotoURL(savedRef.current.photoURL || '');
+      setPhotoURL(savedProfile.photoURL || '');
       showToast('Failed to save profile photo', 'error');
     } finally {
       setPhotoUploading(false);
     }
-  }, [currentUser, photoUploading, photoURL, showToast]);
+  }, [currentUser, photoUploading, photoURL, savedProfile, showToast]);
 
   const handleOpenPhotoPreview = useCallback(() => {
     if (photoUploading) return;
@@ -1324,21 +1341,26 @@ function StudentProfileContent() {
 
       {/* Save button */}
       <Pressable
-        onPress={handleSave} disabled={saving}
+        onPress={handleSave} disabled={saving || !isDirty}
         style={({ pressed }) => ({
           height: compact ? 50 : 56, borderRadius: radii.xl,
-          backgroundColor: saving ? colors.surfaceAlt : colors.primary,
-          borderWidth: 1, borderColor: saving ? colors.border : colors.primary,
+          backgroundColor: !isDirty ? colors.surfaceAlt : saving ? colors.surfaceAlt : colors.primary,
+          borderWidth: 1, borderColor: !isDirty ? colors.border : saving ? colors.border : colors.primary,
           flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: spacing(2),
-          opacity: saving ? 0.7 : pressed ? 0.88 : 1,
-          transform: pressed && !saving ? [{ scale: 0.98 }] : [],
-          ...Platform.select({ ios: { shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 12 }, android: { elevation: 4 }, web: { boxShadow: saving ? 'none' : `0 4px 16px ${colors.primary}55` } as any, default: {} }),
+          opacity: saving || !isDirty ? 0.5 : pressed ? 0.88 : 1,
+          transform: pressed && !saving && isDirty ? [{ scale: 0.98 }] : [],
+          ...Platform.select({ ios: { shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: isDirty && !saving ? 0.35 : 0, shadowRadius: 12 }, android: { elevation: isDirty && !saving ? 4 : 0 }, web: { boxShadow: isDirty && !saving ? `0 4px 16px ${colors.primary}55` : 'none' } as any, default: {} }),
         })}
       >
         {saving ? (
           <><ActivityIndicator color={colors.primary} size="small" /><Text style={[typography.label, { color: colors.primary, letterSpacing: 0.5, fontSize: compact ? 12 : undefined }]}>SAVING…</Text></>
         ) : (
-          <><Ionicons name="cloud-upload-outline" size={compact ? 17 : 20} color="#fff" /><Text style={[typography.label, { color: '#fff', letterSpacing: 0.5, fontSize: compact ? 12 : undefined }]}>SAVE PROFILE</Text></>
+          <>
+            <Ionicons name={isDirty ? 'cloud-upload-outline' : 'checkmark-circle-outline'} size={compact ? 17 : 20} color={isDirty ? '#fff' : colors.textMuted} />
+            <Text style={[typography.label, { color: isDirty ? '#fff' : colors.textMuted, letterSpacing: 0.5, fontSize: compact ? 12 : undefined }]}>
+              {isDirty ? 'SAVE PROFILE' : 'NO CHANGES TO SAVE'}
+            </Text>
+          </>
         )}
       </Pressable>
     </SectionCard>

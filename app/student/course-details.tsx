@@ -27,12 +27,19 @@ import DashboardLayout, {
 // ─────────────────────────────────────────────────────────────────────────────
 // Firebase
 // ─────────────────────────────────────────────────────────────────────────────
-import { db } from "../../constants/firebase";
+import { auth, db } from "../../constants/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import {
+  getSavedItemsErrorMessage,
+  isItemSaved,
+  saveItem,
+} from "../../services/savedItemsService";
 import { doc, getDoc } from "firebase/firestore";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
+
 type Breakpoint = "mobile" | "tablet" | "desktop";
 
 type Course = {
@@ -282,6 +289,32 @@ function CourseDetailsContent() {
   const isMobile = breakpoint === "mobile";
   const isDesktop = breakpoint === "desktop";
 
+  // Keep the bookmark state synced with this Firebase account.
+  useEffect(() => {
+    let active = true;
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!active) return;
+
+      if (!user || !courseId) {
+        setSaved(false);
+        return;
+      }
+
+      try {
+        const exists = await isItemSaved("course", courseId);
+        if (active) setSaved(exists);
+      } catch (saveStateError) {
+        console.warn("Could not read saved course state:", saveStateError);
+      }
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [courseId]);
+
   // Fetch full course data
   useEffect(() => {
     if (!courseId) {
@@ -362,7 +395,62 @@ function CourseDetailsContent() {
 
   const handleApply = () => setApplyModalVisible(true);
   const handleCloseApplyModal = () => setApplyModalVisible(false);
-  const handleSave = () => setSaved(!saved);
+
+  const handleSave = async () => {
+    if (!course) return;
+
+    if (!auth.currentUser) {
+      Alert.alert(
+        "Sign in required",
+        "Please sign in before saving a course so it can sync across your devices.",
+      );
+      return;
+    }
+
+    try {
+      if (await isItemSaved("course", course.id)) {
+        setSaved(true);
+        Alert.alert(
+          "Already saved",
+          `${course.title} is already available in your Saved Courses.`,
+          [
+            { text: "View Saved", onPress: () => router.push("/student/saved") },
+            { text: "OK" },
+          ],
+        );
+        return;
+      }
+
+      await saveItem("course", {
+        id: course.id,
+        title: course.title,
+        institution: institution?.name ?? "Unknown Institution",
+        institutionId: course.institutionId,
+        facultyId: course.facultyId,
+        duration: course.duration,
+        fee: `BWP ${(course.tuitionPerYear ?? 25000).toLocaleString()}/yr`,
+        level: course.qualificationLevel,
+        requiredPoints: course.requiredPoints,
+      });
+
+      setSaved(true);
+      Alert.alert(
+        "Course saved",
+        `${course.title} has been saved to your account and will be available on your other devices.`,
+        [
+          { text: "View Saved", onPress: () => router.push("/student/saved") },
+          { text: "Done" },
+        ],
+      );
+    } catch (saveError) {
+      console.error("Failed to save course:", saveError);
+      Alert.alert(
+        "Could not save course",
+        getSavedItemsErrorMessage(saveError),
+      );
+    }
+  };
+
   const handleShare = () => Alert.alert("Share", `Sharing ${course?.title}`);
 
   if (loading) {

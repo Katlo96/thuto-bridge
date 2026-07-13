@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,13 +7,19 @@ import {
   Platform,
   Alert,
   type ViewStyle,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../constants/firebase';
-import { StudentMenuProvider } from '../../components/student/StudentMenu';
-import ApplyRedirectModal from '../../components/student/ApplyRedirectModal';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { router, useLocalSearchParams } from "expo-router";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../../constants/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import {
+  getSavedItemsErrorMessage,
+  isItemSaved,
+  saveItem,
+} from "../../services/savedItemsService";
+import { StudentMenuProvider } from "../../components/student/StudentMenu";
+import ApplyRedirectModal from "../../components/student/ApplyRedirectModal";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DashboardLayout & design tokens
@@ -23,13 +29,14 @@ import DashboardLayout, {
   typography,
   radii,
   useTheme,
-} from '../../components/student/DashboardLayout';
+} from "../../components/student/DashboardLayout";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
-type Breakpoint = 'mobile' | 'tablet' | 'desktop';
+type Breakpoint = "mobile" | "tablet" | "desktop";
 type IconName = keyof typeof Ionicons.glyphMap;
+
 
 type ScholarshipDetails = {
   id: string;
@@ -38,9 +45,9 @@ type ScholarshipDetails = {
   amount: string;
   deadline: string;
   daysLeft: number;
-  category: 'Local' | 'International';
+  category: "Local" | "International";
   status: string;
-  statusVariant: 'good' | 'warning' | 'info' | 'neutral';
+  statusVariant: "good" | "warning" | "info" | "neutral";
   description: string;
   eligibility: string[];
   howToApply: string[];
@@ -51,17 +58,17 @@ type ScholarshipDetails = {
 // for a given scholarship document. Add `howToApply` / `documents` arrays
 // to your Firestore scholarship docs to override these with real data.
 const DEFAULT_HOW_TO_APPLY = [
-  'Review the eligibility requirements carefully before applying.',
-  'Prepare all required documents listed below.',
-  'Complete the application form provided by the scholarship provider.',
-  'Submit your application before the stated deadline.',
+  "Review the eligibility requirements carefully before applying.",
+  "Prepare all required documents listed below.",
+  "Complete the application form provided by the scholarship provider.",
+  "Submit your application before the stated deadline.",
 ];
 
 const DEFAULT_DOCUMENTS = [
-  'National ID or passport copy',
-  'Academic transcript',
-  'Proof of admission / enrolment',
-  'Personal statement or motivation letter',
+  "National ID or passport copy",
+  "Academic transcript",
+  "Proof of admission / enrolment",
+  "Personal statement or motivation letter",
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,18 +82,22 @@ const DEFAULT_DOCUMENTS = [
  */
 function toSafeDate(value: unknown): Date | null {
   if (!value) return null;
-  if (typeof value === 'object' && value !== null && 'toDate' in (value as any)) {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toDate" in (value as any)
+  ) {
     try {
       return (value as any).toDate();
     } catch {
       return null;
     }
   }
-  if (typeof value === 'number') {
+  if (typeof value === "number") {
     const d = new Date(value);
     return isNaN(d.getTime()) ? null : d;
   }
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const d = new Date(value);
     return isNaN(d.getTime()) ? null : d;
   }
@@ -94,38 +105,50 @@ function toSafeDate(value: unknown): Date | null {
 }
 
 function formatDeadline(date: Date | null): string {
-  if (!date) return 'TBA';
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
+  if (!date) return "TBA";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
 }
 
 function toStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((v) => typeof v === 'string') : [];
+  return Array.isArray(value) ? value.filter((v) => typeof v === "string") : [];
 }
 
 // Maps the same 'good' | 'warning' | 'neutral' | 'info' variant used on the
 // list screen into the statusVariant used here (they're identical — this
 // just keeps the mapping explicit/obvious at the call site).
-function toStatusVariant(variant: string | undefined): ScholarshipDetails['statusVariant'] {
-  if (variant === 'good' || variant === 'warning' || variant === 'info') return variant;
-  return 'neutral';
+function toStatusVariant(
+  variant: string | undefined,
+): ScholarshipDetails["statusVariant"] {
+  if (variant === "good" || variant === "warning" || variant === "info")
+    return variant;
+  return "neutral";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Elevation helper
 // ─────────────────────────────────────────────────────────────────────────────
-function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md'): ViewStyle {
+function useElevation(intensity: "sm" | "md" | "lg" = "md"): ViewStyle {
   return useMemo<ViewStyle>(() => {
     const opacity = 0.28;
-    const radius = intensity === 'sm' ? 6 : intensity === 'md' ? 14 : 22;
-    const offsetY = intensity === 'sm' ? 2 : intensity === 'md' ? 5 : 10;
+    const radius = intensity === "sm" ? 6 : intensity === "md" ? 14 : 22;
+    const offsetY = intensity === "sm" ? 2 : intensity === "md" ? 5 : 10;
     return (Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: offsetY }, shadowOpacity: opacity, shadowRadius: radius },
-      android: { elevation: intensity === 'sm' ? 3 : intensity === 'md' ? 6 : 12 },
-      web: { boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})` } as any,
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: offsetY },
+        shadowOpacity: opacity,
+        shadowRadius: radius,
+      },
+      android: {
+        elevation: intensity === "sm" ? 3 : intensity === "md" ? 6 : 12,
+      },
+      web: {
+        boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})`,
+      } as any,
       default: {},
     }) ?? {}) as ViewStyle;
   }, [intensity]);
@@ -134,17 +157,33 @@ function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md'): ViewStyle {
 // ─────────────────────────────────────────────────────────────────────────────
 // Variant colour helper
 // ─────────────────────────────────────────────────────────────────────────────
-function useVariantColors(variant: ScholarshipDetails['statusVariant']) {
+function useVariantColors(variant: ScholarshipDetails["statusVariant"]) {
   const colors = useTheme();
   switch (variant) {
-    case 'good':
-      return { bg: `${colors.success}18`, border: `${colors.success}44`, text: colors.success };
-    case 'warning':
-      return { bg: `${colors.warning}18`, border: `${colors.warning}44`, text: colors.warning };
-    case 'info':
-      return { bg: `${colors.primary}18`, border: `${colors.primary}44`, text: colors.primary };
+    case "good":
+      return {
+        bg: `${colors.success}18`,
+        border: `${colors.success}44`,
+        text: colors.success,
+      };
+    case "warning":
+      return {
+        bg: `${colors.warning}18`,
+        border: `${colors.warning}44`,
+        text: colors.warning,
+      };
+    case "info":
+      return {
+        bg: `${colors.primary}18`,
+        border: `${colors.primary}44`,
+        text: colors.primary,
+      };
     default:
-      return { bg: colors.surfaceAlt, border: colors.border, text: colors.textSecondary };
+      return {
+        bg: colors.surfaceAlt,
+        border: colors.border,
+        text: colors.textSecondary,
+      };
   }
 }
 
@@ -154,12 +193,12 @@ function useVariantColors(variant: ScholarshipDetails['statusVariant']) {
 function Card({
   children,
   style,
-  intensity = 'md',
+  intensity = "md",
   accentColor,
 }: {
   children: React.ReactNode;
   style?: ViewStyle;
-  intensity?: 'sm' | 'md' | 'lg';
+  intensity?: "sm" | "md" | "lg";
   accentColor?: string;
 }) {
   const elevation = useElevation(intensity);
@@ -167,12 +206,20 @@ function Card({
   return (
     <View
       style={[
-        { backgroundColor: colors.card, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+        {
+          backgroundColor: colors.card,
+          borderRadius: radii.xxl,
+          borderWidth: 1,
+          borderColor: colors.border,
+          overflow: "hidden",
+        },
         elevation,
         style,
       ]}
     >
-      {accentColor && <View style={{ height: 3, backgroundColor: accentColor }} />}
+      {accentColor && (
+        <View style={{ height: 3, backgroundColor: accentColor }} />
+      )}
       {children}
     </View>
   );
@@ -181,16 +228,35 @@ function Card({
 // ─────────────────────────────────────────────────────────────────────────────
 // SectionHeader
 // ─────────────────────────────────────────────────────────────────────────────
-function SectionHeader({ title, icon, label }: { title: string; icon?: IconName; label?: string }) {
+function SectionHeader({
+  title,
+  icon,
+  label,
+}: {
+  title: string;
+  icon?: IconName;
+  label?: string;
+}) {
   const colors = useTheme();
   return (
     <View style={{ marginBottom: spacing(5) }}>
       {label && (
-        <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(2) }]}>
+        <Text
+          style={[
+            typography.caption,
+            {
+              color: colors.textMuted,
+              letterSpacing: 0.5,
+              marginBottom: spacing(2),
+            },
+          ]}
+        >
           {label.toUpperCase()}
         </Text>
       )}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
+      <View
+        style={{ flexDirection: "row", alignItems: "center", gap: spacing(3) }}
+      >
         {icon && (
           <View
             style={{
@@ -198,14 +264,16 @@ function SectionHeader({ title, icon, label }: { title: string; icon?: IconName;
               height: 36,
               borderRadius: radii.lg,
               backgroundColor: `${colors.primary}22`,
-              alignItems: 'center',
-              justifyContent: 'center',
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             <Ionicons name={icon} size={18} color={colors.primary} />
           </View>
         )}
-        <Text style={[typography.h2, { color: colors.textPrimary, flex: 1 }]}>{title}</Text>
+        <Text style={[typography.h2, { color: colors.textPrimary, flex: 1 }]}>
+          {title}
+        </Text>
       </View>
     </View>
   );
@@ -220,9 +288,32 @@ function BulletList({ items, color }: { items: string[]; color?: string }) {
   return (
     <View style={{ gap: spacing(3) }}>
       {items.map((item, i) => (
-        <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(3) }}>
-          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: c, marginTop: 8, flexShrink: 0 }} />
-          <Text style={[typography.body, { color: colors.textSecondary, flex: 1, lineHeight: 22 }]}>{item}</Text>
+        <View
+          key={i}
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-start",
+            gap: spacing(3),
+          }}
+        >
+          <View
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: 4,
+              backgroundColor: c,
+              marginTop: 8,
+              flexShrink: 0,
+            }}
+          />
+          <Text
+            style={[
+              typography.body,
+              { color: colors.textSecondary, flex: 1, lineHeight: 22 },
+            ]}
+          >
+            {item}
+          </Text>
         </View>
       ))}
     </View>
@@ -237,7 +328,14 @@ function NumberedList({ items }: { items: string[] }) {
   return (
     <View style={{ gap: spacing(4) }}>
       {items.map((item, i) => (
-        <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing(4) }}>
+        <View
+          key={i}
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-start",
+            gap: spacing(4),
+          }}
+        >
           <View
             style={{
               width: 30,
@@ -246,15 +344,29 @@ function NumberedList({ items }: { items: string[] }) {
               backgroundColor: `${colors.primary}22`,
               borderWidth: 1,
               borderColor: `${colors.primary}44`,
-              alignItems: 'center',
-              justifyContent: 'center',
+              alignItems: "center",
+              justifyContent: "center",
               flexShrink: 0,
               marginTop: 2,
             }}
           >
-            <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{i + 1}</Text>
+            <Text
+              style={[
+                typography.caption,
+                { color: colors.primary, fontWeight: "700" },
+              ]}
+            >
+              {i + 1}
+            </Text>
           </View>
-          <Text style={[typography.body, { color: colors.textSecondary, flex: 1, lineHeight: 22 }]}>{item}</Text>
+          <Text
+            style={[
+              typography.body,
+              { color: colors.textSecondary, flex: 1, lineHeight: 22 },
+            ]}
+          >
+            {item}
+          </Text>
         </View>
       ))}
     </View>
@@ -266,7 +378,9 @@ function NumberedList({ items }: { items: string[] }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function DocumentChecklist({ items }: { items: string[] }) {
   const colors = useTheme();
-  const [checked, setChecked] = useState<boolean[]>(Array(items.length).fill(false));
+  const [checked, setChecked] = useState<boolean[]>(
+    Array(items.length).fill(false),
+  );
 
   // Keep checklist state in sync if the underlying items list changes
   // (e.g. navigating from one scholarship's details straight to another's).
@@ -293,12 +407,14 @@ function DocumentChecklist({ items }: { items: string[] }) {
           accessibilityRole="checkbox"
           accessibilityState={{ checked: checked[i] }}
           style={({ pressed }) => ({
-            flexDirection: 'row' as const,
-            alignItems: 'center' as const,
+            flexDirection: "row" as const,
+            alignItems: "center" as const,
             gap: spacing(3),
             padding: spacing(3),
             borderRadius: radii.lg,
-            backgroundColor: checked[i] ? `${colors.success}14` : colors.surfaceAlt,
+            backgroundColor: checked[i]
+              ? `${colors.success}14`
+              : colors.surfaceAlt,
             borderWidth: 1,
             borderColor: checked[i] ? `${colors.success}33` : colors.border,
             opacity: pressed ? 0.85 : 1,
@@ -312,8 +428,8 @@ function DocumentChecklist({ items }: { items: string[] }) {
               backgroundColor: checked[i] ? colors.success : colors.surface,
               borderWidth: 2,
               borderColor: checked[i] ? colors.success : colors.border,
-              alignItems: 'center',
-              justifyContent: 'center',
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             {checked[i] && <Ionicons name="checkmark" size={13} color="#fff" />}
@@ -321,19 +437,41 @@ function DocumentChecklist({ items }: { items: string[] }) {
           <Text
             style={[
               typography.body,
-              { color: checked[i] ? colors.textPrimary : colors.textSecondary, flex: 1, textDecorationLine: checked[i] ? 'line-through' : 'none' },
+              {
+                color: checked[i] ? colors.textPrimary : colors.textSecondary,
+                flex: 1,
+                textDecorationLine: checked[i] ? "line-through" : "none",
+              },
             ]}
           >
             {item}
           </Text>
         </Pressable>
       ))}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginTop: spacing(1) }}>
-        <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.surfaceAlt, overflow: 'hidden' }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: spacing(2),
+          marginTop: spacing(1),
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: colors.surfaceAlt,
+            overflow: "hidden",
+          }}
+        >
           <View
             style={{
-              width: items.length > 0 ? `${(doneCount / items.length) * 100}%` : '0%',
-              height: '100%',
+              width:
+                items.length > 0
+                  ? `${(doneCount / items.length) * 100}%`
+                  : "0%",
+              height: "100%",
               backgroundColor: colors.success,
             }}
           />
@@ -352,33 +490,48 @@ function DocumentChecklist({ items }: { items: string[] }) {
 function DesktopSidebar({
   data,
   saved,
+  saving,
   onApply,
   onToggleSave,
 }: {
   data: ScholarshipDetails;
   saved: boolean;
+  saving: boolean;
   onApply: () => void;
   onToggleSave: () => void;
 }) {
   const colors = useTheme();
-  const elevation = useElevation('md');
+  const elevation = useElevation("md");
   const vc = useVariantColors(data.statusVariant);
   const isUrgent = data.daysLeft <= 7 && data.daysLeft > 0;
 
   return (
     <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
       {/* CTA card */}
-      <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }, elevation]}>
+      <View
+        style={[
+          {
+            backgroundColor: colors.surface,
+            borderRadius: radii.xxl,
+            borderWidth: 1,
+            borderColor: colors.border,
+            overflow: "hidden",
+          },
+          elevation,
+        ]}
+      >
         <View style={{ height: 3, backgroundColor: vc.text }} />
         <View style={{ padding: spacing(6), gap: spacing(3) }}>
-          <Text style={[typography.h2, { color: colors.textPrimary }]}>Take Action</Text>
+          <Text style={[typography.h2, { color: colors.textPrimary }]}>
+            Take Action
+          </Text>
 
           <Pressable
             onPress={onApply}
             style={({ pressed }) => ({
-              flexDirection: 'row' as const,
-              alignItems: 'center' as const,
-              justifyContent: 'center' as const,
+              flexDirection: "row" as const,
+              alignItems: "center" as const,
+              justifyContent: "center" as const,
               gap: spacing(2),
               paddingVertical: spacing(4),
               borderRadius: radii.lg,
@@ -388,15 +541,16 @@ function DesktopSidebar({
             })}
           >
             <Ionicons name="rocket-outline" size={18} color="#fff" />
-            <Text style={[typography.label, { color: '#fff' }]}>Apply Now</Text>
+            <Text style={[typography.label, { color: "#fff" }]}>Apply Now</Text>
           </Pressable>
 
           <Pressable
+            disabled={saving}
             onPress={onToggleSave}
             style={({ pressed }) => ({
-              flexDirection: 'row' as const,
-              alignItems: 'center' as const,
-              justifyContent: 'center' as const,
+              flexDirection: "row" as const,
+              alignItems: "center" as const,
+              justifyContent: "center" as const,
               gap: spacing(2),
               paddingVertical: spacing(3),
               borderRadius: radii.lg,
@@ -406,34 +560,69 @@ function DesktopSidebar({
               opacity: pressed ? 0.88 : 1,
             })}
           >
-            <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={17} color={colors.primary} />
-            <Text style={[typography.label, { color: colors.primary }]}>{saved ? 'Saved' : 'Save for Later'}</Text>
+            <Ionicons
+              name={saved ? "bookmark" : "bookmark-outline"}
+              size={17}
+              color={colors.primary}
+            />
+            <Text style={[typography.label, { color: colors.primary }]}>
+              {saving ? "Saving…" : saved ? "Saved" : "Save for Later"}
+            </Text>
           </Pressable>
         </View>
       </View>
 
       {/* Quick facts */}
-      <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing(6), gap: spacing(4) }, elevation]}>
-        <Text style={[typography.h2, { color: colors.textPrimary }]}>Quick Facts</Text>
+      <View
+        style={[
+          {
+            backgroundColor: colors.surface,
+            borderRadius: radii.xxl,
+            borderWidth: 1,
+            borderColor: colors.border,
+            padding: spacing(6),
+            gap: spacing(4),
+          },
+          elevation,
+        ]}
+      >
+        <Text style={[typography.h2, { color: colors.textPrimary }]}>
+          Quick Facts
+        </Text>
 
         {[
-          { icon: 'cash-outline' as const, label: 'Award Amount', value: data.amount },
-          { icon: 'calendar-outline' as const, label: 'Deadline', value: data.deadline },
-          { icon: 'time-outline' as const, label: 'Days Remaining', value: data.daysLeft <= 0 ? 'Closed' : `${data.daysLeft} days` },
           {
-            icon: data.category === 'Local' ? ('location-outline' as const) : ('globe-outline' as const),
-            label: 'Category',
+            icon: "cash-outline" as const,
+            label: "Award Amount",
+            value: data.amount,
+          },
+          {
+            icon: "calendar-outline" as const,
+            label: "Deadline",
+            value: data.deadline,
+          },
+          {
+            icon: "time-outline" as const,
+            label: "Days Remaining",
+            value: data.daysLeft <= 0 ? "Closed" : `${data.daysLeft} days`,
+          },
+          {
+            icon:
+              data.category === "Local"
+                ? ("location-outline" as const)
+                : ("globe-outline" as const),
+            label: "Category",
             value: data.category,
           },
         ].map(({ icon, label, value }, idx, arr) => {
-          const rowIsUrgent = label === 'Days Remaining' && isUrgent;
+          const rowIsUrgent = label === "Days Remaining" && isUrgent;
           const isLast = idx === arr.length - 1;
           return (
             <View
               key={label}
               style={{
-                flexDirection: 'row',
-                alignItems: 'center',
+                flexDirection: "row",
+                alignItems: "center",
                 gap: spacing(3),
                 paddingVertical: spacing(2),
                 borderBottomWidth: isLast ? 0 : 1,
@@ -445,16 +634,35 @@ function DesktopSidebar({
                   width: 36,
                   height: 36,
                   borderRadius: radii.md,
-                  backgroundColor: rowIsUrgent ? `${colors.danger}14` : `${colors.primary}14`,
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  backgroundColor: rowIsUrgent
+                    ? `${colors.danger}14`
+                    : `${colors.primary}14`,
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                <Ionicons name={icon} size={16} color={rowIsUrgent ? colors.danger : colors.primary} />
+                <Ionicons
+                  name={icon}
+                  size={16}
+                  color={rowIsUrgent ? colors.danger : colors.primary}
+                />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[typography.caption, { color: colors.textSecondary }]}>{label}</Text>
-                <Text style={[typography.bodyStrong, { color: rowIsUrgent ? colors.danger : colors.textPrimary, marginTop: 2 }]} numberOfLines={1}>
+                <Text
+                  style={[typography.caption, { color: colors.textSecondary }]}
+                >
+                  {label}
+                </Text>
+                <Text
+                  style={[
+                    typography.bodyStrong,
+                    {
+                      color: rowIsUrgent ? colors.danger : colors.textPrimary,
+                      marginTop: 2,
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
                   {value}
                 </Text>
               </View>
@@ -471,22 +679,40 @@ function DesktopSidebar({
           borderRadius: radii.xl,
           borderWidth: 1,
           borderColor: vc.border,
-          flexDirection: 'row',
-          alignItems: 'center',
+          flexDirection: "row",
+          alignItems: "center",
           gap: spacing(3),
         }}
       >
         <Ionicons name="ribbon-outline" size={20} color={vc.text} />
         <View style={{ flex: 1 }}>
-          <Text style={[typography.caption, { color: colors.textSecondary }]}>Your Status</Text>
-          <Text style={[typography.bodyStrong, { color: vc.text }]}>{data.status}</Text>
+          <Text style={[typography.caption, { color: colors.textSecondary }]}>
+            Your Status
+          </Text>
+          <Text style={[typography.bodyStrong, { color: vc.text }]}>
+            {data.status}
+          </Text>
         </View>
       </View>
 
       {/* Tip */}
-      <View style={{ padding: spacing(4), backgroundColor: `${colors.primary}14`, borderRadius: radii.xl, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
-        <Text style={[typography.caption, { color: colors.textSecondary, lineHeight: 18 }]}>
-          💡 Prepare all documents early and check eligibility carefully before submitting your application.
+      <View
+        style={{
+          padding: spacing(4),
+          backgroundColor: `${colors.primary}14`,
+          borderRadius: radii.xl,
+          borderLeftWidth: 3,
+          borderLeftColor: colors.primary,
+        }}
+      >
+        <Text
+          style={[
+            typography.caption,
+            { color: colors.textSecondary, lineHeight: 18 },
+          ]}
+        >
+          💡 Prepare all documents early and check eligibility carefully before
+          submitting your application.
         </Text>
       </View>
     </View>
@@ -518,12 +744,12 @@ function StateScreen({
   spinning?: boolean;
 }) {
   const colors = useTheme();
-  const elevation = useElevation('sm');
+  const elevation = useElevation("sm");
   return (
     <View
       style={[
         {
-          alignItems: 'center',
+          alignItems: "center",
           padding: spacing(10),
           backgroundColor: colors.card,
           borderRadius: radii.xxl,
@@ -541,15 +767,32 @@ function StateScreen({
           backgroundColor: iconBg,
           borderWidth: 1,
           borderColor: colors.border,
-          alignItems: 'center',
-          justifyContent: 'center',
+          alignItems: "center",
+          justifyContent: "center",
           marginBottom: spacing(5),
         }}
       >
         <Ionicons name={icon} size={32} color={iconColor} />
       </View>
-      <Text style={[typography.h2, { color: colors.textPrimary, textAlign: 'center' }]}>{title}</Text>
-      <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2), textAlign: 'center', maxWidth: 340 }]}>
+      <Text
+        style={[
+          typography.h2,
+          { color: colors.textPrimary, textAlign: "center" },
+        ]}
+      >
+        {title}
+      </Text>
+      <Text
+        style={[
+          typography.body,
+          {
+            color: colors.textSecondary,
+            marginTop: spacing(2),
+            textAlign: "center",
+            maxWidth: 340,
+          },
+        ]}
+      >
         {message}
       </Text>
       {actionLabel && onAction && (
@@ -557,8 +800,8 @@ function StateScreen({
           onPress={onAction}
           style={({ pressed }) => ({
             marginTop: spacing(6),
-            flexDirection: 'row' as const,
-            alignItems: 'center' as const,
+            flexDirection: "row" as const,
+            alignItems: "center" as const,
             gap: spacing(2),
             paddingHorizontal: spacing(6),
             paddingVertical: spacing(4),
@@ -568,7 +811,9 @@ function StateScreen({
           })}
         >
           {actionIcon && <Ionicons name={actionIcon} size={17} color="#fff" />}
-          <Text style={[typography.label, { color: '#fff' }]}>{actionLabel}</Text>
+          <Text style={[typography.label, { color: "#fff" }]}>
+            {actionLabel}
+          </Text>
         </Pressable>
       )}
     </View>
@@ -582,7 +827,7 @@ function ScholarshipDetailsContent() {
   const { width } = useWindowDimensions();
   const colors = useTheme();
   const params = useLocalSearchParams<{ id?: string }>();
-  const scholarshipId = typeof params.id === 'string' ? params.id : undefined;
+  const scholarshipId = typeof params.id === "string" ? params.id : undefined;
 
   const [data, setData] = useState<ScholarshipDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -608,7 +853,7 @@ function ScholarshipDetailsContent() {
       setErrorMessage(null);
 
       try {
-        const ref = doc(db, 'scholarships', scholarshipId);
+        const ref = doc(db, "scholarships", scholarshipId);
         const snap = await getDoc(ref);
 
         if (!snap.exists()) {
@@ -622,33 +867,44 @@ function ScholarshipDetailsContent() {
         const raw = snap.data() as Record<string, any>;
         const deadlineDate = toSafeDate(raw.deadline);
         const daysLeft = deadlineDate
-          ? Math.ceil((deadlineDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+          ? Math.ceil(
+              (deadlineDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+            )
           : 9999;
 
         const mapped: ScholarshipDetails = {
           id: snap.id,
-          title: typeof raw.title === 'string' && raw.title.trim() ? raw.title : 'Untitled Scholarship',
-          providerName: raw.provider ?? raw.providerName ?? 'Unknown Provider',
-          amount: typeof raw.amount === 'string' ? raw.amount : 'Amount varies',
+          title:
+            typeof raw.title === "string" && raw.title.trim()
+              ? raw.title
+              : "Untitled Scholarship",
+          providerName: raw.provider ?? raw.providerName ?? "Unknown Provider",
+          amount: typeof raw.amount === "string" ? raw.amount : "Amount varies",
           deadline: formatDeadline(deadlineDate),
           daysLeft,
-          category: raw.category === 'International' ? 'International' : 'Local',
-          status: typeof raw.status === 'string' ? raw.status : 'Open',
+          category:
+            raw.category === "International" ? "International" : "Local",
+          status: typeof raw.status === "string" ? raw.status : "Open",
           statusVariant: toStatusVariant(raw.variant ?? raw.statusVariant),
-          description: typeof raw.description === 'string' ? raw.description : '',
+          description:
+            typeof raw.description === "string" ? raw.description : "",
           eligibility: toStringArray(raw.eligibility ?? raw.requirements),
-          howToApply: toStringArray(raw.howToApply).length ? toStringArray(raw.howToApply) : DEFAULT_HOW_TO_APPLY,
-          documents: toStringArray(raw.documents).length ? toStringArray(raw.documents) : DEFAULT_DOCUMENTS,
+          howToApply: toStringArray(raw.howToApply).length
+            ? toStringArray(raw.howToApply)
+            : DEFAULT_HOW_TO_APPLY,
+          documents: toStringArray(raw.documents).length
+            ? toStringArray(raw.documents)
+            : DEFAULT_DOCUMENTS,
         };
 
         if (!cancelled) setData(mapped);
       } catch (error: any) {
-        console.error('Failed to fetch scholarship details:', error);
+        console.error("Failed to fetch scholarship details:", error);
         if (!cancelled) {
           setErrorMessage(
-            error?.code === 'permission-denied'
+            error?.code === "permission-denied"
               ? "You don't have permission to view this scholarship. Please make sure you're signed in."
-              : 'Something went wrong while loading this scholarship. Please check your connection and try again.'
+              : "Something went wrong while loading this scholarship. Please check your connection and try again.",
           );
         }
       } finally {
@@ -663,39 +919,124 @@ function ScholarshipDetailsContent() {
   }, [scholarshipId, refreshKey]);
 
   const breakpoint = useMemo<Breakpoint>(() => {
-    if (width < 768) return 'mobile';
-    if (width < 1024) return 'tablet';
-    return 'desktop';
+    if (width < 768) return "mobile";
+    if (width < 1024) return "tablet";
+    return "desktop";
   }, [width]);
 
-  const isMobile = breakpoint === 'mobile';
-  const isDesktop = breakpoint === 'desktop';
+  const isMobile = breakpoint === "mobile";
+  const isDesktop = breakpoint === "desktop";
 
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
 
-  const vc = useVariantColors(data?.statusVariant ?? 'neutral');
-  const mobileStickyElevation = useElevation('lg');
+  const vc = useVariantColors(data?.statusVariant ?? "neutral");
+  const mobileStickyElevation = useElevation("lg");
 
   const handleApply = useCallback(() => setApplyOpen(true), []);
 
+  useEffect(() => {
+    let active = true;
 
-  const handleToggleSave = useCallback(() => {
-    setSaved((p) => !p);
-    Alert.alert(
-      saved ? 'Removed from saved' : 'Saved!',
-      saved ? 'Scholarship removed from your saved list.' : 'Scholarship added to your saved list.'
-    );
-  }, [saved]);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!active) return;
+
+      if (!user || !data?.id) {
+        setSaved(false);
+        return;
+      }
+
+      try {
+        const exists = await isItemSaved("scholarship", data.id);
+        if (active) setSaved(exists);
+      } catch (error) {
+        console.warn("Could not restore scholarship saved state:", error);
+      }
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [data?.id]);
+
+  const handleToggleSave = useCallback(async () => {
+    if (!data || saving) return;
+
+    if (!auth.currentUser) {
+      Alert.alert(
+        "Sign in required",
+        "Please sign in before saving a scholarship so it can sync across your devices.",
+      );
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      if (await isItemSaved("scholarship", data.id)) {
+        setSaved(true);
+        Alert.alert(
+          "Already saved",
+          `${data.title} is already available in your Saved Scholarships.`,
+          [
+            {
+              text: "View Saved",
+              onPress: () => router.push("/student/saved"),
+            },
+            { text: "OK" },
+          ],
+        );
+        return;
+      }
+
+      await saveItem("scholarship", {
+        id: data.id,
+        title: data.title,
+        provider: data.providerName,
+        amount: data.amount,
+        deadline: data.deadline,
+        eligibility: data.eligibility.join(" • "),
+        description: data.description,
+        category: data.category,
+        status: data.status,
+      });
+
+      setSaved(true);
+      Alert.alert(
+        "Scholarship saved",
+        `${data.title} has been saved to your account and will be available on your other devices.`,
+        [
+          { text: "View Saved", onPress: () => router.push("/student/saved") },
+          { text: "Done" },
+        ],
+      );
+    } catch (error) {
+      console.error("Failed to save scholarship:", error);
+      Alert.alert(
+        "Could not save scholarship",
+        getSavedItemsErrorMessage(error),
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [data, saving]);
 
   const handleRetry = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   // ── Loading state ───────────────────────────────────────────────────────
   if (loading) {
     return (
-      <DashboardLayout title="Scholarship Details" subtitle="Loading..." showPointsCard={false}>
-        <View style={{ alignItems: 'center', paddingVertical: spacing(14) }}>
-          <Text style={[typography.body, { color: colors.textSecondary }]}>Loading scholarship details…</Text>
+      <DashboardLayout
+        title="Scholarship Details"
+        subtitle="Loading..."
+        showPointsCard={false}
+      >
+        <View style={{ alignItems: "center", paddingVertical: spacing(14) }}>
+          <Text style={[typography.body, { color: colors.textSecondary }]}>
+            Loading scholarship details…
+          </Text>
         </View>
       </DashboardLayout>
     );
@@ -704,7 +1045,11 @@ function ScholarshipDetailsContent() {
   // ── Error state (fetch failed) ──────────────────────────────────────────
   if (errorMessage) {
     return (
-      <DashboardLayout title="Scholarship Details" subtitle="Something went wrong" showPointsCard={false}>
+      <DashboardLayout
+        title="Scholarship Details"
+        subtitle="Something went wrong"
+        showPointsCard={false}
+      >
         <StateScreen
           icon="alert-circle-outline"
           iconColor={colors.danger}
@@ -722,7 +1067,11 @@ function ScholarshipDetailsContent() {
   // ── Not found state ─────────────────────────────────────────────────────
   if (notFound || !data) {
     return (
-      <DashboardLayout title="Scholarship Details" subtitle="Not found" showPointsCard={false}>
+      <DashboardLayout
+        title="Scholarship Details"
+        subtitle="Not found"
+        showPointsCard={false}
+      >
         <StateScreen
           icon="search-outline"
           iconColor={colors.textMuted}
@@ -741,10 +1090,22 @@ function ScholarshipDetailsContent() {
 
   // ── Hero card ──────────────────────────────────────────────────────────────
   const HeroCard = (
-    <Card intensity="lg" accentColor={vc.text} style={{ marginBottom: spacing(7) }}>
-      <View style={{ padding: isMobile ? spacing(5) : spacing(7), gap: spacing(6) }}>
+    <Card
+      intensity="lg"
+      accentColor={vc.text}
+      style={{ marginBottom: spacing(7) }}
+    >
+      <View
+        style={{ padding: isMobile ? spacing(5) : spacing(7), gap: spacing(6) }}
+      >
         {/* Icon + title */}
-        <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: spacing(5) }}>
+        <View
+          style={{
+            flexDirection: isMobile ? "column" : "row",
+            alignItems: isMobile ? "flex-start" : "center",
+            gap: spacing(5),
+          }}
+        >
           <View
             style={{
               width: isMobile ? 64 : 76,
@@ -753,20 +1114,53 @@ function ScholarshipDetailsContent() {
               backgroundColor: vc.bg,
               borderWidth: 1,
               borderColor: vc.border,
-              alignItems: 'center',
-              justifyContent: 'center',
+              alignItems: "center",
+              justifyContent: "center",
               flexShrink: 0,
             }}
           >
-            <Ionicons name="ribbon-outline" size={isMobile ? 28 : 34} color={vc.text} />
+            <Ionicons
+              name="ribbon-outline"
+              size={isMobile ? 28 : 34}
+              color={vc.text}
+            />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[typography.hero, { color: colors.textPrimary, fontSize: isMobile ? 22 : 32, lineHeight: isMobile ? 28 : 38 }]}>
+            <Text
+              style={[
+                typography.hero,
+                {
+                  color: colors.textPrimary,
+                  fontSize: isMobile ? 22 : 32,
+                  lineHeight: isMobile ? 28 : 38,
+                },
+              ]}
+            >
               {data.title}
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginTop: spacing(2) }}>
-              <Ionicons name="business-outline" size={14} color={colors.primary} />
-              <Text style={[typography.subtitle, { color: colors.textSecondary, fontSize: isMobile ? 13 : undefined }]} numberOfLines={1}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing(2),
+                marginTop: spacing(2),
+              }}
+            >
+              <Ionicons
+                name="business-outline"
+                size={14}
+                color={colors.primary}
+              />
+              <Text
+                style={[
+                  typography.subtitle,
+                  {
+                    color: colors.textSecondary,
+                    fontSize: isMobile ? 13 : undefined,
+                  },
+                ]}
+                numberOfLines={1}
+              >
                 {data.providerName}
               </Text>
             </View>
@@ -774,11 +1168,13 @@ function ScholarshipDetailsContent() {
         </View>
 
         {/* Status badges row */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) }}>
+        <View
+          style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing(2) }}
+        >
           <View
             style={{
-              flexDirection: 'row',
-              alignItems: 'center',
+              flexDirection: "row",
+              alignItems: "center",
               gap: spacing(2),
               paddingHorizontal: spacing(3),
               paddingVertical: spacing(2),
@@ -789,12 +1185,19 @@ function ScholarshipDetailsContent() {
             }}
           >
             <Ionicons name="ribbon-outline" size={13} color={vc.text} />
-            <Text style={[typography.caption, { color: vc.text, fontWeight: '700' }]}>{data.status}</Text>
+            <Text
+              style={[
+                typography.caption,
+                { color: vc.text, fontWeight: "700" },
+              ]}
+            >
+              {data.status}
+            </Text>
           </View>
           <View
             style={{
-              flexDirection: 'row',
-              alignItems: 'center',
+              flexDirection: "row",
+              alignItems: "center",
               gap: spacing(2),
               paddingHorizontal: spacing(3),
               paddingVertical: spacing(2),
@@ -804,14 +1207,27 @@ function ScholarshipDetailsContent() {
               borderColor: `${colors.primary}33`,
             }}
           >
-            <Ionicons name={data.category === 'Local' ? 'location-outline' : 'globe-outline'} size={13} color={colors.primary} />
-            <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{data.category}</Text>
+            <Ionicons
+              name={
+                data.category === "Local" ? "location-outline" : "globe-outline"
+              }
+              size={13}
+              color={colors.primary}
+            />
+            <Text
+              style={[
+                typography.caption,
+                { color: colors.primary, fontWeight: "700" },
+              ]}
+            >
+              {data.category}
+            </Text>
           </View>
           {isUrgent && (
             <View
               style={{
-                flexDirection: 'row',
-                alignItems: 'center',
+                flexDirection: "row",
+                alignItems: "center",
                 gap: spacing(2),
                 paddingHorizontal: spacing(3),
                 paddingVertical: spacing(2),
@@ -822,27 +1238,86 @@ function ScholarshipDetailsContent() {
               }}
             >
               <Ionicons name="time-outline" size={13} color={colors.danger} />
-              <Text style={[typography.caption, { color: colors.danger, fontWeight: '700' }]}>
-                Deadline in {data.daysLeft} day{data.daysLeft !== 1 ? 's' : ''}!
+              <Text
+                style={[
+                  typography.caption,
+                  { color: colors.danger, fontWeight: "700" },
+                ]}
+              >
+                Deadline in {data.daysLeft} day{data.daysLeft !== 1 ? "s" : ""}!
               </Text>
             </View>
           )}
         </View>
 
         {/* Meta facts grid */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(4), paddingTop: spacing(4), borderTopWidth: 1, borderTopColor: colors.divider }}>
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            gap: spacing(4),
+            paddingTop: spacing(4),
+            borderTopWidth: 1,
+            borderTopColor: colors.divider,
+          }}
+        >
           {[
-            { icon: 'cash-outline' as const, label: 'Award Amount', value: data.amount },
-            { icon: 'calendar-outline' as const, label: 'Deadline', value: data.deadline },
-            { icon: 'time-outline' as const, label: 'Days Remaining', value: data.daysLeft <= 0 ? 'Closed' : data.daysLeft >= 9999 ? 'TBA' : `${data.daysLeft} days` },
+            {
+              icon: "cash-outline" as const,
+              label: "Award Amount",
+              value: data.amount,
+            },
+            {
+              icon: "calendar-outline" as const,
+              label: "Deadline",
+              value: data.deadline,
+            },
+            {
+              icon: "time-outline" as const,
+              label: "Days Remaining",
+              value:
+                data.daysLeft <= 0
+                  ? "Closed"
+                  : data.daysLeft >= 9999
+                    ? "TBA"
+                    : `${data.daysLeft} days`,
+            },
           ].map(({ icon, label, value }) => (
-            <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), flex: 1, minWidth: isMobile ? '100%' : 160 }}>
-              <View style={{ width: 38, height: 38, borderRadius: radii.lg, backgroundColor: `${colors.primary}22`, alignItems: 'center', justifyContent: 'center' }}>
+            <View
+              key={label}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing(3),
+                flex: 1,
+                minWidth: isMobile ? "100%" : 160,
+              }}
+            >
+              <View
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: radii.lg,
+                  backgroundColor: `${colors.primary}22`,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 <Ionicons name={icon} size={17} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[typography.caption, { color: colors.textSecondary }]}>{label}</Text>
-                <Text style={[typography.bodyStrong, { color: colors.textPrimary, marginTop: 2 }]} numberOfLines={1}>
+                <Text
+                  style={[typography.caption, { color: colors.textSecondary }]}
+                >
+                  {label}
+                </Text>
+                <Text
+                  style={[
+                    typography.bodyStrong,
+                    { color: colors.textPrimary, marginTop: 2 },
+                  ]}
+                  numberOfLines={1}
+                >
                   {value}
                 </Text>
               </View>
@@ -852,12 +1327,27 @@ function ScholarshipDetailsContent() {
 
         {/* Description */}
         {!!data.description && (
-          <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 24 }]}>{data.description}</Text>
+          <Text
+            style={[
+              typography.body,
+              { color: colors.textSecondary, lineHeight: 24 },
+            ]}
+          >
+            {data.description}
+          </Text>
         )}
 
         {/* Tablet inline CTAs */}
         {!isMobile && !isDesktop && (
-          <View style={{ flexDirection: 'row', gap: spacing(3), paddingTop: spacing(4), borderTopWidth: 1, borderTopColor: colors.divider }}>
+          <View
+            style={{
+              flexDirection: "row",
+              gap: spacing(3),
+              paddingTop: spacing(4),
+              borderTopWidth: 1,
+              borderTopColor: colors.divider,
+            }}
+          >
             <Pressable
               onPress={handleApply}
               style={({ pressed }) => ({
@@ -865,15 +1355,17 @@ function ScholarshipDetailsContent() {
                 height: 52,
                 borderRadius: radii.lg,
                 backgroundColor: colors.primary,
-                flexDirection: 'row' as const,
-                alignItems: 'center' as const,
-                justifyContent: 'center' as const,
+                flexDirection: "row" as const,
+                alignItems: "center" as const,
+                justifyContent: "center" as const,
                 gap: spacing(2),
                 opacity: pressed ? 0.88 : 1,
               })}
             >
               <Ionicons name="rocket-outline" size={18} color="#fff" />
-              <Text style={[typography.label, { color: '#fff' }]}>Apply Now</Text>
+              <Text style={[typography.label, { color: "#fff" }]}>
+                Apply Now
+              </Text>
             </Pressable>
             <Pressable
               onPress={handleToggleSave}
@@ -884,15 +1376,21 @@ function ScholarshipDetailsContent() {
                 backgroundColor: colors.surfaceAlt,
                 borderWidth: 1,
                 borderColor: colors.border,
-                flexDirection: 'row' as const,
-                alignItems: 'center' as const,
-                justifyContent: 'center' as const,
+                flexDirection: "row" as const,
+                alignItems: "center" as const,
+                justifyContent: "center" as const,
                 gap: spacing(2),
                 opacity: pressed ? 0.88 : 1,
               })}
             >
-              <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={17} color={colors.primary} />
-              <Text style={[typography.label, { color: colors.primary }]}>{saved ? 'Saved' : 'Save'}</Text>
+              <Ionicons
+                name={saved ? "bookmark" : "bookmark-outline"}
+                size={17}
+                color={colors.primary}
+              />
+              <Text style={[typography.label, { color: colors.primary }]}>
+                {saving ? "Saving…" : saved ? "Saved" : "Save"}
+              </Text>
             </Pressable>
           </View>
         )}
@@ -904,7 +1402,11 @@ function ScholarshipDetailsContent() {
   const EligibilityCard = data.eligibility.length > 0 && (
     <Card style={{ marginBottom: spacing(6) }}>
       <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
-        <SectionHeader title="Eligibility Requirements" icon="checkmark-circle-outline" label="Requirements" />
+        <SectionHeader
+          title="Eligibility Requirements"
+          icon="checkmark-circle-outline"
+          label="Requirements"
+        />
         <BulletList items={data.eligibility} color={colors.success} />
       </View>
     </Card>
@@ -914,7 +1416,11 @@ function ScholarshipDetailsContent() {
   const HowToApplyCard = (
     <Card style={{ marginBottom: spacing(6) }}>
       <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
-        <SectionHeader title="How to Apply" icon="list-outline" label="Application Steps" />
+        <SectionHeader
+          title="How to Apply"
+          icon="list-outline"
+          label="Application Steps"
+        />
         <NumberedList items={data.howToApply} />
       </View>
     </Card>
@@ -924,9 +1430,23 @@ function ScholarshipDetailsContent() {
   const DocumentsCard = (
     <Card style={{ marginBottom: spacing(6) }}>
       <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
-        <SectionHeader title="Documents Checklist" icon="document-text-outline" label="Prepare" />
-        <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing(5), lineHeight: 22 }]}>
-          Tap each document below to check it off as you prepare your application.
+        <SectionHeader
+          title="Documents Checklist"
+          icon="document-text-outline"
+          label="Prepare"
+        />
+        <Text
+          style={[
+            typography.body,
+            {
+              color: colors.textSecondary,
+              marginBottom: spacing(5),
+              lineHeight: 22,
+            },
+          ]}
+        >
+          Tap each document below to check it off as you prepare your
+          application.
         </Text>
         <DocumentChecklist items={data.documents} />
       </View>
@@ -937,19 +1457,35 @@ function ScholarshipDetailsContent() {
   const NextStepsCard = (
     <Card>
       <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
-        <SectionHeader title="Next Steps" icon="arrow-forward-circle-outline" label="What to do now" />
+        <SectionHeader
+          title="Next Steps"
+          icon="arrow-forward-circle-outline"
+          label="What to do now"
+        />
         <View style={{ gap: spacing(3) }}>
           {[
-            { icon: 'checkmark-done-outline' as const, text: 'Verify you meet all eligibility criteria above.' },
-            { icon: 'document-outline' as const, text: 'Gather all required documents before the deadline.' },
-            { icon: 'rocket-outline' as const, text: 'Click "Apply Now" to proceed to the official portal.' },
-            { icon: 'notifications-outline' as const, text: 'Set a reminder closer to the deadline date.' },
+            {
+              icon: "checkmark-done-outline" as const,
+              text: "Verify you meet all eligibility criteria above.",
+            },
+            {
+              icon: "document-outline" as const,
+              text: "Gather all required documents before the deadline.",
+            },
+            {
+              icon: "rocket-outline" as const,
+              text: 'Click "Apply Now" to proceed to the official portal.',
+            },
+            {
+              icon: "notifications-outline" as const,
+              text: "Set a reminder closer to the deadline date.",
+            },
           ].map(({ icon, text }) => (
             <View
               key={text}
               style={{
-                flexDirection: 'row',
-                alignItems: 'flex-start',
+                flexDirection: "row",
+                alignItems: "flex-start",
                 gap: spacing(3),
                 padding: spacing(3),
                 backgroundColor: colors.surfaceAlt,
@@ -958,8 +1494,20 @@ function ScholarshipDetailsContent() {
                 borderColor: colors.border,
               }}
             >
-              <Ionicons name={icon} size={18} color={colors.primary} style={{ marginTop: 2 }} />
-              <Text style={[typography.body, { color: colors.textSecondary, flex: 1, lineHeight: 22 }]}>{text}</Text>
+              <Ionicons
+                name={icon}
+                size={18}
+                color={colors.primary}
+                style={{ marginTop: 2 }}
+              />
+              <Text
+                style={[
+                  typography.body,
+                  { color: colors.textSecondary, flex: 1, lineHeight: 22 },
+                ]}
+              >
+                {text}
+              </Text>
             </View>
           ))}
         </View>
@@ -971,13 +1519,17 @@ function ScholarshipDetailsContent() {
   const MobileStickyBar = isMobile && (
     <View
       style={{
-        position: 'absolute',
+        position: "absolute",
         bottom: 0,
         left: 0,
         right: 0,
-        flexDirection: 'row',
+        flexDirection: "row",
         padding: spacing(4),
-        paddingBottom: Platform.select({ ios: spacing(9), android: spacing(6), default: spacing(5) }),
+        paddingBottom: Platform.select({
+          ios: spacing(9),
+          android: spacing(6),
+          default: spacing(5),
+        }),
         backgroundColor: colors.surface,
         borderTopWidth: 1,
         borderTopColor: colors.border,
@@ -988,7 +1540,7 @@ function ScholarshipDetailsContent() {
       <Pressable
         onPress={handleToggleSave}
         accessibilityRole="button"
-        accessibilityLabel={saved ? 'Remove from saved' : 'Save for later'}
+        accessibilityLabel={saved ? "Remove from saved" : "Save for later"}
         style={({ pressed }) => ({
           flex: 1,
           height: 52,
@@ -996,15 +1548,21 @@ function ScholarshipDetailsContent() {
           backgroundColor: colors.surfaceAlt,
           borderWidth: 1,
           borderColor: colors.border,
-          flexDirection: 'row' as const,
-          alignItems: 'center' as const,
-          justifyContent: 'center' as const,
+          flexDirection: "row" as const,
+          alignItems: "center" as const,
+          justifyContent: "center" as const,
           gap: spacing(2),
           opacity: pressed ? 0.85 : 1,
         })}
       >
-        <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={18} color={colors.primary} />
-        <Text style={[typography.label, { color: colors.primary }]}>{saved ? 'Saved' : 'Save'}</Text>
+        <Ionicons
+          name={saved ? "bookmark" : "bookmark-outline"}
+          size={18}
+          color={colors.primary}
+        />
+        <Text style={[typography.label, { color: colors.primary }]}>
+          {saving ? "Saving…" : saved ? "Saved" : "Save"}
+        </Text>
       </Pressable>
       <Pressable
         onPress={handleApply}
@@ -1015,15 +1573,15 @@ function ScholarshipDetailsContent() {
           height: 52,
           borderRadius: radii.lg,
           backgroundColor: colors.primary,
-          flexDirection: 'row' as const,
-          alignItems: 'center' as const,
-          justifyContent: 'center' as const,
+          flexDirection: "row" as const,
+          alignItems: "center" as const,
+          justifyContent: "center" as const,
           gap: spacing(2),
           opacity: pressed ? 0.9 : 1,
         })}
       >
         <Ionicons name="rocket-outline" size={18} color="#fff" />
-        <Text style={[typography.label, { color: '#fff' }]}>Apply Now</Text>
+        <Text style={[typography.label, { color: "#fff" }]}>Apply Now</Text>
       </Pressable>
     </View>
   );
@@ -1033,16 +1591,27 @@ function ScholarshipDetailsContent() {
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <>
-      <DashboardLayout title="Scholarship Details" subtitle={data.title} showPointsCard={false}>
+      <DashboardLayout
+        title="Scholarship Details"
+        subtitle={data.title}
+        showPointsCard={false}
+      >
         {/* Back + breadcrumb */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing(3),
+            marginBottom: spacing(6),
+          }}
+        >
           <Pressable
             onPress={() => router.back()}
             accessibilityRole="button"
             accessibilityLabel="Go back"
             style={({ pressed }) => ({
-              flexDirection: 'row' as const,
-              alignItems: 'center' as const,
+              flexDirection: "row" as const,
+              alignItems: "center" as const,
               gap: spacing(2),
               paddingHorizontal: spacing(isMobile ? 3 : 4),
               paddingVertical: spacing(2),
@@ -1053,18 +1622,45 @@ function ScholarshipDetailsContent() {
               opacity: pressed ? 0.8 : 1,
             })}
           >
-            <Ionicons name="arrow-back" size={isMobile ? 15 : 17} color={colors.primary} />
-            <Text style={[typography.label, { color: colors.primary, fontSize: isMobile ? 12 : undefined }]}>Back</Text>
+            <Ionicons
+              name="arrow-back"
+              size={isMobile ? 15 : 17}
+              color={colors.primary}
+            />
+            <Text
+              style={[
+                typography.label,
+                { color: colors.primary, fontSize: isMobile ? 12 : undefined },
+              ]}
+            >
+              Back
+            </Text>
           </Pressable>
-          <Text style={[typography.caption, { color: colors.textMuted, flex: 1, fontSize: isMobile ? 11 : undefined }]} numberOfLines={1}>
+          <Text
+            style={[
+              typography.caption,
+              {
+                color: colors.textMuted,
+                flex: 1,
+                fontSize: isMobile ? 11 : undefined,
+              },
+            ]}
+            numberOfLines={1}
+          >
             Scholarships › {data.providerName}
           </Text>
         </View>
 
         {/* Two-column on desktop, stacked otherwise */}
-        <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: spacing(8), alignItems: 'flex-start' }}>
+        <View
+          style={{
+            flexDirection: isDesktop ? "row" : "column",
+            gap: spacing(8),
+            alignItems: "flex-start",
+          }}
+        >
           {/* Main column */}
-          <View style={{ flex: 1, width: '100%', minWidth: 0 }}>
+          <View style={{ flex: 1, width: "100%", minWidth: 0 }}>
             {HeroCard}
             {EligibilityCard}
             {HowToApplyCard}
@@ -1074,7 +1670,15 @@ function ScholarshipDetailsContent() {
           </View>
 
           {/* Desktop sidebar */}
-          {isDesktop && <DesktopSidebar data={data} saved={saved} onApply={handleApply} onToggleSave={handleToggleSave} />}
+          {isDesktop && (
+            <DesktopSidebar
+              data={data}
+              saved={saved}
+              saving={saving}
+              onApply={handleApply}
+              onToggleSave={handleToggleSave}
+            />
+          )}
         </View>
       </DashboardLayout>
 
