@@ -17,6 +17,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StudentMenuProvider } from '../../components/student/StudentMenu';
+import StudentFooter from '../../components/student/StudentFooter';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DashboardLayout & design tokens
@@ -148,10 +150,13 @@ function MetaItem({ icon, label, value }: { icon: IconName; label: string; value
 }
 
 function CourseRow({ course, onPress }: { course: Course; onPress: () => void }) {
+  const { t } = useLanguage();
   const colors = useTheme();
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${t('View details')}: ${course.title}`}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
@@ -175,7 +180,7 @@ function CourseRow({ course, onPress }: { course: Course; onPress: () => void })
         </Text>
       </View>
       <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: `${colors.primary}22` }}>
-        <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{course.requiredPoints} pts</Text>
+        <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{course.requiredPoints} {t('Points')}</Text>
       </View>
       <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: spacing(3) }} />
     </Pressable>
@@ -206,6 +211,7 @@ function FacultyChip({ name, isActive, onPress }: { name: string; isActive: bool
 }
 
 function NoteModal({ visible, noteText, onChangeText, onClose, onSave }: any) {
+  const { t } = useLanguage();
   const colors = useTheme();
   const elevation = useElevation('lg');
   return (
@@ -216,25 +222,37 @@ function NoteModal({ visible, noteText, onChangeText, onClose, onSave }: any) {
             <View style={{ height: 3, backgroundColor: colors.primary }} />
             <View style={{ padding: spacing(6), gap: spacing(5) }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={[typography.h2, { color: colors.textPrimary }]}>Add Quick Note</Text>
-                <Pressable onPress={onClose} style={({ pressed }) => ({ width: 40, height: 40, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
+                <Text style={[typography.h2, { color: colors.textPrimary }]}>{t('Add Quick Note')}</Text>
+                <Pressable
+onPress={onClose}
+accessibilityRole="button"
+accessibilityLabel={t('Close')}
+style={({ pressed }) => ({ width: 40, height: 40, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
                   <Ionicons name="close" size={20} color={colors.textSecondary} />
                 </Pressable>
               </View>
               <TextInput
                 value={noteText}
                 onChangeText={onChangeText}
-                placeholder="e.g. Strong engineering faculty. Compare points..."
+                placeholder={t('e.g. Strong engineering faculty. Compare points...')}
                 placeholderTextColor={colors.textMuted}
                 style={{ minHeight: 120, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, padding: spacing(4), backgroundColor: colors.surfaceAlt, color: colors.textPrimary, textAlignVertical: 'top', fontSize: 15 }}
                 multiline
               />
               <View style={{ flexDirection: 'row', gap: spacing(3) }}>
-                <Pressable onPress={onClose} style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.85 : 1 })}>
-                  <Text style={[typography.label, { color: colors.textPrimary }]}>Cancel</Text>
+                <Pressable
+onPress={onClose}
+accessibilityRole="button"
+accessibilityLabel={t('Cancel')}
+style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.85 : 1 })}>
+                  <Text style={[typography.label, { color: colors.textPrimary }]}>{t('Cancel')}</Text>
                 </Pressable>
-                <Pressable onPress={onSave} style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: radii.lg, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.9 : 1 })}>
-                  <Text style={[typography.label, { color: '#fff' }]}>Save Note</Text>
+                <Pressable
+onPress={onSave}
+accessibilityRole="button"
+accessibilityLabel={t('Save Note')}
+style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: radii.lg, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.9 : 1 })}>
+                  <Text style={[typography.label, { color: '#fff' }]}>{t('Save Note')}</Text>
                 </Pressable>
               </View>
             </View>
@@ -249,6 +267,7 @@ function NoteModal({ visible, noteText, onChangeText, onClose, onSave }: any) {
 // Main Content
 // ─────────────────────────────────────────────────────────────────────────────
 function UniversityDetailsContent() {
+  const { t } = useLanguage();
   const { width } = useWindowDimensions();
   const colors = useTheme();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -273,7 +292,7 @@ function UniversityDetailsContent() {
 
   useEffect(() => {
     if (!uniId) {
-      setError("University ID not found");
+      setError(t("University ID not found"));
       setLoading(false);
       return;
     }
@@ -283,7 +302,7 @@ function UniversityDetailsContent() {
         setLoading(true);
         const uniDoc = await getDoc(doc(db, 'institutions', uniId));
         if (!uniDoc.exists()) {
-          setError("University not found");
+          setError(t("University not found"));
           return;
         }
 
@@ -313,13 +332,13 @@ function UniversityDetailsContent() {
           facultyId: d.data().facultyId,
         })).sort((a, b) => a.title.localeCompare(b.title)));
       } catch (err) {
-        setError('Failed to load university information');
+        setError(t('Failed to load university information'));
       } finally {
         setLoading(false);
       }
     };
     fetchUniversityData();
-  }, [uniId]);
+  }, [uniId, t]);
 
   const filteredCourses = useMemo(() => {
     const list = selectedFacultyId ? courses.filter(c => c.facultyId === selectedFacultyId) : courses;
@@ -335,7 +354,7 @@ function UniversityDetailsContent() {
   };
 
   if (loading) return (
-    <DashboardLayout title="University Details" subtitle="Loading..." showPointsCard={false}>
+    <DashboardLayout title={t('University Details')} subtitle={t('Loading...')} showPointsCard={false}>
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing(10) }}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
@@ -344,11 +363,15 @@ function UniversityDetailsContent() {
 
   return (
     <>
-      <DashboardLayout title="University Details" subtitle={university?.name} showPointsCard={false}>
+      <DashboardLayout title={t('University Details')} subtitle={university?.name} showPointsCard={false}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
-          <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]}>
+          <Pressable
+onPress={() => router.back()}
+accessibilityRole="button"
+accessibilityLabel={t('Go Back')}
+style={({ pressed }) => [styles.backBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]}>
             <Ionicons name="arrow-back" size={17} color={colors.primary} />
-            <Text style={[typography.label, { color: colors.primary }]}>Back</Text>
+            <Text style={[typography.label, { color: colors.primary }]}>{t('Go Back')}</Text>
           </Pressable>
         </View>
 
@@ -362,14 +385,14 @@ function UniversityDetailsContent() {
                     <Text style={[typography.label, { color: university?.accentColor }]}>{university?.badge}</Text>
                   </View>
                   <View style={[styles.badgeContainer, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                    <Text style={[typography.caption, { color: colors.textSecondary }]}>{university?.ownership} · Est. {university?.established}</Text>
+                    <Text style={[typography.caption, { color: colors.textSecondary }]}>{university?.ownership} · {t('Est.')} {university?.established}</Text>
                   </View>
                 </View>
                 <Text style={[typography.hero, { color: colors.textPrimary, fontSize: isMobile ? 24 : 32 }]}>{university?.name}</Text>
                 <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 24 }]}>{university?.about}</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(4), paddingTop: spacing(4), borderTopWidth: 1, borderTopColor: colors.divider }}>
-                  <MetaItem icon="location-outline" label="Location" value={university?.location || ''} />
-                  <MetaItem icon="globe-outline" label="Website" value={university?.website || 'N/A'} />
+                  <MetaItem icon="location-outline" label={t('Location')} value={university?.location || ''} />
+                  <MetaItem icon="globe-outline" label={t('Website')} value={university?.website || 'N/A'} />
                 </View>
               </View>
             </Card>
@@ -377,10 +400,10 @@ function UniversityDetailsContent() {
             {/* Filter */}
             <Card style={{ marginBottom: spacing(6) }}>
               <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
-                <SectionLabel title="Explore" />
-                <SectionTitle title="Browse by Faculty" icon="layers-outline" />
+                <SectionLabel title={t('Explore')} />
+                <SectionTitle title={t('Browse by Faculty')} icon="layers-outline" />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <FacultyChip name="All Faculties" isActive={selectedFacultyId === null} onPress={() => handleFacultySelect(null)} />
+                  <FacultyChip name={t('All Faculties')} isActive={selectedFacultyId === null} onPress={() => handleFacultySelect(null)} />
                   {faculties.map(f => <FacultyChip key={f.id} name={f.name} isActive={selectedFacultyId === f.id} onPress={() => handleFacultySelect(f.id)} />)}
                 </ScrollView>
               </View>
@@ -390,18 +413,21 @@ function UniversityDetailsContent() {
             <Card style={{ marginBottom: spacing(6) }}>
               <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing(1) }}>
-                  <SectionLabel title="Programmes" />
-                  <Text style={[typography.caption, { color: colors.textMuted }]}>{displayedCourses.length} of {filteredCourses.length}</Text>
+                  <SectionLabel title={t('Programmes')} />
+                  <Text style={[typography.caption, { color: colors.textMuted }]}>{displayedCourses.length} {t('of')} {filteredCourses.length}</Text>
                 </View>
-                <SectionTitle title="Courses Offered" icon="school-outline" />
+                <SectionTitle title={t('Courses Offered')} icon="school-outline" />
                 {filteredCourses.length === 0 ? (
-                  <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center', padding: spacing(10) }]}>No courses found.</Text>
+                  <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center', padding: spacing(10) }]}>{t('No courses found.')}</Text>
                 ) : (
                   <>
                     {displayedCourses.map(c => <CourseRow key={c.id} course={c} onPress={() => router.push({ pathname: '/student/course-details', params: { id: c.id } })} />)}
                     {hasMore && (
-                      <Pressable onPress={() => setVisibleCount(v => v + INITIAL_VISIBLE_COUNT)} style={({ pressed }) => [styles.loadMore, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]}>
-                        <Text style={[typography.label, { color: colors.primary }]}>Load More Courses</Text>
+                      <Pressable
+onPress={() => setVisibleCount(v => v + INITIAL_VISIBLE_COUNT)}
+accessibilityRole="button"
+accessibilityLabel={t('Load More Courses')} style={({ pressed }) => [styles.loadMore, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]}>
+                        <Text style={[typography.label, { color: colors.primary }]}>{t('Load More Courses')}</Text>
                         <Ionicons name="chevron-down" size={16} color={colors.primary} />
                       </Pressable>
                     )}
@@ -416,14 +442,20 @@ function UniversityDetailsContent() {
             <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
               <Card intensity="md">
                 <View style={{ padding: spacing(6), gap: spacing(3) }}>
-                  <SectionLabel title="Actions" />
-                  <Pressable onPress={() => university?.website && Alert.alert('Website', university.website)} style={[styles.actionBtn, { backgroundColor: colors.primary }]}>
+                  <SectionLabel title={t('Actions')} />
+                  <Pressable
+onPress={() => university?.website && Alert.alert(t('Website'), university.website)}
+accessibilityRole="button"
+accessibilityLabel={t('Visit Website')} style={[styles.actionBtn, { backgroundColor: colors.primary }]}>
                     <Ionicons name="open-outline" size={18} color="#fff" />
-                    <Text style={[typography.label, { color: '#fff' }]}>Visit Website</Text>
+                    <Text style={[typography.label, { color: '#fff' }]}>{t('Visit Website')}</Text>
                   </Pressable>
-                  <Pressable onPress={() => setNoteModalVisible(true)} style={[styles.actionBtn, { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border }]}>
+                  <Pressable
+onPress={() => setNoteModalVisible(true)}
+accessibilityRole="button"
+accessibilityLabel={t('Add Note')} style={[styles.actionBtn, { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border }]}>
                     <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
-                    <Text style={[typography.label, { color: colors.textSecondary }]}>Add Note</Text>
+                    <Text style={[typography.label, { color: colors.textSecondary }]}>{t('Add Note')}</Text>
                   </Pressable>
                 </View>
               </Card>
@@ -432,16 +464,24 @@ function UniversityDetailsContent() {
 
           {isMobile && (
             <View style={{ marginBottom: spacing(10) }}>
-              <Pressable onPress={() => university?.website && Alert.alert('Website', university.website)} style={[styles.actionBtn, { height: 56, backgroundColor: colors.primary }]}>
+              <Pressable
+onPress={() => university?.website && Alert.alert(t('Website'), university.website)}
+accessibilityRole="button"
+accessibilityLabel={t('Official Website')} style={[styles.actionBtn, { height: 56, backgroundColor: colors.primary }]}>
                 <Ionicons name="open-outline" size={20} color="#fff" />
-                <Text style={[typography.bodyStrong, { color: '#fff' }]}>Official Website</Text>
+                <Text style={[typography.bodyStrong, { color: '#fff' }]}>{t('Official Website')}</Text>
               </Pressable>
             </View>
           )}
         </View>
+
+        <StudentFooter
+          topSpacing={isMobile ? spacing(8) : spacing(10)}
+          maxWidth={1280}
+        />
       </DashboardLayout>
 
-      <NoteModal visible={noteModalVisible} noteText={noteText} onChangeText={setNoteText} onClose={() => setNoteModalVisible(false)} onSave={() => { Alert.alert('Saved', 'Note saved'); setNoteModalVisible(false); }} />
+      <NoteModal visible={noteModalVisible} noteText={noteText} onChangeText={setNoteText} onClose={() => setNoteModalVisible(false)} onSave={() => { Alert.alert(t('Saved'), t('Note saved')); setNoteModalVisible(false); }} />
     </>
   );
 }

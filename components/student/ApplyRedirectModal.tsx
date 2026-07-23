@@ -13,6 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { spacing, typography, radii, useTheme } from "./DashboardLayout";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -56,6 +57,7 @@ const CURRENT_STAGE_INDEX = 0;
 // ─────────────────────────────────────────────────────────────────────────────
 function RoadmapStepper({ compact }: { compact: boolean }) {
   const colors = useTheme();
+  const { t } = useLanguage();
 
   return (
     <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
@@ -111,7 +113,7 @@ function RoadmapStepper({ compact }: { compact: boolean }) {
                   },
                 ]}
               >
-                {stage.label}
+                {t(stage.label)}
               </Text>
               {isActive && (
                 <View
@@ -252,6 +254,7 @@ export default function ApplyRedirectModal({
   providerName,
 }: ApplyRedirectModalProps) {
   const colors = useTheme();
+  const { t } = useLanguage();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
@@ -291,6 +294,7 @@ export default function ApplyRedirectModal({
 
   const isScholarship = targetType === "scholarship";
   const noun = isScholarship ? "scholarship" : "course";
+  const displayedNoun = t(noun);
   const destinationLabel = isScholarship
     ? "application page"
     : "admissions page";
@@ -351,7 +355,7 @@ export default function ApplyRedirectModal({
               <Pressable
                 onPress={onClose}
                 accessibilityRole="button"
-                accessibilityLabel="Close"
+                accessibilityLabel={t('Close')}
                 hitSlop={8}
                 style={({ pressed }) => ({
                   position: "absolute",

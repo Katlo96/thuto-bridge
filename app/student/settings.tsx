@@ -1,54 +1,43 @@
-// screens/student/StudentSettingsScreen.tsx
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  Pressable,
-  Platform,
-  ScrollView,
-  useWindowDimensions,
-  Switch,
+  ActivityIndicator,
   Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  Switch,
+  Text,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { StudentMenuProvider, useStudentMenu } from '../../components/student/StudentMenu';
+import { signOut } from 'firebase/auth';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared Design System
-// ─────────────────────────────────────────────────────────────────────────────
+import { auth } from '../../constants/firebase';
+import type { AppLanguage } from '../../constants/translations';
 import {
+  type AppearancePreference,
+  type DisplayDensity,
+  type IconSizePreference,
+  type TextSizePreference,
+  useAppPreferences,
+} from '../../contexts/AppPreferencesContext';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { useStudentMenu } from '../../components/student/StudentMenu';
+import {
+  iconSize,
+  radii,
   spacing,
   typography,
-  radii,
   useTheme,
 } from '../../components/student/DashboardLayout';
+import StudentFooter from '../../components/student/StudentFooter';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Elevation helper
-// ─────────────────────────────────────────────────────────────────────────────
-function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md') {
-  return useMemo(() => {
-    const opacity = 0.28;
-    const radius  = intensity === 'sm' ? 6  : intensity === 'md' ? 14 : 22;
-    const offsetY = intensity === 'sm' ? 2  : intensity === 'md' ? 5  : 10;
-    return Platform.select({
-      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: offsetY }, shadowOpacity: opacity, shadowRadius: radius },
-      android: { elevation: intensity === 'sm' ? 3 : intensity === 'md' ? 6 : 12 },
-      web:     { boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})` },
-      default: {},
-    });
-  }, [intensity]);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
 type SettingRoute =
   | 'profile'
   | 'notifications'
-  | 'password'
   | 'terms'
   | 'privacy'
   | 'support'
@@ -56,356 +45,693 @@ type SettingRoute =
   | 'logout'
   | 'delete';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Route config — single source of truth used by both sidebar and mobile sections
-// ─────────────────────────────────────────────────────────────────────────────
-const NAV_LINKS: {
-  key:   SettingRoute;
+type LanguageOption = {
+  code: AppLanguage;
+  name: string;
+  nativeName: string;
+  description: string;
+  shortCode: string;
+};
+
+type ChoiceOption<T extends string> = {
+  value: T;
   label: string;
-  icon:  keyof typeof Ionicons.glyphMap;
-  accent?: string;
-}[] = [
-  { key: 'profile',       label: 'Edit Profile',      icon: 'person-outline'                },
-  { key: 'notifications', label: 'Notifications',      icon: 'notifications-outline'         },
-  { key: 'password',      label: 'Change Password',    icon: 'key-outline'                   },
-  { key: 'terms',         label: 'Terms & Conditions', icon: 'document-text-outline'         },
-  { key: 'privacy',       label: 'Privacy Policy',     icon: 'shield-checkmark-outline'      },
-  { key: 'support',       label: 'Contact Support',    icon: 'help-circle-outline'           },
-  { key: 'faq',           label: 'FAQ',                icon: 'chatbubble-ellipses-outline'   },
+  description?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+};
+
+const LANGUAGE_OPTIONS: LanguageOption[] = [
+  {
+    code: 'en',
+    name: 'English',
+    nativeName: 'English',
+    description: 'Use Thuto-Bridge in English',
+    shortCode: 'EN',
+  },
+  {
+    code: 'tn',
+    name: 'Setswana',
+    nativeName: 'Setswana',
+    description: 'Dirisa Thuto-Bridge ka Setswana',
+    shortCode: 'TN',
+  },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Provider wrapper
-// ─────────────────────────────────────────────────────────────────────────────
-export default function StudentSettingsScreen() {
-  return (
-    <StudentMenuProvider>
-      <StudentSettingsContent />
-    </StudentMenuProvider>
-  );
+const APPEARANCE_OPTIONS: ChoiceOption<AppearancePreference>[] = [
+  {
+    value: 'system',
+    label: 'System',
+    description: 'Follow your device appearance',
+    icon: 'phone-portrait-outline',
+  },
+  {
+    value: 'light',
+    label: 'Light',
+    description: 'Use a bright appearance',
+    icon: 'sunny-outline',
+  },
+  {
+    value: 'dark',
+    label: 'Dark',
+    description: 'Use a darker appearance',
+    icon: 'moon-outline',
+  },
+];
+
+const DENSITY_OPTIONS: ChoiceOption<DisplayDensity>[] = [
+  {
+    value: 'comfortable',
+    label: 'Comfortable',
+    description: 'More space between app elements',
+    icon: 'resize-outline',
+  },
+  {
+    value: 'compact',
+    label: 'Compact',
+    description: 'Fit more content on each screen',
+    icon: 'contract-outline',
+  },
+];
+
+const TEXT_SIZE_OPTIONS: ChoiceOption<TextSizePreference>[] = [
+  { value: 'small', label: 'Small' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'large', label: 'Large' },
+  { value: 'extraLarge', label: 'Extra large' },
+];
+
+const ICON_SIZE_OPTIONS: ChoiceOption<IconSizePreference>[] = [
+  { value: 'small', label: 'Small' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'large', label: 'Large' },
+];
+
+const NAV_LINKS: Array<{
+  key: SettingRoute;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}> = [
+  { key: 'profile', label: 'Edit Profile', icon: 'person-outline' },
+  {
+    key: 'notifications',
+    label: 'Notifications',
+    icon: 'notifications-outline',
+  },
+  {
+    key: 'terms',
+    label: 'Terms & Conditions',
+    icon: 'document-text-outline',
+  },
+  {
+    key: 'privacy',
+    label: 'Privacy Policy',
+    icon: 'shield-checkmark-outline',
+  },
+  {
+    key: 'support',
+    label: 'Contact Support',
+    icon: 'help-circle-outline',
+  },
+  { key: 'faq', label: 'FAQ', icon: 'chatbubble-ellipses-outline' },
+];
+
+function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md') {
+  return useMemo(() => {
+    const opacity = 0.24;
+    const radius = intensity === 'sm' ? 6 : intensity === 'md' ? 14 : 22;
+    const offsetY = intensity === 'sm' ? 2 : intensity === 'md' ? 5 : 10;
+
+    return Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: offsetY },
+        shadowOpacity: opacity,
+        shadowRadius: radius,
+      },
+      android: {
+        elevation: intensity === 'sm' ? 3 : intensity === 'md' ? 6 : 12,
+      },
+      web: {
+        boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})`,
+      },
+      default: {},
+    });
+  }, [intensity]);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Screen content
-// ─────────────────────────────────────────────────────────────────────────────
-function StudentSettingsContent() {
+export default function StudentSettingsScreen() {
   const { width } = useWindowDimensions();
-  const colors    = useTheme();
+  const colors = useTheme();
   const { openMenu } = useStudentMenu();
   const elevationMd = useElevation('md');
+  const [pushNotifs, setPushNotifs] = useState(true);
+  const [deadlineReminders, setDeadlineReminders] = useState(true);
+
+  const {
+    language: selectedLanguage,
+    isLanguageLoading,
+    isLanguageSaving,
+    setLanguage,
+    t,
+  } = useLanguage();
+
+  const {
+    preferences,
+    resolvedAppearance,
+    isPreferencesLoading,
+    isPreferencesSaving,
+    setAppearance,
+    setDensity,
+    setTextSize,
+    setIconSize,
+  } = useAppPreferences();
 
   const breakpoint = useMemo<'mobile' | 'tablet' | 'desktop'>(() => {
-    if (width < 768)  return 'mobile';
+    if (width < 768) return 'mobile';
     if (width < 1024) return 'tablet';
     return 'desktop';
   }, [width]);
 
   const isDesktop = breakpoint === 'desktop';
-  const isMobile  = breakpoint === 'mobile';
+  const isMobile = breakpoint === 'mobile';
+  const settingsBusy = isPreferencesLoading || isPreferencesSaving;
 
-  const [emailNotifs,       setEmailNotifs]       = useState(true);
-  const [pushNotifs,        setPushNotifs]         = useState(true);
-  const [marketingNotifs,   setMarketingNotifs]    = useState(false);
-  const [compactMode,       setCompactMode]        = useState(false);
-  const [deadlineReminders, setDeadlineReminders]  = useState(true);
+  const activeLanguage = useMemo(
+    () =>
+      LANGUAGE_OPTIONS.find(option => option.code === selectedLanguage) ??
+      LANGUAGE_OPTIONS[0],
+    [selectedLanguage],
+  );
 
-  const navigate = useCallback((route: SettingRoute) => {
+  const navigate = useCallback(async (route: SettingRoute) => {
     switch (route) {
-      case 'profile':       router.push('/student/profile');           break;
-      case 'notifications': router.push('/student/notifications');     break;
-      case 'password':      router.push('/student/change-password');   break;
-      case 'terms':         router.push('/student/terms-conditions');  break;
-      case 'privacy':       router.push('/student/privacy-policy');    break;
-      case 'support':       router.push('/student/contact-support');   break;
-      case 'faq':           router.push('/student/faq');               break;
-      case 'logout':        router.replace('/login');                  break;
+      case 'profile':
+        router.push('/student/profile');
+        return;
+      case 'notifications':
+        router.push('/student/notifications');
+        return;
+      case 'terms':
+        router.push('/student/terms-conditions');
+        return;
+      case 'privacy':
+        router.push('/student/privacy-policy');
+        return;
+      case 'support':
+        router.push('/student/contact-support');
+        return;
+      case 'faq':
+        router.push('/student/faq');
+        return;
+      case 'logout':
+        try {
+          await signOut(auth);
+          router.replace('/login');
+        } catch (error) {
+          console.error('Failed to log out:', error);
+          Alert.alert('Could not log out', 'Please try again.');
+        }
+        return;
       case 'delete':
         Alert.alert('Coming soon', 'Account deletion will be added later.');
-        break;
+        return;
     }
   }, []);
+
+  const handleLanguageChange = useCallback(
+    async (nextLanguage: AppLanguage) => {
+      if (
+        nextLanguage === selectedLanguage ||
+        isLanguageSaving ||
+        isLanguageLoading
+      ) {
+        return;
+      }
+
+      try {
+        await setLanguage(nextLanguage);
+      } catch (error) {
+        console.error('Failed to update preferred language:', error);
+        Alert.alert(
+          t('Could not update language'),
+          t('Please check your internet connection and try again.'),
+        );
+      }
+    },
+    [
+      isLanguageLoading,
+      isLanguageSaving,
+      selectedLanguage,
+      setLanguage,
+      t,
+    ],
+  );
+
+  const runPreferenceUpdate = useCallback(
+    async (operation: () => Promise<void>) => {
+      if (settingsBusy) return;
+
+      try {
+        await operation();
+      } catch (error) {
+        console.error('Failed to update app preference:', error);
+        Alert.alert(
+          'Could not update preference',
+          'Your previous setting has been restored. Please check your connection and try again.',
+        );
+      }
+    },
+    [settingsBusy],
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={{
-            padding:      isMobile ? spacing(5) : spacing(7),
-            maxWidth:     isDesktop ? 1280 : '100%',
-            alignSelf:    'center',
-            width:        '100%',
-            paddingBottom: spacing(12),
+            paddingHorizontal: isMobile ? spacing(4) : spacing(7),
+            paddingTop: isMobile ? spacing(4) : spacing(7),
+            paddingBottom: spacing(14),
+            maxWidth: isDesktop ? 1280 : '100%',
+            alignSelf: 'center',
+            width: '100%',
           }}
         >
-          {/* ── Header ── */}
           <View
             style={{
-              flexDirection:  'row',
+              flexDirection: 'row',
               justifyContent: 'space-between',
-              alignItems:     'center',
-              marginBottom:   spacing(7),
+              alignItems: 'center',
+              marginBottom: spacing(7),
             }}
           >
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={[typography.h1, { color: colors.textPrimary }]}>Settings</Text>
-              <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing(1) }]}>
-                Manage your account, privacy and preferences
+            <View style={{ flex: 1, minWidth: 0, paddingRight: spacing(2) }}>
+              <Text style={[typography.h1, { color: colors.textPrimary }]}>
+                {t('Settings')}
+              </Text>
+              <Text
+                style={[
+                  typography.caption,
+                  {
+                    color: colors.textSecondary,
+                    marginTop: spacing(1),
+                  },
+                ]}
+              >
+                {t('Manage your account, language, privacy and preferences')}
               </Text>
             </View>
 
             <Pressable
               onPress={openMenu}
+              accessibilityRole="button"
+              accessibilityLabel={t('Open student menu')}
+              hitSlop={8}
               style={({ pressed }) => ({
-                width:           48,
-                height:          48,
-                borderRadius:    radii.lg,
+                width: isMobile ? 44 : 48,
+                height: isMobile ? 44 : 48,
+                borderRadius: radii.lg,
                 backgroundColor: colors.surfaceAlt,
-                borderWidth:     1,
-                borderColor:     colors.border,
-                alignItems:      'center',
-                justifyContent:  'center',
-                marginLeft:      spacing(4),
-                opacity:         pressed ? 0.85 : 1,
-                transform:       pressed ? [{ scale: 0.96 }] : [],
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.84 : 1,
               })}
             >
-              <Ionicons name="menu" size={22} color={colors.textPrimary} />
+              <Ionicons
+                name="menu"
+                size={iconSize(22)}
+                color={colors.textPrimary}
+              />
             </Pressable>
           </View>
 
-          <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: spacing(8) }}>
-
-            {/* ── Desktop sidebar ── */}
+          <View
+            style={{
+              flexDirection: isDesktop ? 'row' : 'column',
+              gap: spacing(8),
+            }}
+          >
             {isDesktop && (
               <View style={{ width: 300, flexShrink: 0 }}>
                 <View
                   style={[
                     {
                       backgroundColor: colors.surface,
-                      borderRadius:    radii.xxl,
-                      borderWidth:     1,
-                      borderColor:     colors.border,
-                      overflow:        'hidden',
+                      borderRadius: radii.xxl,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      overflow: 'hidden',
                     },
                     elevationMd,
                   ]}
                 >
-                  {/* Accent top bar */}
                   <View style={{ height: 3, backgroundColor: colors.primary }} />
+                  <Text
+                    style={[
+                      typography.h2,
+                      {
+                        color: colors.textPrimary,
+                        padding: spacing(6),
+                        paddingBottom: spacing(4),
+                      },
+                    ]}
+                  >
+                    {t('Navigation')}
+                  </Text>
 
-                  <View style={{ padding: spacing(6), paddingBottom: spacing(4) }}>
-                    <Text style={[typography.h2, { color: colors.textPrimary }]}>Navigation</Text>
-                  </View>
-
-                  {NAV_LINKS.map(({ key, label, icon }) => (
-                    <Pressable
-                      key={key}
-                      onPress={() => navigate(key)}
-                      style={({ pressed }) => ({
-                        paddingHorizontal: spacing(5),
-                        paddingVertical:   spacing(4),
-                        flexDirection:     'row',
-                        alignItems:        'center',
-                        gap:               spacing(3),
-                        backgroundColor:   pressed ? colors.surfaceAlt : 'transparent',
-                      })}
-                    >
-                      <View
-                        style={{
-                          width:           34,
-                          height:          34,
-                          borderRadius:    radii.md,
-                          backgroundColor: `${colors.primary}18`,
-                          alignItems:      'center',
-                          justifyContent:  'center',
-                        }}
-                      >
-                        <Ionicons name={icon} size={17} color={colors.primary} />
-                      </View>
-                      <Text style={[typography.body, { color: colors.textPrimary, flex: 1 }]}>
-                        {label}
-                      </Text>
-                      <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
-                    </Pressable>
+                  {NAV_LINKS.map(item => (
+                    <NavRow
+                      key={item.key}
+                      label={t(item.label)}
+                      icon={item.icon}
+                      onPress={() => void navigate(item.key)}
+                      colors={colors}
+                    />
                   ))}
 
-                  <View style={{ height: 1, backgroundColor: colors.divider, marginVertical: spacing(2) }} />
-
-                  <Pressable
-                    onPress={() => navigate('logout')}
-                    style={({ pressed }) => ({
-                      paddingHorizontal: spacing(5),
-                      paddingVertical:   spacing(4),
-                      flexDirection:     'row',
-                      alignItems:        'center',
-                      gap:               spacing(3),
-                      opacity:           pressed ? 0.85 : 1,
-                    })}
-                  >
-                    <View
-                      style={{
-                        width:           34,
-                        height:          34,
-                        borderRadius:    radii.md,
-                        backgroundColor: `${colors.danger}18`,
-                        alignItems:      'center',
-                        justifyContent:  'center',
-                      }}
-                    >
-                      <Ionicons name="log-out-outline" size={17} color={colors.danger} />
-                    </View>
-                    <Text style={[typography.body, { color: colors.danger, flex: 1 }]}>Log Out</Text>
-                  </Pressable>
-
-                  <View style={{ height: spacing(4) }} />
+                  <NavRow
+                    label={t('Log Out')}
+                    icon="log-out-outline"
+                    onPress={() => void navigate('logout')}
+                    colors={colors}
+                    danger
+                    last
+                  />
                 </View>
               </View>
             )}
 
-            {/* ── Main content ── */}
             <View style={{ flex: 1, minWidth: 0 }}>
-
-              {/* Hero card */}
               <View
                 style={[
                   {
                     backgroundColor: colors.surface,
-                    borderRadius:    radii.xxl,
-                    borderWidth:     1,
-                    borderColor:     colors.border,
-                    overflow:        'hidden',
-                    marginBottom:    spacing(7),
+                    borderRadius: radii.xxl,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    overflow: 'hidden',
+                    marginBottom: spacing(7),
                   },
                   elevationMd,
                 ]}
               >
                 <View style={{ height: 3, backgroundColor: colors.primary }} />
-                <View style={{ padding: spacing(6) }}>
+                <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
+                  <View
+                    style={{
+                      width: 46,
+                      height: 46,
+                      borderRadius: radii.lg,
+                      backgroundColor: `${colors.primary}18`,
+                      borderWidth: 1,
+                      borderColor: `${colors.primary}30`,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: spacing(4),
+                    }}
+                  >
+                    <Ionicons
+                      name="settings-outline"
+                      size={iconSize(22)}
+                      color={colors.primary}
+                    />
+                  </View>
                   <Text style={[typography.h2, { color: colors.textPrimary }]}>
-                    Student Settings
+                    {t('Student Settings')}
                   </Text>
-                  <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2) }]}>
-                    Control your experience, privacy, notifications and account security.
+                  <Text
+                    style={[
+                      typography.body,
+                      {
+                        color: colors.textSecondary,
+                        marginTop: spacing(2),
+                      },
+                    ]}
+                  >
+                    {t(
+                      'Control your language, appearance, display size and account security.',
+                    )}
                   </Text>
                 </View>
               </View>
 
-              {/* ── Account ── */}
-              <Section title="Account" icon="person-circle-outline" colors={colors}>
-                <NavRow
-                  label="Edit Profile"
-                  description="Update your name, bio and contact info"
-                  icon="person-outline"
-                  onPress={() => navigate('profile')}
+              <Section
+                title={t('Language')}
+                icon="language-outline"
+                colors={colors}
+              >
+                <View style={{ padding: spacing(5) }}>
+                  <SectionIntro
+                    title={t('App language')}
+                    description={t(
+                      'Choose the language you would like to use throughout Thuto-Bridge.',
+                    )}
+                    icon="globe-outline"
+                    colors={colors}
+                  />
+                  <View
+                    style={{
+                      flexDirection: isMobile ? 'column' : 'row',
+                      gap: spacing(3),
+                    }}
+                  >
+                    {LANGUAGE_OPTIONS.map(option => (
+                      <LanguageCard
+                        key={option.code}
+                        option={option}
+                        selected={selectedLanguage === option.code}
+                        disabled={isLanguageLoading || isLanguageSaving}
+                        onPress={() => void handleLanguageChange(option.code)}
+                        colors={colors}
+                        displayDescription={t(option.description)}
+                      />
+                    ))}
+                  </View>
+                  <StatusBanner
+                    loading={isLanguageLoading || isLanguageSaving}
+                    text={`${t('Current language: ')}${activeLanguage.nativeName}`}
+                    colors={colors}
+                  />
+                </View>
+              </Section>
+
+              <Section
+                title={t('Appearance')}
+                icon="color-palette-outline"
+                colors={colors}
+              >
+                <View style={{ padding: spacing(5) }}>
+                  <SectionIntro
+                    title={t('Light and dark mode')}
+                    description={t(
+                      'Choose a theme or allow Thuto-Bridge to follow your device.',
+                    )}
+                    icon="contrast-outline"
+                    colors={colors}
+                  />
+                  <ChoiceGrid
+                    options={APPEARANCE_OPTIONS}
+                    selected={preferences.appearance}
+                    disabled={settingsBusy}
+                    onSelect={value =>
+                      void runPreferenceUpdate(() => setAppearance(value))
+                    }
+                    colors={colors}
+                    columns={isMobile ? 1 : 3}
+                  />
+                  <StatusBanner
+                    loading={settingsBusy}
+                    text={`Active appearance: ${resolvedAppearance === 'dark' ? 'Dark' : 'Light'}`}
+                    colors={colors}
+                  />
+                </View>
+              </Section>
+
+              <Section
+                title={t('Display')}
+                icon="options-outline"
+                colors={colors}
+              >
+                <View style={{ padding: spacing(5) }}>
+                  <SectionIntro
+                    title={t('Display density')}
+                    description={t(
+                      'Compact mode reduces spacing throughout screens that use the shared design system.',
+                    )}
+                    icon="grid-outline"
+                    colors={colors}
+                  />
+                  <ChoiceGrid
+                    options={DENSITY_OPTIONS}
+                    selected={preferences.density}
+                    disabled={settingsBusy}
+                    onSelect={value =>
+                      void runPreferenceUpdate(() => setDensity(value))
+                    }
+                    colors={colors}
+                    columns={isMobile ? 1 : 2}
+                  />
+                </View>
+
+                <Divider colors={colors} />
+
+                <View style={{ padding: spacing(5) }}>
+                  <SectionIntro
+                    title={t('Text size')}
+                    description={t(
+                      'Increase or decrease shared text styles across Thuto-Bridge.',
+                    )}
+                    icon="text-outline"
+                    colors={colors}
+                  />
+                  <SegmentedChoice
+                    options={TEXT_SIZE_OPTIONS}
+                    selected={preferences.textSize}
+                    disabled={settingsBusy}
+                    onSelect={value =>
+                      void runPreferenceUpdate(() => setTextSize(value))
+                    }
+                    colors={colors}
+                  />
+                  <PreviewCard colors={colors} />
+                </View>
+
+                <Divider colors={colors} />
+
+                <View style={{ padding: spacing(5) }}>
+                  <SectionIntro
+                    title={t('Icon size')}
+                    description={t(
+                      'Adjust icons that use the shared icon sizing helper.',
+                    )}
+                    icon="apps-outline"
+                    colors={colors}
+                  />
+                  <SegmentedChoice
+                    options={ICON_SIZE_OPTIONS}
+                    selected={preferences.iconSize}
+                    disabled={settingsBusy}
+                    onSelect={value =>
+                      void runPreferenceUpdate(() => setIconSize(value))
+                    }
+                    colors={colors}
+                  />
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      gap: spacing(5),
+                      marginTop: spacing(5),
+                    }}
+                  >
+                    {(['home-outline', 'book-outline', 'settings-outline'] as const).map(
+                      name => (
+                        <Ionicons
+                          key={name}
+                          name={name}
+                          size={iconSize(24)}
+                          color={colors.primary}
+                        />
+                      ),
+                    )}
+                  </View>
+                </View>
+
+                <StatusBanner
+                  loading={settingsBusy}
+                  text="Display preferences are saved to your account and synchronised across devices."
                   colors={colors}
-                />
-                <NavRow
-                  label="Change Password"
-                  description="Update your account password"
-                  icon="key-outline"
-                  onPress={() => navigate('password')}
-                  colors={colors}
-                  last
+                  inset
                 />
               </Section>
 
-              {/* ── Notifications ── */}
-              <Section title="Notifications" icon="notifications-outline" colors={colors}>
-                <Toggle
-                  label="Email notifications"
-                  description="Receive updates via email"
-                  value={emailNotifs}
-                  setValue={setEmailNotifs}
-                  colors={colors}
-                />
-                <Toggle
-                  label="Push notifications"
-                  description="Alerts on your device"
+              <Section
+                title={t('Notifications')}
+                icon="notifications-outline"
+                colors={colors}
+              >
+                <ToggleRow
+                  label={t('Push notifications')}
+                  description={t('Receive alerts directly on your device')}
                   value={pushNotifs}
                   setValue={setPushNotifs}
                   colors={colors}
                 />
-                <Toggle
-                  label="Deadline reminders"
-                  description="Get reminded before application deadlines"
+                <ToggleRow
+                  label={t('Deadline reminders')}
+                  description={t(
+                    'Get reminded before application deadlines',
+                  )}
                   value={deadlineReminders}
                   setValue={setDeadlineReminders}
                   colors={colors}
-                />
-                <Toggle
-                  label="Marketing updates"
-                  description="News and feature announcements"
-                  value={marketingNotifs}
-                  setValue={setMarketingNotifs}
-                  colors={colors}
                   last
                 />
               </Section>
 
-              {/* ── Preferences ── */}
-              <Section title="Preferences" icon="options-outline" colors={colors}>
-                <Toggle
-                  label="Compact mode"
-                  description="Reduce spacing for denser layouts"
-                  value={compactMode}
-                  setValue={setCompactMode}
-                  colors={colors}
-                  last
-                />
-              </Section>
-
-              {/* ── Quick links (visible on mobile & tablet; desktop uses sidebar) ── */}
               {!isDesktop && (
-                <Section title="Quick Links" icon="link-outline" colors={colors}>
-                  {NAV_LINKS.map(({ key, label, icon }, i) => (
+                <Section
+                  title={t('Quick Links')}
+                  icon="link-outline"
+                  colors={colors}
+                >
+                  {NAV_LINKS.map((item, index) => (
                     <NavRow
-                      key={key}
-                      label={label}
-                      icon={icon}
-                      onPress={() => navigate(key)}
+                      key={item.key}
+                      label={t(item.label)}
+                      icon={item.icon}
+                      onPress={() => void navigate(item.key)}
                       colors={colors}
-                      last={i === NAV_LINKS.length - 1}
+                      last={index === NAV_LINKS.length - 1}
                     />
                   ))}
                 </Section>
               )}
 
-              {/* ── Danger zone ── */}
-              <Section title="Danger Zone" icon="warning-outline" colors={colors} danger>
-                {/* Log out row — mobile/tablet only (desktop has sidebar) */}
+              <Section
+                title={t('Danger Zone')}
+                icon="warning-outline"
+                colors={colors}
+                danger
+              >
                 {!isDesktop && (
                   <NavRow
-                    label="Log Out"
-                    description="Sign out of your account"
+                    label={t('Log Out')}
+                    description={t('Sign out of your account')}
                     icon="log-out-outline"
-                    onPress={() => navigate('logout')}
+                    onPress={() => void navigate('logout')}
                     colors={colors}
                     danger
                   />
                 )}
                 <NavRow
-                  label="Delete Account"
-                  description="Permanently remove your account and data"
+                  label={t('Delete Account')}
+                  description={t('Permanently remove your account and data')}
                   icon="trash-outline"
-                  onPress={() => navigate('delete')}
+                  onPress={() => void navigate('delete')}
                   colors={colors}
                   danger
                   last
                 />
               </Section>
-
             </View>
           </View>
+
+          <StudentFooter
+            topSpacing={isMobile ? spacing(8) : spacing(10)}
+            maxWidth={1280}
+          />
         </ScrollView>
       </SafeAreaView>
     </View>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Section wrapper
-// ─────────────────────────────────────────────────────────────────────────────
 function Section({
   title,
   icon,
@@ -413,22 +739,42 @@ function Section({
   colors,
   danger,
 }: {
-  title:    string;
-  icon?:    keyof typeof Ionicons.glyphMap;
+  title: string;
+  icon?: keyof typeof Ionicons.glyphMap;
   children: React.ReactNode;
-  colors:   ReturnType<typeof useTheme>;
-  danger?:  boolean;
+  colors: ReturnType<typeof useTheme>;
+  danger?: boolean;
 }) {
   const elevation = useElevation('md');
-  const accent    = danger ? colors.danger : colors.primary;
+  const accent = danger ? colors.danger : colors.primary;
 
   return (
     <View style={{ marginBottom: spacing(7) }}>
-      {/* Section label */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginBottom: spacing(3) }}>
-        <View style={{ width: 3, height: 16, borderRadius: 2, backgroundColor: accent }} />
-        {icon && <Ionicons name={icon} size={14} color={accent} />}
-        <Text style={[typography.caption, { color: accent, letterSpacing: 0.6, fontWeight: '700' }]}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing(2),
+          marginBottom: spacing(3),
+        }}
+      >
+        <View
+          style={{
+            width: 3,
+            height: 16,
+            borderRadius: 2,
+            backgroundColor: accent,
+          }}
+        />
+        {icon && (
+          <Ionicons name={icon} size={iconSize(14)} color={accent} />
+        )}
+        <Text
+          style={[
+            typography.caption,
+            { color: accent, letterSpacing: 0.6, fontWeight: '700' },
+          ]}
+        >
           {title.toUpperCase()}
         </Text>
       </View>
@@ -437,15 +783,14 @@ function Section({
         style={[
           {
             backgroundColor: colors.surface,
-            borderRadius:    radii.xxl,
-            borderWidth:     1,
-            borderColor:     danger ? `${colors.danger}33` : colors.border,
-            overflow:        'hidden',
+            borderRadius: radii.xxl,
+            borderWidth: 1,
+            borderColor: danger ? `${colors.danger}33` : colors.border,
+            overflow: 'hidden',
           },
           elevation,
         ]}
       >
-        {/* Top accent */}
         <View style={{ height: 3, backgroundColor: accent }} />
         {children}
       </View>
@@ -453,9 +798,398 @@ function Section({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// NavRow — tappable link row with icon, label, optional description
-// ─────────────────────────────────────────────────────────────────────────────
+function SectionIntro({
+  title,
+  description,
+  icon,
+  colors,
+}: {
+  title: string;
+  description: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  colors: ReturnType<typeof useTheme>;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: spacing(3),
+        marginBottom: spacing(5),
+      }}
+    >
+      <View
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: radii.md,
+          backgroundColor: `${colors.primary}18`,
+          borderWidth: 1,
+          borderColor: `${colors.primary}30`,
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <Ionicons name={icon} size={iconSize(20)} color={colors.primary} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text
+          style={[
+            typography.body,
+            { color: colors.textPrimary, fontWeight: '700' },
+          ]}
+        >
+          {title}
+        </Text>
+        <Text
+          style={[
+            typography.caption,
+            { color: colors.textMuted, marginTop: 3 },
+          ]}
+        >
+          {description}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function LanguageCard({
+  option,
+  selected,
+  disabled,
+  onPress,
+  colors,
+  displayDescription,
+}: {
+  option: LanguageOption;
+  selected: boolean;
+  disabled: boolean;
+  onPress: () => void;
+  colors: ReturnType<typeof useTheme>;
+  displayDescription: string;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected, disabled }}
+      style={({ pressed }) => ({
+        flex: 1,
+        minWidth: 0,
+        padding: spacing(4),
+        borderRadius: radii.xl,
+        borderWidth: selected ? 2 : 1,
+        borderColor: selected ? colors.primary : colors.border,
+        backgroundColor: selected ? `${colors.primary}0D` : colors.surfaceAlt,
+        opacity: disabled ? 0.6 : pressed ? 0.86 : 1,
+      })}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
+        <View
+          style={{
+            width: 46,
+            height: 46,
+            borderRadius: radii.lg,
+            backgroundColor: selected ? colors.primary : colors.surface,
+            borderWidth: 1,
+            borderColor: selected ? colors.primary : colors.border,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text
+            style={[
+              typography.body,
+              {
+                color: selected ? '#FFFFFF' : colors.textPrimary,
+                fontWeight: '800',
+              },
+            ]}
+          >
+            {option.shortCode}
+          </Text>
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            style={[
+              typography.body,
+              { color: colors.textPrimary, fontWeight: '700' },
+            ]}
+          >
+            {option.nativeName}
+          </Text>
+          <Text
+            style={[
+              typography.caption,
+              { color: colors.textMuted, marginTop: 3 },
+            ]}
+          >
+            {displayDescription}
+          </Text>
+        </View>
+        <SelectionIndicator selected={selected} colors={colors} />
+      </View>
+    </Pressable>
+  );
+}
+
+function ChoiceGrid<T extends string>({
+  options,
+  selected,
+  disabled,
+  onSelect,
+  colors,
+  columns,
+}: {
+  options: ChoiceOption<T>[];
+  selected: T;
+  disabled: boolean;
+  onSelect: (value: T) => void;
+  colors: ReturnType<typeof useTheme>;
+  columns: number;
+}) {
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3) }}>
+      {options.map(option => {
+        const active = option.value === selected;
+        return (
+          <Pressable
+            key={option.value}
+            onPress={() => onSelect(option.value)}
+            disabled={disabled}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: active, disabled }}
+            style={({ pressed }) => ({
+              flexBasis:
+                columns === 1
+                  ? '100%'
+                  : columns === 2
+                    ? '47%'
+                    : '30%',
+              flexGrow: 1,
+              minWidth: columns === 1 ? '100%' : 150,
+              padding: spacing(4),
+              borderRadius: radii.xl,
+              borderWidth: active ? 2 : 1,
+              borderColor: active ? colors.primary : colors.border,
+              backgroundColor: active
+                ? `${colors.primary}0D`
+                : colors.surfaceAlt,
+              opacity: disabled ? 0.6 : pressed ? 0.86 : 1,
+            })}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing(3),
+              }}
+            >
+              {option.icon && (
+                <Ionicons
+                  name={option.icon}
+                  size={iconSize(22)}
+                  color={active ? colors.primary : colors.textSecondary}
+                />
+              )}
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={[
+                    typography.body,
+                    { color: colors.textPrimary, fontWeight: '700' },
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                {!!option.description && (
+                  <Text
+                    style={[
+                      typography.caption,
+                      { color: colors.textMuted, marginTop: 3 },
+                    ]}
+                  >
+                    {option.description}
+                  </Text>
+                )}
+              </View>
+              <SelectionIndicator selected={active} colors={colors} />
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function SegmentedChoice<T extends string>({
+  options,
+  selected,
+  disabled,
+  onSelect,
+  colors,
+}: {
+  options: ChoiceOption<T>[];
+  selected: T;
+  disabled: boolean;
+  onSelect: (value: T) => void;
+  colors: ReturnType<typeof useTheme>;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing(2),
+        padding: spacing(2),
+        borderRadius: radii.xl,
+        backgroundColor: colors.surfaceAlt,
+        borderWidth: 1,
+        borderColor: colors.border,
+      }}
+    >
+      {options.map(option => {
+        const active = option.value === selected;
+        return (
+          <Pressable
+            key={option.value}
+            onPress={() => onSelect(option.value)}
+            disabled={disabled}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: active, disabled }}
+            style={({ pressed }) => ({
+              flexGrow: 1,
+              minWidth: 86,
+              paddingHorizontal: spacing(3),
+              paddingVertical: spacing(3),
+              borderRadius: radii.lg,
+              alignItems: 'center',
+              backgroundColor: active ? colors.primary : 'transparent',
+              opacity: disabled ? 0.6 : pressed ? 0.84 : 1,
+            })}
+          >
+            <Text
+              style={[
+                typography.label,
+                { color: active ? '#FFFFFF' : colors.textSecondary },
+              ]}
+            >
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function PreviewCard({ colors }: { colors: ReturnType<typeof useTheme> }) {
+  return (
+    <View
+      style={{
+        marginTop: spacing(5),
+        padding: spacing(4),
+        borderRadius: radii.xl,
+        backgroundColor: colors.surfaceAlt,
+        borderWidth: 1,
+        borderColor: colors.border,
+      }}
+    >
+      <Text style={[typography.h2, { color: colors.textPrimary }]}>Aa</Text>
+      <Text
+        style={[
+          typography.body,
+          { color: colors.textSecondary, marginTop: spacing(2) },
+        ]}
+      >
+        This preview changes immediately when you select a different text size.
+      </Text>
+    </View>
+  );
+}
+
+function SelectionIndicator({
+  selected,
+  colors,
+}: {
+  selected: boolean;
+  colors: ReturnType<typeof useTheme>;
+}) {
+  return (
+    <View
+      style={{
+        width: 25,
+        height: 25,
+        borderRadius: 13,
+        borderWidth: selected ? 0 : 1.5,
+        borderColor: colors.border,
+        backgroundColor: selected ? colors.primary : 'transparent',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {selected && (
+        <Ionicons name="checkmark" size={iconSize(16)} color="#FFFFFF" />
+      )}
+    </View>
+  );
+}
+
+function StatusBanner({
+  loading,
+  text,
+  colors,
+  inset,
+}: {
+  loading: boolean;
+  text: string;
+  colors: ReturnType<typeof useTheme>;
+  inset?: boolean;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing(2),
+        marginTop: spacing(4),
+        marginHorizontal: inset ? spacing(5) : 0,
+        marginBottom: inset ? spacing(5) : 0,
+        paddingHorizontal: spacing(3),
+        paddingVertical: spacing(3),
+        borderRadius: radii.md,
+        backgroundColor: `${colors.primary}0D`,
+        borderWidth: 1,
+        borderColor: `${colors.primary}20`,
+      }}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.primary} />
+      ) : (
+        <Ionicons
+          name="cloud-done-outline"
+          size={iconSize(17)}
+          color={colors.primary}
+        />
+      )}
+      <Text
+        style={[
+          typography.caption,
+          { color: colors.textSecondary, flex: 1 },
+        ]}
+      >
+        {text}
+      </Text>
+    </View>
+  );
+}
+
+function Divider({ colors }: { colors: ReturnType<typeof useTheme> }) {
+  return <View style={{ height: 1, backgroundColor: colors.divider }} />;
+}
+
 function NavRow({
   label,
   description,
@@ -465,72 +1199,85 @@ function NavRow({
   danger,
   last,
 }: {
-  label:        string;
+  label: string;
   description?: string;
-  icon?:        keyof typeof Ionicons.glyphMap;
-  onPress:      () => void;
-  colors:       ReturnType<typeof useTheme>;
-  danger?:      boolean;
-  last?:        boolean;
+  icon?: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+  colors: ReturnType<typeof useTheme>;
+  danger?: boolean;
+  last?: boolean;
 }) {
   const accent = danger ? colors.danger : colors.primary;
 
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={({ pressed }) => ({
-        flexDirection:   'row',
-        alignItems:      'center',
-        gap:             spacing(4),
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing(4),
         paddingHorizontal: spacing(5),
         paddingVertical: spacing(4),
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: colors.divider,
-        backgroundColor:  pressed
-          ? danger ? `${colors.danger}10` : colors.surfaceAlt
+        backgroundColor: pressed
+          ? danger
+            ? `${colors.danger}10`
+            : colors.surfaceAlt
           : 'transparent',
       })}
     >
-      {/* Icon bubble */}
       {icon && (
         <View
           style={{
-            width:           38,
-            height:          38,
-            borderRadius:    radii.md,
+            width: 38,
+            height: 38,
+            borderRadius: radii.md,
             backgroundColor: `${accent}18`,
-            borderWidth:     1,
-            borderColor:     `${accent}30`,
-            alignItems:      'center',
-            justifyContent:  'center',
-            flexShrink:      0,
+            borderWidth: 1,
+            borderColor: `${accent}30`,
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
-          <Ionicons name={icon} size={18} color={accent} />
+          <Ionicons name={icon} size={iconSize(18)} color={accent} />
         </View>
       )}
-
-      {/* Text */}
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[typography.body, { color: danger ? colors.danger : colors.textPrimary, fontWeight: '600' }]}>
+        <Text
+          style={[
+            typography.body,
+            {
+              color: danger ? colors.danger : colors.textPrimary,
+              fontWeight: '600',
+            },
+          ]}
+        >
           {label}
         </Text>
-        {description && (
-          <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]} numberOfLines={1}>
+        {!!description && (
+          <Text
+            style={[
+              typography.caption,
+              { color: colors.textMuted, marginTop: 2 },
+            ]}
+          >
             {description}
           </Text>
         )}
       </View>
-
-      <Ionicons name="chevron-forward" size={16} color={danger ? colors.danger : colors.textMuted} />
+      <Ionicons
+        name="chevron-forward"
+        size={iconSize(16)}
+        color={danger ? colors.danger : colors.textMuted}
+      />
     </Pressable>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Toggle row
-// ─────────────────────────────────────────────────────────────────────────────
-function Toggle({
+function ToggleRow({
   label,
   description,
   value,
@@ -538,61 +1285,67 @@ function Toggle({
   colors,
   last,
 }: {
-  label:        string;
+  label: string;
   description?: string;
-  value:        boolean;
-  setValue:     (val: boolean) => void;
-  colors:       ReturnType<typeof useTheme>;
-  last?:        boolean;
+  value: boolean;
+  setValue: (value: boolean) => void;
+  colors: ReturnType<typeof useTheme>;
+  last?: boolean;
 }) {
   return (
     <View
       style={{
-        flexDirection:     'row',
-        alignItems:        'center',
-        gap:               spacing(4),
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing(4),
         paddingHorizontal: spacing(5),
-        paddingVertical:   spacing(4),
+        paddingVertical: spacing(4),
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: colors.divider,
       }}
     >
-      {/* Icon bubble */}
       <View
         style={{
-          width:           38,
-          height:          38,
-          borderRadius:    radii.md,
-          backgroundColor: value ? `${colors.primary}18` : `${colors.border}60`,
-          borderWidth:     1,
-          borderColor:     value ? `${colors.primary}30` : colors.border,
-          alignItems:      'center',
-          justifyContent:  'center',
-          flexShrink:      0,
+          width: 38,
+          height: 38,
+          borderRadius: radii.md,
+          backgroundColor: value ? `${colors.primary}18` : colors.surfaceAlt,
+          borderWidth: 1,
+          borderColor: value ? `${colors.primary}30` : colors.border,
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
         <Ionicons
           name={value ? 'checkmark-circle-outline' : 'ellipse-outline'}
-          size={18}
+          size={iconSize(18)}
           color={value ? colors.primary : colors.textMuted}
         />
       </View>
-
-      {/* Text */}
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[typography.body, { color: colors.textPrimary, fontWeight: '600' }]}>
+        <Text
+          style={[
+            typography.body,
+            { color: colors.textPrimary, fontWeight: '600' },
+          ]}
+        >
           {label}
         </Text>
-        {description && (
-          <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]} numberOfLines={2}>
+        {!!description && (
+          <Text
+            style={[
+              typography.caption,
+              { color: colors.textMuted, marginTop: 2 },
+            ]}
+          >
             {description}
           </Text>
         )}
       </View>
-
       <Switch
         value={value}
         onValueChange={setValue}
+        accessibilityLabel={label}
         trackColor={{ false: colors.border, true: colors.primary }}
         thumbColor="#FFFFFF"
       />

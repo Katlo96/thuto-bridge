@@ -27,7 +27,9 @@ import DashboardLayout, {
   typography,
   useTheme,
 } from '../../components/student/DashboardLayout';
+import StudentFooter from '../../components/student/StudentFooter';
 import { StudentMenuProvider } from '../../components/student/StudentMenu';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 
 type SavedItemType = 'course' | 'career' | 'scholarship';
@@ -108,6 +110,7 @@ function EmptyState({
   subtitle: string;
 }) {
   const colors = useTheme();
+  const { t } = useLanguage();
 
   return (
     <View style={{ alignItems: 'center', paddingVertical: spacing(14), paddingHorizontal: spacing(5) }}>
@@ -178,10 +181,13 @@ function DeleteButton({ label, onPress }: { label: string; onPress: () => void }
 
 function CourseCard({ item, onDelete }: { item: SavedCourse; onDelete: () => void }) {
   const colors = useTheme();
+  const { t } = useLanguage();
 
   return (
     <Pressable
       onPress={() => router.push({ pathname: '/student/course-details', params: { id: item.id } })}
+      accessibilityRole="button"
+      accessibilityLabel={`${t('View details')}: ${item.title}`}
       style={({ pressed }) => ({
         backgroundColor: colors.surface,
         borderRadius: radii.xxl,
@@ -220,7 +226,7 @@ function CourseCard({ item, onDelete }: { item: SavedCourse; onDelete: () => voi
               {item.institution}
             </Text>
           </View>
-          <DeleteButton label={`Delete saved course ${item.title}`} onPress={onDelete} />
+          <DeleteButton label={`${t('Delete saved course')} ${item.title}`} onPress={onDelete} />
         </View>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginTop: spacing(4) }}>
@@ -229,7 +235,7 @@ function CourseCard({ item, onDelete }: { item: SavedCourse; onDelete: () => voi
             { icon: 'cash-outline' as const, text: item.fee },
             { icon: 'school-outline' as const, text: item.level },
             ...(typeof item.requiredPoints === 'number'
-              ? [{ icon: 'star-outline' as const, text: `${item.requiredPoints} points` }]
+              ? [{ icon: 'star-outline' as const, text: `${item.requiredPoints} ${t('Points')}` }]
               : []),
           ].map((chip) => (
             <View
@@ -268,6 +274,7 @@ function CareerCard({
   onViewInfo: () => void;
 }) {
   const colors = useTheme();
+  const { t } = useLanguage();
 
   return (
     <View
@@ -338,7 +345,7 @@ function CareerCard({
                 },
               ]}
             >
-              {item.field || 'Career pathway'}
+              {item.field || t('Career pathway')}
             </Text>
 
             {!!item.description && (
@@ -359,7 +366,7 @@ function CareerCard({
           </View>
 
           <DeleteButton
-            label={`Delete saved career ${item.title}`}
+            label={`${t('Delete saved career')} ${item.title}`}
             onPress={onDelete}
           />
         </View>
@@ -397,8 +404,7 @@ function CareerCard({
                   { color: colors.textSecondary, fontSize: 11 },
                 ]}
               >
-                {item.courseCount} related course
-                {item.courseCount === 1 ? '' : 's'}
+                {item.courseCount} {item.courseCount === 1 ? t('related course') : t('related courses')}
               </Text>
             </View>
           )}
@@ -428,8 +434,7 @@ function CareerCard({
                   { color: colors.textSecondary, fontSize: 11 },
                 ]}
               >
-                {item.institutionCount} institution
-                {item.institutionCount === 1 ? '' : 's'}
+                {item.institutionCount} {item.institutionCount === 1 ? t('institution') : t('Institutions')}
               </Text>
             </View>
           )}
@@ -438,7 +443,7 @@ function CareerCard({
         <Pressable
           onPress={onViewInfo}
           accessibilityRole="button"
-          accessibilityLabel={`View full information for ${item.title}`}
+          accessibilityLabel={`${t('View Full Info')}: ${item.title}`}
           style={({ pressed }) => ({
             marginTop: spacing(4),
             minHeight: 48,
@@ -456,7 +461,7 @@ function CareerCard({
         >
           <Ionicons name="information-circle-outline" size={18} color="#fff" />
           <Text style={[typography.label, { color: '#fff' }]}>
-            View Full Info
+            {t('View Full Info')}
           </Text>
         </Pressable>
       </View>
@@ -466,9 +471,12 @@ function CareerCard({
 
 function ScholarshipCard({ item, onDelete }: { item: SavedScholarship; onDelete: () => void }) {
   const colors = useTheme();
+  const { t } = useLanguage();
 
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${t('View details')}: ${item.title}`}
       onPress={() =>
         router.push({
           pathname: '/student/scholarship-details',
@@ -515,10 +523,10 @@ function ScholarshipCard({ item, onDelete }: { item: SavedScholarship; onDelete:
               {item.title}
             </Text>
             <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 3 }]}>
-              {item.provider || 'Scholarship provider'}
+              {item.provider || t('Scholarship provider')}
             </Text>
           </View>
-          <DeleteButton label={`Delete saved scholarship ${item.title}`} onPress={onDelete} />
+          <DeleteButton label={`${t('Delete saved scholarship')} ${item.title}`} onPress={onDelete} />
         </View>
 
         {(item.amount || item.deadline) && (
@@ -535,7 +543,7 @@ function ScholarshipCard({ item, onDelete }: { item: SavedScholarship; onDelete:
             {!!item.amount && <Text style={[typography.bodyStrong, { color: colors.warning }]}>{item.amount}</Text>}
             {!!item.deadline && (
               <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing(1) }]}>
-                Deadline: {item.deadline}
+                {t('Deadline')}: {item.deadline}
               </Text>
             )}
           </View>
@@ -548,6 +556,7 @@ function ScholarshipCard({ item, onDelete }: { item: SavedScholarship; onDelete:
 function SavedContent() {
   const { width } = useWindowDimensions();
   const colors = useTheme();
+  const { t, language } = useLanguage();
   const isMobile = width < 768;
 
   const [activeTab, setActiveTab] = useState<SavedItemType>('course');
@@ -573,7 +582,7 @@ function SavedContent() {
         setSavedCourses([]);
         setSavedCareers([]);
         setSavedScholarships([]);
-        setError('Please sign in to view saved items linked to your account.');
+        setError(t('Please sign in to view saved items linked to your account.'));
         return;
       }
 
@@ -665,7 +674,7 @@ function SavedContent() {
     } finally {
       setLoading(false);
     }
-  }, [colors.primary]);
+  }, [colors.primary, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -722,7 +731,7 @@ function SavedContent() {
       setPendingDelete(null);
     } catch (deleteError) {
       console.error('Failed to delete saved item:', deleteError);
-      setError('The saved item could not be removed. Please try again.');
+      setError(t('The saved item could not be removed. Please try again.'));
     } finally {
       setDeleting(false);
     }
@@ -738,8 +747,8 @@ function SavedContent() {
   return (
     <>
       <DashboardLayout
-      title="Saved"
-      subtitle="Your courses, careers and scholarships in one place"
+      title={t('Saved')}
+      subtitle={t('Your courses, careers and scholarships in one place')}
       showPointsCard={false}
     >
       <View
@@ -760,6 +769,9 @@ function SavedContent() {
             <Pressable
               key={tab.key}
               onPress={() => setActiveTab(tab.key)}
+              accessibilityRole="tab"
+              accessibilityLabel={`${t(tab.label)}: ${counts[tab.key]}`}
+              accessibilityState={{ selected: active }}
               style={({ pressed }) => ({
                 flex: 1,
                 minHeight: 54,
@@ -776,7 +788,7 @@ function SavedContent() {
             >
               <Ionicons name={active ? tab.icon.replace('-outline', '') as any : tab.icon} size={18} color={active ? colors.primary : colors.textMuted} />
               <Text style={[typography.label, { color: active ? colors.primary : colors.textSecondary, fontSize: isMobile ? 11 : 13 }]}>
-                {tab.label} ({counts[tab.key]})
+                {t(tab.label)} ({counts[tab.key]})
               </Text>
             </Pressable>
           );
@@ -787,7 +799,7 @@ function SavedContent() {
         <View style={{ alignItems: 'center', paddingVertical: spacing(14) }}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(4) }]}>
-            Loading your saved items…
+            {t('Loading your saved items…')}
           </Text>
         </View>
       ) : error ? (
@@ -798,6 +810,8 @@ function SavedContent() {
           </Text>
           <Pressable
             onPress={() => void loadSavedItems()}
+            accessibilityRole="button"
+            accessibilityLabel={t('Try Again')}
             style={({ pressed }) => ({
               marginTop: spacing(5),
               paddingHorizontal: spacing(5),
@@ -807,14 +821,26 @@ function SavedContent() {
               opacity: pressed ? 0.85 : 1,
             })}
           >
-            <Text style={[typography.label, { color: '#fff' }]}>Try Again</Text>
+            <Text style={[typography.label, { color: '#fff' }]}>{t('Try Again')}</Text>
           </Pressable>
         </View>
       ) : currentItems.length === 0 ? (
         <EmptyState
           icon={activeTab === 'course' ? 'book-outline' : activeTab === 'career' ? 'briefcase-outline' : 'ribbon-outline'}
-          title={`No saved ${activeTab === 'career' ? 'careers' : activeTab === 'course' ? 'courses' : 'scholarships'} yet`}
-          subtitle={`Use the Save button while exploring ${activeTab === 'career' ? 'career paths' : activeTab === 'course' ? 'courses' : 'scholarships'} and they will appear here.`}
+          title={
+            activeTab === 'career'
+              ? t('No saved careers yet')
+              : activeTab === 'course'
+                ? t('No saved courses yet')
+                : t('No saved scholarships yet')
+          }
+          subtitle={
+            activeTab === 'career'
+              ? t('Use the Save button while exploring career paths and they will appear here.')
+              : activeTab === 'course'
+                ? t('Use the Save button while exploring courses and they will appear here.')
+                : t('Use the Save button while exploring scholarships and they will appear here.')
+          }
         />
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing(12) }}>
@@ -837,6 +863,11 @@ function SavedContent() {
           ))}
         </ScrollView>
       )}
+
+      <StudentFooter
+        topSpacing={isMobile ? spacing(8) : spacing(10)}
+        maxWidth={1280}
+      />
       </DashboardLayout>
 
       <Modal
@@ -864,7 +895,7 @@ function SavedContent() {
               left: 0,
             }}
             accessibilityRole="button"
-            accessibilityLabel="Close career information"
+            accessibilityLabel={t('Close career information')}
           />
 
           {selectedCareer && (
@@ -971,7 +1002,7 @@ function SavedContent() {
                   <Pressable
                     onPress={() => setSelectedCareer(null)}
                     accessibilityRole="button"
-                    accessibilityLabel="Close"
+                    accessibilityLabel={t('Close')}
                     hitSlop={8}
                     style={({ pressed }) => ({
                       width: 40,
@@ -1011,7 +1042,7 @@ function SavedContent() {
                     },
                   ]}
                 >
-                  CAREER OVERVIEW
+                  {t('CAREER OVERVIEW')}
                 </Text>
 
                 <Text
@@ -1024,7 +1055,7 @@ function SavedContent() {
                   ]}
                 >
                   {selectedCareer.description ||
-                    `${selectedCareer.title} is one of the career pathways connected to programmes available on Thuto-Bridge.`}
+                    `${selectedCareer.title} ${t('is one of the career pathways connected to programmes available on Thuto-Bridge.')}`}
                 </Text>
 
                 <View
@@ -1060,7 +1091,7 @@ function SavedContent() {
                         },
                       ]}
                     >
-                      RELATED COURSES
+                      {t('RELATED COURSES')}
                     </Text>
                     <Text
                       style={[
@@ -1074,7 +1105,7 @@ function SavedContent() {
                       {typeof selectedCareer.courseCount ===
                       'number'
                         ? selectedCareer.courseCount
-                        : 'Not specified'}
+                        : t('Not specified')}
                     </Text>
                   </View>
 
@@ -1103,7 +1134,7 @@ function SavedContent() {
                         },
                       ]}
                     >
-                      INSTITUTIONS
+                      {t('INSTITUTIONS')}
                     </Text>
                     <Text
                       style={[
@@ -1117,7 +1148,7 @@ function SavedContent() {
                       {typeof selectedCareer.institutionCount ===
                       'number'
                         ? selectedCareer.institutionCount
-                        : 'Not specified'}
+                        : t('Not specified')}
                     </Text>
                   </View>
 
@@ -1146,7 +1177,7 @@ function SavedContent() {
                         },
                       ]}
                     >
-                      MINIMUM POINTS
+                      {t('MINIMUM POINTS')}
                     </Text>
                     <Text
                       style={[
@@ -1160,7 +1191,7 @@ function SavedContent() {
                       {typeof selectedCareer.minimumPoints ===
                       'number'
                         ? selectedCareer.minimumPoints
-                        : 'Varies'}
+                        : t('Varies')}
                     </Text>
                   </View>
                 </View>
@@ -1186,18 +1217,18 @@ function SavedContent() {
                       },
                     ]}
                   >
-                    PATHWAY SNAPSHOT
+                    {t('PATHWAY SNAPSHOT')}
                   </Text>
 
                   {[
                     {
                       icon: 'navigate-outline' as const,
-                      title: 'Career field',
-                      value: selectedCareer.field || 'Career pathway not specified',
+                      title: t('Career field'),
+                      value: selectedCareer.field || t('Career pathway not specified'),
                     },
                     {
                       icon: 'book-outline' as const,
-                      title: 'Study route',
+                      title: t('Study route'),
                       value:
                         typeof selectedCareer.courseCount === 'number' && selectedCareer.courseCount > 0
                           ? `${selectedCareer.courseCount} related programme${selectedCareer.courseCount === 1 ? '' : 's'} currently connect to this career.`
@@ -1205,7 +1236,7 @@ function SavedContent() {
                     },
                     {
                       icon: 'school-outline' as const,
-                      title: 'Where to study',
+                      title: t('Where to study'),
                       value:
                         typeof selectedCareer.institutionCount === 'number' && selectedCareer.institutionCount > 0
                           ? `${selectedCareer.institutionCount} institution${selectedCareer.institutionCount === 1 ? '' : 's'} currently offer connected programmes.`
@@ -1213,7 +1244,7 @@ function SavedContent() {
                     },
                     {
                       icon: 'star-outline' as const,
-                      title: 'Entry guidance',
+                      title: t('Entry guidance'),
                       value:
                         typeof selectedCareer.minimumPoints === 'number'
                           ? `Connected programmes may begin from approximately ${selectedCareer.minimumPoints} points. Always confirm the exact requirements with the institution.`
@@ -1290,14 +1321,14 @@ function SavedContent() {
                       },
                     ]}
                   >
-                    HOW TO PREPARE
+                    {t('HOW TO PREPARE')}
                   </Text>
 
                   {[
-                    'Compare the connected courses and choose a programme that matches your interests and strengths.',
-                    'Check the exact points, subject grades, fees, duration and study mode for each institution.',
-                    'Research the day-to-day responsibilities and skills commonly required in this career field.',
-                    'Build practical experience through projects, internships, volunteering or entry-level opportunities where possible.',
+                    t('Compare the connected courses and choose a programme that matches your interests and strengths.'),
+                    t('Check the exact points, subject grades, fees, duration and study mode for each institution.'),
+                    t('Research the day-to-day responsibilities and skills commonly required in this career field.'),
+                    t('Build practical experience through projects, internships, volunteering or entry-level opportunities where possible.'),
                   ].map((step, index) => (
                     <View
                       key={step}
@@ -1374,7 +1405,7 @@ function SavedContent() {
                         },
                       ]}
                     >
-                      This information is based on the career data saved from Thuto-Bridge. Course availability, entry requirements and institution information can change, so verify the latest details before applying.
+                      {t('This information is based on the career data saved from Thuto-Bridge. Course availability, entry requirements and institution information can change, so verify the latest details before applying.')}
                     </Text>
                   </View>
                 </View>
@@ -1416,10 +1447,10 @@ function SavedContent() {
                         },
                       ]}
                     >
-                      Saved on{' '}
+                      {t('Saved on ')}
                       {new Date(
                         selectedCareer.savedAt,
-                      ).toLocaleDateString()}
+                      ).toLocaleDateString(language === 'tn' ? 'tn-BW' : 'en-BW')}
                     </Text>
                   </View>
                 )}
@@ -1448,7 +1479,7 @@ function SavedContent() {
                       { color: '#fff' },
                     ]}
                   >
-                    Done
+                    {t('Done')}
                   </Text>
                 </Pressable>
               </ScrollView>
@@ -1485,7 +1516,8 @@ function SavedContent() {
               bottom: 0,
               left: 0,
             }}
-            accessibilityLabel="Close remove confirmation"
+            accessibilityRole="button"
+            accessibilityLabel={t('Close remove confirmation')}
           />
 
           <View
@@ -1524,7 +1556,7 @@ function SavedContent() {
             </View>
 
             <Text style={[typography.h2, { color: colors.textPrimary }]}>
-              Remove saved item?
+              {t('Remove saved item?')}
             </Text>
             <Text
               style={[
@@ -1537,12 +1569,12 @@ function SavedContent() {
               ]}
             >
               {pendingDelete
-                ? `${pendingDelete.title} will be permanently removed from your saved ${
+                ? `${pendingDelete.title} ${t('will be permanently removed from your saved')} ${
                     pendingDelete.type === 'course'
-                      ? 'courses'
+                      ? t('courses')
                       : pendingDelete.type === 'career'
-                        ? 'careers'
-                        : 'scholarships'
+                        ? t('careers')
+                        : t('scholarships')
                   }.`
                 : ''}
             </Text>
@@ -1558,6 +1590,8 @@ function SavedContent() {
               <Pressable
                 disabled={deleting}
                 onPress={() => setPendingDelete(null)}
+                accessibilityRole="button"
+                accessibilityLabel={t('Cancel')}
                 style={({ pressed }) => ({
                   minWidth: 100,
                   minHeight: 46,
@@ -1572,13 +1606,15 @@ function SavedContent() {
                 })}
               >
                 <Text style={[typography.label, { color: colors.textPrimary }]}>
-                  Cancel
+                  {t('Cancel')}
                 </Text>
               </Pressable>
 
               <Pressable
                 disabled={deleting}
                 onPress={() => void confirmDelete()}
+                accessibilityRole="button"
+                accessibilityLabel={deleting ? t('Removing…') : t('Remove')}
                 style={({ pressed }) => ({
                   minWidth: 112,
                   minHeight: 46,
@@ -1598,7 +1634,7 @@ function SavedContent() {
                   <Ionicons name="trash-outline" size={17} color="#fff" />
                 )}
                 <Text style={[typography.label, { color: '#fff' }]}>
-                  {deleting ? 'Removing…' : 'Remove'}
+                  {deleting ? t('Removing…') : t('Remove')}
                 </Text>
               </Pressable>
             </View>

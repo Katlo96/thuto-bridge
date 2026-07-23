@@ -12,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { StudentMenuProvider } from "../../components/student/StudentMenu";
+import { useLanguage } from "../../contexts/LanguageContext";
 import ApplyRedirectModal from "../../components/student/ApplyRedirectModal";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -23,6 +24,7 @@ import DashboardLayout, {
   radii,
   useTheme,
 } from "../../components/student/DashboardLayout";
+import StudentFooter from "../../components/student/StudentFooter";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Firebase
@@ -271,6 +273,7 @@ function BulletList({ items }: { items: string[] }) {
 function CourseDetailsContent() {
   const { width } = useWindowDimensions();
   const colors = useTheme();
+  const { t } = useLanguage();
   const params = useLocalSearchParams<{ id?: string }>();
   const courseId = typeof params.id === "string" ? params.id : "";
 
@@ -313,12 +316,12 @@ function CourseDetailsContent() {
       active = false;
       unsubscribe();
     };
-  }, [courseId]);
+  }, [courseId, t]);
 
   // Fetch full course data
   useEffect(() => {
     if (!courseId) {
-      setError("Course ID not found");
+      setError(t("Course ID not found"));
       setLoading(false);
       return;
     }
@@ -330,7 +333,7 @@ function CourseDetailsContent() {
 
         const courseDoc = await getDoc(doc(db, "courses", courseId));
         if (!courseDoc.exists()) {
-          setError("Course not found");
+          setError(t("Course not found"));
           return;
         }
 
@@ -384,7 +387,7 @@ function CourseDetailsContent() {
         }
       } catch (err: any) {
         console.error("COURSE DETAILS ERROR:", err);
-        setError("Failed to load course information");
+        setError(t("Failed to load course information"));
       } finally {
         setLoading(false);
       }
@@ -401,8 +404,8 @@ function CourseDetailsContent() {
 
     if (!auth.currentUser) {
       Alert.alert(
-        "Sign in required",
-        "Please sign in before saving a course so it can sync across your devices.",
+        t("Sign in required"),
+        t("Please sign in before saving a course so it can sync across your devices."),
       );
       return;
     }
@@ -411,11 +414,11 @@ function CourseDetailsContent() {
       if (await isItemSaved("course", course.id)) {
         setSaved(true);
         Alert.alert(
-          "Already saved",
-          `${course.title} is already available in your Saved Courses.`,
+          t("Already saved"),
+          `${course.title} ${t("is already available in your Saved Courses.")}`,
           [
-            { text: "View Saved", onPress: () => router.push("/student/saved") },
-            { text: "OK" },
+            { text: t("View Saved"), onPress: () => router.push("/student/saved") },
+            { text: t("OK") },
           ],
         );
         return;
@@ -435,29 +438,29 @@ function CourseDetailsContent() {
 
       setSaved(true);
       Alert.alert(
-        "Course saved",
-        `${course.title} has been saved to your account and will be available on your other devices.`,
+        t("Course saved"),
+        `${course.title} ${t("has been saved to your account and will be available on your other devices.")}`,
         [
-          { text: "View Saved", onPress: () => router.push("/student/saved") },
-          { text: "Done" },
+          { text: t("View Saved"), onPress: () => router.push("/student/saved") },
+          { text: t("Done") },
         ],
       );
     } catch (saveError) {
       console.error("Failed to save course:", saveError);
       Alert.alert(
-        "Could not save course",
+        t("Could not save course"),
         getSavedItemsErrorMessage(saveError),
       );
     }
   };
 
-  const handleShare = () => Alert.alert("Share", `Sharing ${course?.title}`);
+  const handleShare = () => Alert.alert(t("Share"), `${t("Sharing")} ${course?.title ?? ""}`);
 
   if (loading) {
     return (
       <DashboardLayout
-        title="Course Details"
-        subtitle="Loading..."
+        title={t("Course Details")}
+        subtitle={t("Loading...")}
         showPointsCard={false}
       >
         <View
@@ -475,7 +478,7 @@ function CourseDetailsContent() {
               { color: colors.textSecondary, marginTop: spacing(4) },
             ]}
           >
-            Loading comprehensive course details...
+            {t("Loading comprehensive course details...")}
           </Text>
         </View>
       </DashboardLayout>
@@ -485,8 +488,8 @@ function CourseDetailsContent() {
   if (error || !course) {
     return (
       <DashboardLayout
-        title="Course Details"
-        subtitle="Error"
+        title={t("Course Details")}
+        subtitle={t("Error")}
         showPointsCard={false}
       >
         <View style={{ padding: spacing(8), alignItems: "center" }}>
@@ -505,10 +508,12 @@ function CourseDetailsContent() {
               },
             ]}
           >
-            {error || "Course not found"}
+            {error || t("Course not found")}
           </Text>
           <Pressable
             onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel={t("Go Back")}
             style={{
               marginTop: spacing(6),
               paddingHorizontal: spacing(6),
@@ -517,7 +522,7 @@ function CourseDetailsContent() {
               borderRadius: radii.lg,
             }}
           >
-            <Text style={[typography.label, { color: "#fff" }]}>Go Back</Text>
+            <Text style={[typography.label, { color: "#fff" }]}>{t("Go Back")}</Text>
           </Pressable>
         </View>
       </DashboardLayout>
@@ -527,7 +532,7 @@ function CourseDetailsContent() {
   return (
     <>
       <DashboardLayout
-        title="Course Details"
+        title={t("Course Details")}
         subtitle={course.title}
         showPointsCard={false}
       >
@@ -542,6 +547,8 @@ function CourseDetailsContent() {
         >
           <Pressable
             onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel={t("Go Back")}
             style={({ pressed }) => ({
               flexDirection: "row",
               alignItems: "center",
@@ -557,14 +564,14 @@ function CourseDetailsContent() {
           >
             <Ionicons name="arrow-back" size={17} color={colors.primary} />
             <Text style={[typography.label, { color: colors.primary }]}>
-              Back
+              {t("Go Back")}
             </Text>
           </Pressable>
           <Text
             style={[typography.caption, { color: colors.textMuted, flex: 1 }]}
             numberOfLines={1}
           >
-            Courses › {institution?.badge || ""} › {course.title}
+            {t("Courses")} › {institution?.badge || ""} › {course.title}
           </Text>
         </View>
 
@@ -720,22 +727,22 @@ function CourseDetailsContent() {
                 >
                   <FactItem
                     icon="analytics-outline"
-                    label="Required Points"
+                    label={t("Required Points")}
                     value={course.requiredPoints.toString()}
                   />
                   <FactItem
                     icon="time-outline"
-                    label="Duration"
+                    label={t("Duration")}
                     value={course.duration}
                   />
                   <FactItem
                     icon="calendar-outline"
-                    label="Mode"
+                    label={t("Mode")}
                     value={course.mode}
                   />
                   <FactItem
                     icon="cash-outline"
-                    label="Tuition / Year"
+                    label={t("Tuition / Year")}
                     value={`BWP ${course.tuitionPerYear?.toLocaleString() || "25,000"}`}
                   />
                 </View>
@@ -745,9 +752,9 @@ function CourseDetailsContent() {
             {/* About */}
             <Card style={{ marginBottom: spacing(6) }}>
               <View style={{ padding: spacing(6) }}>
-                <SectionLabel title="Programme Overview" />
+                <SectionLabel title={t("Programme Overview")} />
                 <SectionTitle
-                  title="About this Course"
+                  title={t("About this Course")}
                   icon="information-circle-outline"
                 />
                 <Text
@@ -764,15 +771,15 @@ function CourseDetailsContent() {
             {/* Entry Requirements */}
             <Card style={{ marginBottom: spacing(6) }}>
               <View style={{ padding: spacing(6) }}>
-                <SectionLabel title="Admission" />
+                <SectionLabel title={t("Admission")} />
                 <SectionTitle
-                  title="Entry Requirements"
+                  title={t("Entry Requirements")}
                   icon="school-outline"
                 />
                 <BulletList
                   items={
                     course.entryRequirements || [
-                      "Minimum required points must be met",
+                      t("Minimum required points must be met"),
                     ]
                   }
                 />
@@ -782,8 +789,8 @@ function CourseDetailsContent() {
             {/* Careers */}
             <Card style={{ marginBottom: spacing(6) }}>
               <View style={{ padding: spacing(6) }}>
-                <SectionLabel title="Future Opportunities" />
-                <SectionTitle title="Careers" icon="briefcase-outline" />
+                <SectionLabel title={t("Future Opportunities")} />
+                <SectionTitle title={t("Careers")} icon="briefcase-outline" />
                 <View
                   style={{
                     flexDirection: "row",
@@ -791,7 +798,7 @@ function CourseDetailsContent() {
                     gap: spacing(2),
                   }}
                 >
-                  {(course.careers || ["Excellent career prospects"]).map(
+                  {(course.careers || [t("Excellent career prospects")]).map(
                     (career, idx) => (
                       <View
                         key={idx}
@@ -825,10 +832,12 @@ function CourseDetailsContent() {
             <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
               <Card intensity="md">
                 <View style={{ padding: spacing(6), gap: spacing(4) }}>
-                  <SectionLabel title="Actions" />
-                  <SectionTitle title="Quick Actions" />
+                  <SectionLabel title={t("Actions")} />
+                  <SectionTitle title={t("Quick Actions")} />
                   <Pressable
                     onPress={handleApply}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("Apply Now")}
                     style={({ pressed }) => ({
                       padding: spacing(4),
                       backgroundColor: colors.primary,
@@ -838,11 +847,13 @@ function CourseDetailsContent() {
                     })}
                   >
                     <Text style={[typography.label, { color: "#fff" }]}>
-                      Apply Now
+                      {t("Apply Now")}
                     </Text>
                   </Pressable>
                   <Pressable
                     onPress={handleSave}
+                    accessibilityRole="button"
+                    accessibilityLabel={saved ? t("Saved") : t("Save for Later")}
                     style={({ pressed }) => ({
                       padding: spacing(4),
                       backgroundColor: colors.surfaceAlt,
@@ -854,11 +865,13 @@ function CourseDetailsContent() {
                     })}
                   >
                     <Text style={[typography.label, { color: colors.primary }]}>
-                      {saved ? "Saved ✓" : "Save for Later"}
+                      {saved ? t("Saved ✓") : t("Save for Later")}
                     </Text>
                   </Pressable>
                   <Pressable
                     onPress={handleShare}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("Share Course")}
                     style={({ pressed }) => ({
                       padding: spacing(4),
                       backgroundColor: colors.surfaceAlt,
@@ -875,7 +888,7 @@ function CourseDetailsContent() {
                         { color: colors.textSecondary },
                       ]}
                     >
-                      Share Course
+                      {t("Share Course")}
                     </Text>
                   </Pressable>
                 </View>
@@ -883,6 +896,15 @@ function CourseDetailsContent() {
             </View>
           )}
         </View>
+
+        {/* Shared responsive student footer */}
+        <StudentFooter
+          topSpacing={isMobile ? spacing(8) : spacing(10)}
+          maxWidth={1280}
+        />
+
+        {/* Extra mobile clearance so the sticky action bar never covers the footer */}
+        {isMobile && <View style={{ height: spacing(20) }} />}
       </DashboardLayout>
 
       {/* Mobile Sticky Bar */}
@@ -904,6 +926,8 @@ function CourseDetailsContent() {
         >
           <Pressable
             onPress={handleSave}
+            accessibilityRole="button"
+            accessibilityLabel={saved ? t("Saved") : t("Save")}
             style={({ pressed }) => ({
               flex: 1,
               height: 52,
@@ -917,11 +941,13 @@ function CourseDetailsContent() {
             })}
           >
             <Text style={[typography.label, { color: colors.primary }]}>
-              {saved ? "Saved" : "Save"}
+              {saved ? t("Saved") : t("Save")}
             </Text>
           </Pressable>
           <Pressable
             onPress={handleApply}
+            accessibilityRole="button"
+            accessibilityLabel={t("Apply Now")}
             style={({ pressed }) => ({
               flex: 2,
               height: 52,
@@ -932,7 +958,7 @@ function CourseDetailsContent() {
               opacity: pressed ? 0.9 : 1,
             })}
           >
-            <Text style={[typography.label, { color: "#fff" }]}>Apply Now</Text>
+            <Text style={[typography.label, { color: "#fff" }]}>{t("Apply Now")}</Text>
           </Pressable>
         </View>
       )}

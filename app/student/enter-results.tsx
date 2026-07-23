@@ -16,12 +16,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StudentMenuProvider } from "../../components/student/StudentMenu";
+import { useLanguage } from "../../contexts/LanguageContext";
 import DashboardLayout, {
   spacing,
   typography,
   radii,
   useTheme,
 } from "../../components/student/DashboardLayout";
+import StudentFooter from "../../components/student/StudentFooter";
 
 import { db, auth } from "../../constants/firebase";
 import { doc, setDoc } from "firebase/firestore";
@@ -475,6 +477,7 @@ function CompletionBar({
   total: number;
   colors: any;
 }) {
+  const { t } = useLanguage();
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
   const done = pct === 100;
   return (
@@ -492,7 +495,7 @@ function CompletionBar({
             { color: colors.textSecondary, fontWeight: "600" },
           ]}
         >
-          {completed} of {total} subjects completed
+          {completed}{t(' of ')}{total} {t('subjects completed')}
         </Text>
         <Text
           style={[
@@ -543,6 +546,7 @@ function GradePickerModal({
   onSelect: (g: Grade) => void;
   onClose: () => void;
 }) {
+  const { t } = useLanguage();
   const colors = useTheme();
   const elevation = useElevation("lg");
   const { width } = useWindowDimensions();
@@ -676,7 +680,7 @@ function GradePickerModal({
                   numberOfLines={1}
                 >
                   {activeRow.subject} ·{" "}
-                  {isDouble ? "Double Award scale" : "Standard scale"}
+                  {isDouble ? t("Double Award scale") : t("Standard scale")}
                 </Text>
               </View>
             ) : null}
@@ -766,6 +770,7 @@ function ConfirmModal({
   onClose: () => void;
   count: number;
 }) {
+  const { t } = useLanguage();
   const colors = useTheme();
   const elevation = useElevation("lg");
   const { width } = useWindowDimensions();
@@ -906,6 +911,7 @@ function ResultsModal({
   calculation: ReturnType<typeof pickBestSix> | null;
   onClose: () => void;
 }) {
+  const { t } = useLanguage();
   const colors = useTheme();
   const elevation = useElevation("lg");
   const { width, height } = useWindowDimensions();
@@ -1069,7 +1075,7 @@ function ResultsModal({
                     { color: colors.textMuted, marginTop: 4 },
                   ]}
                 >
-                  {total} / {threshold} required
+                  {total} / {threshold} {t('required')}
                 </Text>
               </View>
               <View
@@ -1095,7 +1101,7 @@ function ResultsModal({
                     { color: tone, marginTop: 4, fontSize: 12.5 },
                   ]}
                 >
-                  {eligible ? "Eligible" : "Below 36"}
+                  {eligible ? t("Eligible") : t("Below 36")}
                 </Text>
               </View>
             </View>
@@ -1153,7 +1159,7 @@ function ResultsModal({
                     },
                   ]}
                 >
-                  GRADE
+                  {t('GRADE')}
                 </Text>
                 <Text
                   style={[
@@ -1166,7 +1172,7 @@ function ResultsModal({
                     },
                   ]}
                 >
-                  PTS
+                  {t('PTS')}
                 </Text>
               </View>
               {(calculation?.bestRows ?? []).map((row, i) => (
@@ -1253,7 +1259,7 @@ function ResultsModal({
               onPress={handleViewCourses}
               disabled={navigating}
               accessibilityRole="button"
-              accessibilityLabel="View recommended courses"
+              accessibilityLabel={t('View Recommended Courses')}
               style={({ pressed }) => ({
                 height: 54,
                 borderRadius: 16,
@@ -1272,13 +1278,13 @@ function ResultsModal({
                 color="#fff"
               />
               <Text style={[typography.label, { color: "#fff" }]}>
-                {navigating ? "Loading…" : "View Recommended Courses"}
+                {navigating ? t("Loading…") : t("View Recommended Courses")}
               </Text>
             </Pressable>
             <Pressable
               onPress={onClose}
               accessibilityRole="button"
-              accessibilityLabel="Close results modal"
+              accessibilityLabel={t('Close results modal')}
               style={({ pressed }) => ({
                 height: 48,
                 borderRadius: 14,
@@ -1291,7 +1297,7 @@ function ResultsModal({
               })}
             >
               <Text style={[typography.label, { color: colors.textPrimary }]}>
-                Close
+                {t('Close')}
               </Text>
             </Pressable>
           </View>
@@ -1321,6 +1327,7 @@ function SubjectRow({
   onRemove: (id: string) => void;
   inputTwoCol: boolean;
 }) {
+  const { t } = useLanguage();
   const colors = useTheme();
   const { width } = useWindowDimensions();
   const isNarrow = width < 390;
@@ -1519,7 +1526,7 @@ function SubjectRow({
                 <TextInput
                   value={row.subject}
                   onChangeText={(text) => onSubjectChange(row.id, text)}
-                  placeholder="e.g. Mathematics"
+                  placeholder={t('e.g. Mathematics')}
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="words"
                   autoCorrect={false}
@@ -1548,7 +1555,7 @@ function SubjectRow({
                   },
                 ]}
               >
-                Grade
+                {t('GRADE')}
               </Text>
               <Pressable
                 onPress={() => onGradePress(row.id)}
@@ -1582,7 +1589,7 @@ function SubjectRow({
                     },
                   ]}
                 >
-                  {row.grade || "Select"}
+                  {row.grade || t("Select")}
                 </Text>
                 <Ionicons
                   name="chevron-down"
@@ -1679,6 +1686,7 @@ function SidebarPanel({
   onReset: () => void;
   completedRows: number;
 }) {
+  const { t } = useLanguage();
   const colors = useTheme();
   return (
     <View style={{ width: 324, flexShrink: 0, gap: spacing(4.5) }}>
@@ -1852,6 +1860,7 @@ function SidebarPanel({
 // Main content
 // ─────────────────────────────────────────────────────────────────────────────
 function EnterResultsContent() {
+  const { t } = useLanguage();
   const { width } = useWindowDimensions();
   const colors = useTheme();
 
@@ -1921,22 +1930,23 @@ function EnterResultsContent() {
   );
 
   const resetRowsFor = useCallback(
-    (l: Level, t: Track) => setRows(buildRows(l, t)),
+    (selectedLevel: Level, selectedTrack: Track) =>
+      setRows(buildRows(selectedLevel, selectedTrack)),
     [],
   );
   const handleLevelChange = useCallback(
     (l: Level) => {
-      const t = l === "BGCSE" ? ("PURE" as Track) : ("ADVANCED" as Track);
+      const nextTrack: Track = l === "BGCSE" ? "PURE" : "ADVANCED";
       setLevel(l);
-      setTrack(t);
-      resetRowsFor(l, t);
+      setTrack(nextTrack);
+      resetRowsFor(l, nextTrack);
     },
     [resetRowsFor],
   );
   const handleTrackChange = useCallback(
-    (t: Track) => {
-      setTrack(t);
-      resetRowsFor(level, t);
+    (selectedTrack: Track) => {
+      setTrack(selectedTrack);
+      resetRowsFor(level, selectedTrack);
     },
     [level, resetRowsFor],
   );
@@ -2032,7 +2042,7 @@ function EnterResultsContent() {
   return (
     <>
       <DashboardLayout
-        title="Enter Results"
+        title={t('Enter Results')}
         subtitle="Calculate your best 6 subject points"
         showPointsCard={false}
       >
@@ -2354,12 +2364,12 @@ function EnterResultsContent() {
                   marginBottom: spacing(4),
                 }}
               >
-                {availableTracks.map((t) => (
+                {availableTracks.map((trackOption) => (
                   <SegButton
-                    key={t}
-                    label={t}
-                    active={track === t}
-                    onPress={() => handleTrackChange(t)}
+                    key={trackOption}
+                    label={t(trackOption)}
+                    active={track === trackOption}
+                    onPress={() => handleTrackChange(trackOption)}
                     grow={isMobile}
                   />
                 ))}
@@ -2424,7 +2434,7 @@ function EnterResultsContent() {
                       },
                     ]}
                   >
-                    SUBJECTS & GRADES
+                    {t('SUBJECT')}S & GRADES
                   </Text>
                   <Text
                     style={[
@@ -2512,7 +2522,7 @@ function EnterResultsContent() {
                     color={colors.primary}
                   />
                   <Text style={[typography.label, { color: colors.primary }]}>
-                    Add Subject
+                    {t('Add Subject')}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -2613,52 +2623,6 @@ function EnterResultsContent() {
               </View>
             </Card>
 
-            {/* Footer – Thuto-Bridge credit */}
-            <View
-              style={{
-                marginTop: spacing(2),
-                paddingTop: spacing(4),
-                borderTopWidth: 1,
-                borderTopColor: colors.divider,
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <Text
-                style={[
-                  typography.bodyStrong,
-                  { color: colors.textPrimary, fontSize: 13.5 },
-                ]}
-              >
-                Thuto-Bridge
-              </Text>
-              <Text
-                style={[
-                  typography.caption,
-                  { color: colors.textSecondary, textAlign: "center" },
-                ]}
-              >
-                Connecting Botswana students to university opportunities.
-              </Text>
-              <Text
-                style={[
-                  typography.caption,
-                  {
-                    color: colors.textMuted,
-                    textAlign: "center",
-                    fontSize: 11,
-                  },
-                ]}
-              >
-                Designed and developed by{" "}
-                <Text
-                  style={{ fontWeight: "700", color: colors.textSecondary }}
-                >
-                  BrightCode Studios
-                </Text>
-                {"\n"}© {new Date().getFullYear()} Thuto-Bridge
-              </Text>
-            </View>
           </View>
 
           {isDesktop && (
@@ -2675,6 +2639,12 @@ function EnterResultsContent() {
             </View>
           )}
         </View>
+
+        {/* Shared responsive student footer */}
+        <StudentFooter
+          topSpacing={isMobile ? spacing(8) : spacing(10)}
+          maxWidth={1280}
+        />
       </DashboardLayout>
 
       {/* Modals */}

@@ -17,6 +17,7 @@ import {
 import { useEffect } from 'react';
 import { db } from '../../constants/firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DashboardLayout & design tokens
@@ -27,6 +28,7 @@ import DashboardLayout, {
   radii,
   useTheme,
 } from '../../components/student/DashboardLayout';
+import StudentFooter from '../../components/student/StudentFooter';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -168,12 +170,13 @@ function BrigadeCard({
 }) {
   const colors    = useTheme();
   const elevation = useElevation('md');
+  const { t } = useLanguage();
 
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Open ${brigade.name}`}
+      accessibilityLabel={`${t('View details')}: ${brigade.name}`}
       style={({ pressed }) => [
         {
           width:           '100%',      // always fill the wrapper
@@ -261,7 +264,7 @@ function BrigadeCard({
           justifyContent:   'space-between',
         }}
       >
-        <Text style={[typography.label, { color: colors.primary }]}>View details</Text>
+        <Text style={[typography.label, { color: colors.primary }]}>{t('View details')}</Text>
         <Ionicons name="arrow-forward" size={15} color={colors.primary} />
       </View>
     </Pressable>
@@ -274,6 +277,7 @@ function BrigadeCard({
 function EmptyState({ onReset }: { onReset: () => void }) {
   const colors    = useTheme();
   const elevation = useElevation('sm');
+  const { t } = useLanguage();
   return (
     <View
       style={[
@@ -304,7 +308,7 @@ function EmptyState({ onReset }: { onReset: () => void }) {
         <Ionicons name="search-outline" size={28} color={colors.primary} />
       </View>
       <Text style={[typography.h2, { color: colors.textPrimary, textAlign: 'center' }]}>
-        No brigades found
+        {t('No brigades found')}
       </Text>
       <Text
         style={[
@@ -312,12 +316,12 @@ function EmptyState({ onReset }: { onReset: () => void }) {
           { color: colors.textSecondary, marginTop: spacing(2), textAlign: 'center', maxWidth: 300 },
         ]}
       >
-        Try a different brigade name, location, or keyword.
+        {t('Try a different brigade name, location, or keyword.')}
       </Text>
       <Pressable
         onPress={onReset}
         accessibilityRole="button"
-        accessibilityLabel="Reset search"
+        accessibilityLabel={t('RESET SEARCH')}
         style={({ pressed }) => ({
           marginTop:         spacing(6),
           flexDirection:     'row' as const,
@@ -332,7 +336,7 @@ function EmptyState({ onReset }: { onReset: () => void }) {
         })}
       >
         <Ionicons name="refresh-outline" size={17} color="#fff" />
-        <Text style={[typography.label, { color: '#fff', letterSpacing: 0.4 }]}>RESET SEARCH</Text>
+        <Text style={[typography.label, { color: '#fff', letterSpacing: 0.4 }]}>{t('RESET SEARCH')}</Text>
       </Pressable>
     </View>
   );
@@ -344,6 +348,7 @@ function EmptyState({ onReset }: { onReset: () => void }) {
 function BrigadesContent() {
   const { width } = useWindowDimensions();
   const colors    = useTheme();
+  const { t } = useLanguage();
   const { openMenu } = useStudentMenu();
   const elevation = useElevation('md');
 
@@ -423,20 +428,20 @@ function BrigadesContent() {
           elevation,
         ]}
       >
-        <Text style={[typography.h2, { color: colors.textPrimary }]}>Overview</Text>
+        <Text style={[typography.h2, { color: colors.textPrimary }]}>{t('Overview')}</Text>
         <View style={{ gap: spacing(3) }}>
-          <StatPill icon="business-outline" label="Total Brigades"  value={`${brigades.length}`}  />
-          <StatPill icon="search-outline"   label="Search Results"  value={`${filtered.length}`}  />
-          <StatPill icon="location-outline" label="Coverage"        value="Botswana"               />
+          <StatPill icon="business-outline" label={t('Total Brigades')} value={`${brigades.length}`} />
+          <StatPill icon="search-outline" label={t('Search Results')} value={`${filtered.length}`} />
+          <StatPill icon="location-outline" label={t('Coverage')} value="Botswana" />
         </View>
 
         <View style={{ height: 1, backgroundColor: colors.divider, marginVertical: spacing(1) }} />
 
-        <Text style={[typography.h2, { color: colors.textPrimary }]}>Quick Actions</Text>
+        <Text style={[typography.h2, { color: colors.textPrimary }]}>{t('Quick Actions')}</Text>
         <View style={{ gap: spacing(3) }}>
-          <SidebarAction icon="menu-outline"    label="Open Menu"        onPress={openMenu}                                    variant="primary" />
-          <SidebarAction icon="refresh-outline" label="Clear Search"     onPress={() => setSearch('')}                         />
-          <SidebarAction icon="school-outline"  label="All Institutions" onPress={() => router.push('/student/institutions')}  />
+          <SidebarAction icon="menu-outline" label={t('Open Menu')} onPress={openMenu} variant="primary" />
+          <SidebarAction icon="refresh-outline" label={t('Clear Search')} onPress={() => setSearch('')} />
+          <SidebarAction icon="school-outline" label={t('All Institutions')} onPress={() => router.push('/student/institutions')} />
         </View>
 
         <View
@@ -450,7 +455,7 @@ function BrigadesContent() {
           }}
         >
           <Text style={[typography.caption, { color: colors.textSecondary, lineHeight: 18 }]}>
-            💡 Tip: Search by brigade name, city, or specialty to narrow results faster.
+            {t('💡 Tip: Search by brigade name, city, or specialty to narrow results faster.')}
           </Text>
         </View>
       </View>
@@ -486,7 +491,7 @@ function BrigadesContent() {
       >
         <View style={{ flex: 1 }}>
           <Text style={[typography.hero, { color: colors.textPrimary }]}>
-            Find the right brigade
+            {t('Find the right brigade')}
           </Text>
           <Text
             style={[
@@ -494,8 +499,7 @@ function BrigadesContent() {
               { color: colors.textSecondary, marginTop: spacing(2) },
             ]}
           >
-            Explore brigades across Botswana, compare options, and open detailed
-            pages for a deeper look at courses and scholarships.
+            {t('Explore brigades across Botswana, compare options, and open detailed pages for a deeper look at courses and scholarships.')}
           </Text>
         </View>
 
@@ -517,7 +521,7 @@ function BrigadesContent() {
         >
           <Ionicons name="construct-outline" size={15} color={colors.primary} />
           <Text style={[typography.label, { color: colors.primary }]}>
-            {filtered.length} result{filtered.length === 1 ? '' : 's'}
+            {filtered.length} {filtered.length === 1 ? t('Search Results').replace(/s$/i, '') : t('Search Results')}
           </Text>
         </View>
       </View>
@@ -533,7 +537,7 @@ function BrigadesContent() {
           { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(2) },
         ]}
       >
-        SEARCH
+        {t('SEARCH')}
       </Text>
       <View
         style={[
@@ -554,7 +558,7 @@ function BrigadesContent() {
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Search by name, location, or specialty…"
+          placeholder={t('Search by name, location, or specialty…')}
           placeholderTextColor={colors.textMuted}
           style={[
             typography.body,
@@ -565,14 +569,14 @@ function BrigadesContent() {
               color:           colors.textPrimary,
             },
           ]}
-          accessibilityLabel="Search brigades"
+          accessibilityLabel={t('Search by name, location, or specialty…')}
           returnKeyType="search"
         />
         {search.length > 0 && (
           <Pressable
             onPress={() => setSearch('')}
             accessibilityRole="button"
-            accessibilityLabel="Clear search"
+            accessibilityLabel={t('Clear Search')}
             style={({ pressed }) => ({ padding: spacing(2), opacity: pressed ? 0.7 : 1 })}
           >
             <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
@@ -587,9 +591,9 @@ function BrigadesContent() {
   const MobileStatsStrip = isMobile && (
     <View style={{ flexDirection: 'row', marginBottom: spacing(6) }}>
       {[
-        { icon: 'business-outline' as const, label: 'Total',    value: `${brigades.length}` },
-        { icon: 'search-outline'   as const, label: 'Results',  value: `${filtered.length}` },
-        { icon: 'location-outline' as const, label: 'Coverage', value: 'BW'                 },
+        { icon: 'business-outline' as const, label: t('Total Brigades'), value: `${brigades.length}` },
+        { icon: 'search-outline' as const, label: t('Search Results'), value: `${filtered.length}` },
+        { icon: 'location-outline' as const, label: t('Coverage'), value: 'BW' },
       ].map((s, i) => (
         <View
           key={s.label}
@@ -643,7 +647,7 @@ function BrigadesContent() {
             { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) },
           ]}
         >
-          BRIGADES ({filtered.length})
+          {t('BRIGADES (')}{filtered.length})
         </Text>
 
         {/* Outer negative-margin trick so cards in multi-col have even gutters */}
@@ -677,8 +681,8 @@ function BrigadesContent() {
   if (loading) {
     return (
       <DashboardLayout
-        title="Brigades"
-        subtitle="Explore brigades across Botswana"
+        title={t('Brigades')}
+        subtitle={t('Explore brigades across Botswana')}
         showPointsCard={false}
       >
         <View style={{ alignItems: 'center', marginTop: spacing(12), gap: spacing(4) }}>
@@ -695,7 +699,7 @@ function BrigadesContent() {
             <Ionicons name="construct-outline" size={26} color={colors.primary} />
           </View>
           <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center' }]}>
-            Loading brigades…
+            {t('Loading brigade information...')}
           </Text>
         </View>
       </DashboardLayout>
@@ -707,8 +711,8 @@ function BrigadesContent() {
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <DashboardLayout
-      title="Brigades"
-      subtitle="Explore brigades across Botswana"
+      title={t('Brigades')}
+      subtitle={t('Explore brigades across Botswana')}
       showPointsCard={false}
     >
       {/* Back navigation */}
@@ -723,7 +727,7 @@ function BrigadesContent() {
         <Pressable
           onPress={() => router.back()}
           accessibilityRole="button"
-          accessibilityLabel="Go back"
+          accessibilityLabel={t('Go Back')}
           style={({ pressed }) => ({
             flexDirection:     'row' as const,
             alignItems:        'center' as const,
@@ -738,10 +742,10 @@ function BrigadesContent() {
           })}
         >
           <Ionicons name="arrow-back" size={17} color={colors.primary} />
-          <Text style={[typography.label, { color: colors.primary }]}>Back</Text>
+          <Text style={[typography.label, { color: colors.primary }]}>{t('Go Back')}</Text>
         </Pressable>
         <Text style={[typography.caption, { color: colors.textMuted }]}>
-          Institutions › Brigades
+          {t('Institutions › Brigades')}
         </Text>
       </View>
 
@@ -764,6 +768,12 @@ function BrigadesContent() {
         {/* Sidebar — desktop only */}
         {Sidebar}
       </View>
+
+      {/* Shared responsive student footer */}
+      <StudentFooter
+        topSpacing={isMobile ? spacing(8) : spacing(10)}
+        maxWidth={1280}
+      />
     </DashboardLayout>
   );
 }

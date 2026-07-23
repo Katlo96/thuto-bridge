@@ -28,12 +28,14 @@ import DashboardLayout, {
   radii,
   useTheme,
 } from '../../components/student/DashboardLayout';
+import StudentFooter from '../../components/student/StudentFooter';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Firebase
 // ─────────────────────────────────────────────────────────────────────────────
 import { db } from '../../constants/firebase';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -148,9 +150,12 @@ function MetaItem({ icon, label, value }: { icon: IconName; label: string; value
 
 function CourseRow({ course, onPress }: { course: Course; onPress: () => void }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${t('View details')}: ${course.title}`}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
@@ -174,7 +179,7 @@ function CourseRow({ course, onPress }: { course: Course; onPress: () => void })
         </Text>
       </View>
       <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: `${colors.primary}22` }}>
-        <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{course.requiredPoints} pts</Text>
+        <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{course.requiredPoints} {t('Points')}</Text>
       </View>
       <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: spacing(3) }} />
     </Pressable>
@@ -222,6 +227,7 @@ function NoteModal({
 }) {
   const colors = useTheme();
   const elevation = useElevation('lg');
+  const { t } = useLanguage();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: spacing(5) }} onPress={onClose}>
@@ -230,25 +236,25 @@ function NoteModal({
             <View style={{ height: 3, backgroundColor: colors.primary }} />
             <View style={{ padding: spacing(6), gap: spacing(5) }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={[typography.h2, { color: colors.textPrimary }]}>Add Quick Note</Text>
-                <Pressable onPress={onClose} style={({ pressed }) => ({ width: 40, height: 40, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
+                <Text style={[typography.h2, { color: colors.textPrimary }]}>{t('Add Quick Note')}</Text>
+                <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={t('Close')} style={({ pressed }) => ({ width: 40, height: 40, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
                   <Ionicons name="close" size={20} color={colors.textSecondary} />
                 </Pressable>
               </View>
               <TextInput
                 value={noteText}
                 onChangeText={onChangeText}
-                placeholder="e.g. Strong focus on practical skills. Good government sponsorship chances..."
+                placeholder={t('e.g. Strong focus on practical skills. Good government sponsorship chances...')}
                 placeholderTextColor={colors.textMuted}
                 style={{ minHeight: 120, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, padding: spacing(4), backgroundColor: colors.surfaceAlt, color: colors.textPrimary, textAlignVertical: 'top', fontSize: 15 }}
                 multiline
               />
               <View style={{ flexDirection: 'row', gap: spacing(3) }}>
                 <Pressable onPress={onClose} style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.85 : 1 })}>
-                  <Text style={[typography.label, { color: colors.textPrimary }]}>Cancel</Text>
+                  <Text style={[typography.label, { color: colors.textPrimary }]}>{t('Cancel')}</Text>
                 </Pressable>
                 <Pressable onPress={onSave} style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: radii.lg, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.9 : 1 })}>
-                  <Text style={[typography.label, { color: '#fff' }]}>Save Note</Text>
+                  <Text style={[typography.label, { color: '#fff' }]}>{t('Save Note')}</Text>
                 </Pressable>
               </View>
             </View>
@@ -265,6 +271,7 @@ function NoteModal({
 function BrigadeDetailsContent() {
   const { width } = useWindowDimensions();
   const colors = useTheme();
+  const { t } = useLanguage();
   const params = useLocalSearchParams<{ id?: string }>();
   const brigadeId = typeof params.id === 'string' ? params.id : '';
 
@@ -287,7 +294,7 @@ function BrigadeDetailsContent() {
   // Fetch Brigade + Faculties + Courses
   useEffect(() => {
     if (!brigadeId) {
-      setError("Brigade ID not found");
+      setError(t('Brigade ID not found'));
       setLoading(false);
       return;
     }
@@ -299,7 +306,7 @@ function BrigadeDetailsContent() {
 
         const brigadeDoc = await getDoc(doc(db, 'institutions', brigadeId));
         if (!brigadeDoc.exists()) {
-          setError("Brigade not found");
+          setError(t('Brigade not found'));
           return;
         }
 
@@ -350,14 +357,14 @@ function BrigadeDetailsContent() {
         setCourses(fetchedCourses);
       } catch (err: any) {
         console.error('BRIGADE DETAILS ERROR:', err);
-        setError('Failed to load brigade information. Please try again.');
+        setError(t('Failed to load brigade information. Please try again.'));
       } finally {
         setLoading(false);
       }
     };
 
     fetchBrigadeData();
-  }, [brigadeId]);
+  }, [brigadeId, t]);
 
   const filteredCourses = useMemo(() => {
     if (!selectedFacultyId) return courses;
@@ -381,9 +388,9 @@ function BrigadeDetailsContent() {
 
   const handleVisitWebsite = () => {
     if (brigade?.website) {
-      Alert.alert('Visit Website', `Would open: ${brigade.website}`);
+      Alert.alert(t('Visit Website'), `${t('Official Website')}: ${brigade.website}`);
     } else {
-      Alert.alert('No website available');
+      Alert.alert(t('No website available'));
     }
   };
 
@@ -392,17 +399,17 @@ function BrigadeDetailsContent() {
   };
 
   const handleSaveNote = () => {
-    Alert.alert('Note Saved', 'Your note has been saved successfully.');
+    Alert.alert(t('Note Saved'), t('Your note has been saved successfully.'));
     setNoteModalVisible(false);
     setNoteText('');
   };
 
   if (loading) {
     return (
-      <DashboardLayout title="Brigade Details" subtitle="Loading..." showPointsCard={false}>
+      <DashboardLayout title={t('Brigade Details')} subtitle={t('Loading...')} showPointsCard={false}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing(10) }}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(4) }]}>Loading brigade information...</Text>
+          <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(4) }]}>{t('Loading brigade information...')}</Text>
         </View>
       </DashboardLayout>
     );
@@ -410,12 +417,12 @@ function BrigadeDetailsContent() {
 
   if (error || !brigade) {
     return (
-      <DashboardLayout title="Brigade Details" subtitle="Error" showPointsCard={false}>
+      <DashboardLayout title={t('Brigade Details')} subtitle={t('Error')} showPointsCard={false}>
         <View style={{ padding: spacing(8), alignItems: 'center' }}>
           <Ionicons name="alert-circle-outline" size={64} color={colors.danger} />
-          <Text style={[typography.h2, { color: colors.textPrimary, marginTop: spacing(4), textAlign: 'center' }]}>{error || 'Failed to load brigade'}</Text>
+          <Text style={[typography.h2, { color: colors.textPrimary, marginTop: spacing(4), textAlign: 'center' }]}>{error || t('Failed to load brigade')}</Text>
           <Pressable onPress={() => router.back()} style={{ marginTop: spacing(6), paddingHorizontal: spacing(6), paddingVertical: spacing(3), backgroundColor: colors.primary, borderRadius: radii.lg }}>
-            <Text style={[typography.label, { color: '#fff' }]}>Go Back</Text>
+            <Text style={[typography.label, { color: '#fff' }]}>{t('Go Back')}</Text>
           </Pressable>
         </View>
       </DashboardLayout>
@@ -424,15 +431,15 @@ function BrigadeDetailsContent() {
 
   return (
     <>
-      <DashboardLayout title="Brigade Details" subtitle={brigade.name} showPointsCard={false}>
+      <DashboardLayout title={t('Brigade Details')} subtitle={brigade.name} showPointsCard={false}>
         {/* Back + Breadcrumb */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
-          <Pressable onPress={() => router.back()} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(4), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}>
+          <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('Go Back')} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(4), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}>
             <Ionicons name="arrow-back" size={17} color={colors.primary} />
-            <Text style={[typography.label, { color: colors.primary }]}>Back</Text>
+            <Text style={[typography.label, { color: colors.primary }]}>{t('Go Back')}</Text>
           </Pressable>
           <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]} numberOfLines={1}>
-            Institutions › Brigades › {brigade.badge}
+            {t('Institutions › Brigades › ')}{brigade.badge}
           </Text>
         </View>
 
@@ -464,8 +471,8 @@ function BrigadeDetailsContent() {
                 <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 24 }]}>{brigade.about}</Text>
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(4), paddingTop: spacing(4), borderTopWidth: 1, borderTopColor: colors.divider }}>
-                  <MetaItem icon="location-outline" label="Location" value={brigade.location} />
-                  <MetaItem icon="globe-outline" label="Website" value={brigade.website || 'N/A'} />
+                  <MetaItem icon="location-outline" label={t('Location')} value={brigade.location} />
+                  <MetaItem icon="globe-outline" label={t('Website')} value={brigade.website || t('N/A')} />
                 </View>
               </View>
             </Card>
@@ -473,10 +480,10 @@ function BrigadeDetailsContent() {
             {/* Faculties Filter */}
             <Card style={{ marginBottom: spacing(6) }}>
               <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
-                <SectionLabel title="Training Areas" />
-                <SectionTitle title="Browse by Faculty" icon="layers-outline" />
+                <SectionLabel title={t('Training Areas')} />
+                <SectionTitle title={t('Browse by Faculty')} icon="layers-outline" />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing(2) }}>
-                  <FacultyChip name="All Faculties" isActive={selectedFacultyId === null} onPress={() => handleFacultySelect(null)} />
+                  <FacultyChip name={t('All Faculties')} isActive={selectedFacultyId === null} onPress={() => handleFacultySelect(null)} />
                   {faculties.map((faculty) => (
                     <FacultyChip
                       key={faculty.id}
@@ -493,18 +500,18 @@ function BrigadeDetailsContent() {
             <Card style={{ marginBottom: spacing(6) }}>
               <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing(1) }}>
-                  <SectionLabel title="Programmes" />
+                  <SectionLabel title={t('Programmes')} />
                   <Text style={[typography.caption, { color: colors.textMuted }]}>
-                    {displayedCourses.length} of {filteredCourses.length}
+                    {displayedCourses.length}{t(' of ')}{filteredCourses.length}
                   </Text>
                 </View>
-                <SectionTitle title="Courses Offered" icon="school-outline" />
+                <SectionTitle title={t('Courses Offered')} icon="school-outline" />
 
                 {filteredCourses.length === 0 ? (
                   <View style={{ padding: spacing(8), alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radii.xl }}>
                     <Ionicons name="book-outline" size={48} color={colors.textMuted} />
                     <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(3), textAlign: 'center' }]}>
-                      No courses found.
+                      {t('No courses found.')}
                     </Text>
                   </View>
                 ) : (
@@ -532,7 +539,7 @@ function BrigadeDetailsContent() {
                           opacity: pressed ? 0.8 : 1,
                         })}
                       >
-                        <Text style={[typography.label, { color: colors.primary }]}>Load More Courses</Text>
+                        <Text style={[typography.label, { color: colors.primary }]}>{t('Load More Courses')}</Text>
                         <Ionicons name="chevron-down" size={16} color={colors.primary} />
                       </Pressable>
                     )}
@@ -547,15 +554,15 @@ function BrigadeDetailsContent() {
             <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
               <Card intensity="md">
                 <View style={{ padding: spacing(6), gap: spacing(3) }}>
-                  <SectionLabel title="Actions" />
-                  <SectionTitle title="Quick Actions" />
-                  <Pressable onPress={handleVisitWebsite} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(4), backgroundColor: colors.primary, borderRadius: radii.lg, opacity: pressed ? 0.9 : 1 })}>
+                  <SectionLabel title={t('Actions')} />
+                  <SectionTitle title={t('Quick Actions')} />
+                  <Pressable onPress={handleVisitWebsite} accessibilityRole="button" accessibilityLabel={t('Visit Website')} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(4), backgroundColor: colors.primary, borderRadius: radii.lg, opacity: pressed ? 0.9 : 1 })}>
                     <Ionicons name="open-outline" size={18} color="#fff" />
-                    <Text style={[typography.label, { color: '#fff' }]}>Visit Website</Text>
+                    <Text style={[typography.label, { color: '#fff' }]}>{t('Visit Website')}</Text>
                   </Pressable>
-                  <Pressable onPress={() => setNoteModalVisible(true)} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(4), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.9 : 1 })}>
+                  <Pressable onPress={() => setNoteModalVisible(true)} accessibilityRole="button" accessibilityLabel={t('Add Note')} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(4), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.9 : 1 })}>
                     <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
-                    <Text style={[typography.label, { color: colors.textSecondary }]}>Add Note</Text>
+                    <Text style={[typography.label, { color: colors.textSecondary }]}>{t('Add Note')}</Text>
                   </Pressable>
                 </View>
               </Card>
@@ -564,14 +571,24 @@ function BrigadeDetailsContent() {
 
           {/* Mobile Actions */}
           {isMobile && (
-            <View style={{ gap: spacing(3), marginBottom: spacing(10) }}>
-              <Pressable onPress={handleVisitWebsite} style={({ pressed }) => ({ height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing(3), backgroundColor: colors.primary, borderRadius: radii.xl, opacity: pressed ? 0.9 : 1 })}>
+            <View style={{ gap: spacing(3), marginBottom: spacing(4) }}>
+              <Pressable onPress={handleVisitWebsite} accessibilityRole="button" accessibilityLabel={t('Official Website')} style={({ pressed }) => ({ height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing(3), backgroundColor: colors.primary, borderRadius: radii.xl, opacity: pressed ? 0.9 : 1 })}>
                 <Ionicons name="open-outline" size={20} color="#fff" />
-                <Text style={[typography.bodyStrong, { color: '#fff' }]}>Official Website</Text>
+                <Text style={[typography.bodyStrong, { color: '#fff' }]}>{t('Official Website')}</Text>
+              </Pressable>
+
+              <Pressable onPress={() => setNoteModalVisible(true)} accessibilityRole="button" accessibilityLabel={t('Add Note')} style={({ pressed }) => ({ height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing(3), backgroundColor: colors.surfaceAlt, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.9 : 1 })}>
+                <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
+                <Text style={[typography.bodyStrong, { color: colors.textSecondary }]}>{t('Add Note')}</Text>
               </Pressable>
             </View>
           )}
         </View>
+
+        <StudentFooter
+          topSpacing={isMobile ? spacing(8) : spacing(10)}
+          maxWidth={1280}
+        />
       </DashboardLayout>
 
       {/* Note Modal */}

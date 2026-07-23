@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { StudentMenuProvider, useStudentMenu } from '../../components/student/StudentMenu';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 import {
   spacing,
@@ -27,6 +28,7 @@ import {
   radii,
   useTheme,
 } from '../../components/student/DashboardLayout';
+import StudentFooter from '../../components/student/StudentFooter';
 
 import { db, auth, storage } from '../../constants/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -99,14 +101,7 @@ const ACCOUNT_LINKS: {
   accent: string;
   href: string;
 }[] = [
-  {
-    key:         'password',
-    label:       'Change Password',
-    description: 'Update your account password',
-    icon:        'lock-closed-outline',
-    accent:      '#FBBF24',
-    href:        '/student/change-password',
-  },
+ 
   {
     key:         'records',
     label:       'Academic Records',
@@ -240,6 +235,7 @@ function Field({
 }) {
   const colors    = useTheme();
   const elevation = useElevation('sm');
+  const { t } = useLanguage();
   return (
     <View style={[{ minWidth: 0, width: '100%' }, containerStyle]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginBottom: spacing(2), minHeight: 18 }}>
@@ -249,7 +245,7 @@ function Field({
         {locked && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1), paddingHorizontal: spacing(2), paddingVertical: 2, borderRadius: radii.pill, backgroundColor: `${colors.warning}1A`, borderWidth: 1, borderColor: `${colors.warning}40`, flexShrink: 0 }}>
             <Ionicons name="lock-closed" size={9} color={colors.warning} />
-            <Text style={{ fontSize: 9, color: colors.warning, fontWeight: '800', letterSpacing: 0.5 }}>LOCKED</Text>
+            <Text style={{ fontSize: 9, color: colors.warning, fontWeight: '800', letterSpacing: 0.5 }}>{t('LOCKED')}</Text>
           </View>
         )}
       </View>
@@ -377,13 +373,14 @@ function Avatar({
 }) {
   const colors    = useTheme();
   const elevation = useElevation('md');
+  const { t } = useLanguage();
 
   return (
     <Pressable
       onPress={onPress}
       disabled={uploading}
       accessibilityRole="button"
-      accessibilityLabel="View profile picture"
+      accessibilityLabel={t('View profile picture')}
       style={({ pressed }) => ({
         width: size,
         height: size,
@@ -466,6 +463,7 @@ function ProfilePhotoPreviewModal({
 }) {
   const colors = useTheme();
   const elevation = useElevation('lg');
+  const { t } = useLanguage();
   const { width, height } = useWindowDimensions();
 
   const horizontalPadding = compact ? spacing(4) : spacing(8);
@@ -533,7 +531,7 @@ function ProfilePhotoPreviewModal({
               <Pressable
                 onPress={onClose}
                 accessibilityRole="button"
-                accessibilityLabel="Close profile picture"
+                accessibilityLabel={t('Close profile picture')}
                 hitSlop={10}
                 style={({ pressed }) => ({
                   width: compact ? 40 : 44,
@@ -582,7 +580,7 @@ function ProfilePhotoPreviewModal({
                   <Image
                     source={{ uri: photoURL }}
                     resizeMode="contain"
-                    accessibilityLabel="Large profile picture"
+                    accessibilityLabel={t('Large profile picture')}
                     style={{
                       width: '100%',
                       height: '100%',
@@ -666,7 +664,7 @@ function ProfilePhotoPreviewModal({
                 })}
               >
                 <Ionicons name="close-circle-outline" size={18} color="#fff" />
-                <Text style={[typography.label, { color: '#fff' }]}>Close</Text>
+                <Text style={[typography.label, { color: '#fff' }]}>{t('Close')}</Text>
               </Pressable>
 
               <Pressable
@@ -687,7 +685,7 @@ function ProfilePhotoPreviewModal({
               >
                 <Ionicons name="camera-outline" size={19} color="#fff" />
                 <Text style={[typography.label, { color: '#fff' }]}>
-                  {photoURL ? 'Change Photo' : 'Add Photo'}
+                  {photoURL ? t('Change Photo') : t('Add Photo')}
                 </Text>
               </Pressable>
             </View>
@@ -719,6 +717,7 @@ function PhotoActionSheet({
 }) {
   const colors    = useTheme();
   const elevation = useElevation('lg');
+  const { t } = useLanguage();
   const { width, height } = useWindowDimensions();
 
   const previewSize = Math.max(
@@ -771,6 +770,8 @@ function PhotoActionSheet({
               <Pressable
                 onPress={onClose}
                 disabled={uploading}
+                accessibilityRole="button"
+                accessibilityLabel={t('Close')}
                 style={({ pressed }) => ({
                   width: 34,
                   height: 34,
@@ -818,7 +819,7 @@ function PhotoActionSheet({
                   <Image
                     source={{ uri: photoURL }}
                     style={{ width: '100%', height: '100%', resizeMode: 'contain' }}
-                    accessibilityLabel="Full-size profile picture"
+                    accessibilityLabel={t('Full-size profile picture')}
                   />
                 ) : (
                   <View
@@ -884,6 +885,8 @@ function PhotoActionSheet({
               <Pressable
                 onPress={onCamera}
                 disabled={uploading}
+                accessibilityRole="button"
+                accessibilityLabel={t('Take a photo')}
                 style={({ pressed }) => ({
                   minHeight: 54,
                   borderRadius: radii.xl,
@@ -899,8 +902,8 @@ function PhotoActionSheet({
               >
                 <Ionicons name="camera" size={20} color={colors.primary} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>Take a photo</Text>
-                  <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>Use your camera</Text>
+                  <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>{t('Take a photo')}</Text>
+                  <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>{t('Use your camera')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
               </Pressable>
@@ -908,6 +911,8 @@ function PhotoActionSheet({
               <Pressable
                 onPress={onLibrary}
                 disabled={uploading}
+                accessibilityRole="button"
+                accessibilityLabel={t('Choose from gallery')}
                 style={({ pressed }) => ({
                   minHeight: 54,
                   borderRadius: radii.xl,
@@ -923,8 +928,8 @@ function PhotoActionSheet({
               >
                 <Ionicons name="image-outline" size={20} color={colors.primary} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>Choose from gallery</Text>
-                  <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>Upload an existing image</Text>
+                  <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>{t('Choose from gallery')}</Text>
+                  <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>{t('Upload an existing image')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
               </Pressable>
@@ -933,7 +938,7 @@ function PhotoActionSheet({
             {uploading && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), padding: spacing(3), borderRadius: radii.lg, backgroundColor: `${colors.primary}12`, borderWidth: 1, borderColor: `${colors.primary}22` }}>
                 <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>Uploading photo…</Text>
+                <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{t('Uploading photo…')}</Text>
               </View>
             )}
           </View>
@@ -948,11 +953,12 @@ function PhotoActionSheet({
 // ─────────────────────────────────────────────────────────────────────────────
 function ProfileCompletionBar({ pct, compact }: { pct: number; compact?: boolean }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   const color  = pct >= 80 ? colors.success : pct >= 50 ? colors.warning : colors.danger;
   return (
     <View style={{ gap: spacing(2) }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={[typography.caption, { color: colors.textSecondary, fontSize: compact ? 10 : undefined }]}>Profile completeness</Text>
+        <Text style={[typography.caption, { color: colors.textSecondary, fontSize: compact ? 10 : undefined }]}>{t('Profile completeness')}</Text>
         <Text style={[typography.caption, { color, fontWeight: '700', fontSize: compact ? 10 : undefined }]}>{pct}%</Text>
       </View>
       <View style={{ height: compact ? 5 : 7, backgroundColor: colors.border, borderRadius: radii.pill, overflow: 'hidden' }}>
@@ -967,13 +973,14 @@ function ProfileCompletionBar({ pct, compact }: { pct: number; compact?: boolean
 // ─────────────────────────────────────────────────────────────────────────────
 function UnsavedBanner({ onSave, saving, compact }: { onSave: () => void; saving: boolean; compact: boolean }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), paddingHorizontal: spacing(4), paddingVertical: spacing(3), backgroundColor: `${colors.warning}18`, borderRadius: radii.lg, borderWidth: 1, borderColor: `${colors.warning}44`, marginBottom: spacing(compact ? 4 : 5) }}>
       <Ionicons name="alert-circle-outline" size={16} color={colors.warning} />
-      <Text style={[typography.caption, { color: colors.warning, flex: 1, fontWeight: '600' }]}>You have unsaved changes</Text>
+      <Text style={[typography.caption, { color: colors.warning, flex: 1, fontWeight: '600' }]}>{t('You have unsaved changes')}</Text>
       <Pressable onPress={onSave} disabled={saving} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(1), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.warning, opacity: pressed || saving ? 0.8 : 1 })}>
         {saving ? <ActivityIndicator size="small" color="#000" /> : <Ionicons name="checkmark" size={13} color="#000" />}
-        <Text style={{ fontSize: 11, fontWeight: '800', color: '#000' }}>{saving ? 'SAVING' : 'SAVE NOW'}</Text>
+        <Text style={{ fontSize: 11, fontWeight: '800', color: '#000' }}>{saving ? t('SAVING') : t('SAVE NOW')}</Text>
       </Pressable>
     </View>
   );
@@ -985,6 +992,7 @@ function UnsavedBanner({ onSave, saving, compact }: { onSave: () => void; saving
 function StudentProfileContent() {
   const { width }    = useWindowDimensions();
   const colors       = useTheme();
+  const { t, language } = useLanguage();
   const { openMenu } = useStudentMenu();
   const elevMd       = useElevation('md');
   const elevLg       = useElevation('lg');
@@ -1058,7 +1066,7 @@ function StudentProfileContent() {
         setSavedProfile({ ...loaded });
       } catch (err) {
         console.error('[Profile] load error:', err);
-        showToast('Could not load profile data', 'error');
+        showToast(t('Could not load profile data'), 'error');
       } finally {
         setLoadingProfile(false);
       }
@@ -1069,7 +1077,7 @@ function StudentProfileContent() {
 
   const handleSave = useCallback(async () => {
     if (saving || !currentUser) return;
-    if (!name.trim()) { showToast('Full name is required', 'error'); return; }
+    if (!name.trim()) { showToast(t('Full name is required'), 'error'); return; }
     setSaving(true);
     const payload: UserProfile = { name: name.trim(), phone: phone.trim(), school: school.trim(), yearForm: yearForm.trim(), bio: bio.trim(), photoURL: photoURL.trim() };
     try {
@@ -1081,14 +1089,14 @@ function StudentProfileContent() {
       // even when the setState calls above are no-ops because the fields
       // already matched the trimmed payload.
       setSavedProfile({ ...payload });
-      showToast('Profile saved successfully', 'success');
+      showToast(t('Profile saved successfully'), 'success');
     } catch (err) {
       console.error('[Profile] save error:', err);
-      showToast('Failed to save — check your connection', 'error');
+      showToast(t('Failed to save — check your connection'), 'error');
     } finally {
       setSaving(false);
     }
-  }, [saving, currentUser, name, phone, school, yearForm, bio, photoURL, showToast]);
+  }, [saving, currentUser, name, phone, school, yearForm, bio, photoURL, showToast, t]);
 
   const handleUploadPhoto = useCallback(async (source: 'camera' | 'library') => {
     if (!currentUser || photoUploading) return;
@@ -1102,8 +1110,8 @@ function StudentProfileContent() {
       if (!permission.granted) {
         showToast(
           source === 'camera'
-            ? 'Camera permission is required to take a profile photo'
-            : 'Gallery permission is required to upload a profile photo',
+            ? t('Camera permission is required to take a profile photo')
+            : t('Gallery permission is required to upload a profile photo'),
           'error',
         );
         return;
@@ -1142,15 +1150,15 @@ function StudentProfileContent() {
 
       setPhotoURL(downloadURL);
       setSavedProfile((prev) => ({ ...prev, photoURL: downloadURL }));
-      showToast('Profile photo saved successfully', 'success');
+      showToast(t('Profile photo saved successfully'), 'success');
     } catch (err) {
       console.error('[Profile] photo upload error:', err);
       setPhotoURL(savedProfile.photoURL || '');
-      showToast('Failed to save profile photo', 'error');
+      showToast(t('Failed to save profile photo'), 'error');
     } finally {
       setPhotoUploading(false);
     }
-  }, [currentUser, photoUploading, photoURL, savedProfile, showToast]);
+  }, [currentUser, photoUploading, photoURL, savedProfile, showToast, t]);
 
   const handleOpenPhotoPreview = useCallback(() => {
     if (photoUploading) return;
@@ -1185,7 +1193,7 @@ function StudentProfileContent() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', gap: spacing(4) }}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[typography.body, { color: colors.textMuted }]}>Checking authentication…</Text>
+        <Text style={[typography.body, { color: colors.textMuted }]}>{t('Checking authentication…')}</Text>
       </View>
     );
   }
@@ -1196,10 +1204,10 @@ function StudentProfileContent() {
         <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: `${colors.danger}20`, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name="lock-closed-outline" size={28} color={colors.danger} />
         </View>
-        <Text style={[typography.h2, { color: colors.textPrimary, textAlign: 'center' }]}>Not signed in</Text>
-        <Text style={[typography.body, { color: colors.textMuted, textAlign: 'center' }]}>Please log in to view and edit your profile.</Text>
-        <Pressable onPress={() => router.replace('/auth/login')} style={{ paddingHorizontal: spacing(6), paddingVertical: spacing(3), backgroundColor: colors.primary, borderRadius: radii.lg }}>
-          <Text style={[typography.label, { color: '#fff' }]}>Go to Login</Text>
+        <Text style={[typography.h2, { color: colors.textPrimary, textAlign: 'center' }]}>{t('Not signed in')}</Text>
+        <Text style={[typography.body, { color: colors.textMuted, textAlign: 'center' }]}>{t('Please log in to view and edit your profile.')}</Text>
+        <Pressable onPress={() => router.replace('/auth/login')} accessibilityRole="button" accessibilityLabel={t('Go to Login')} style={{ paddingHorizontal: spacing(6), paddingVertical: spacing(3), backgroundColor: colors.primary, borderRadius: radii.lg }}>
+          <Text style={[typography.label, { color: '#fff' }]}>{t('Go to Login')}</Text>
         </Pressable>
       </View>
     );
@@ -1208,15 +1216,15 @@ function StudentProfileContent() {
   // ── Nav bar ───────────────────────────────────────────────────────────────
   const NavBar = (
     <View style={[{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: padX, paddingVertical: spacing(compact ? 3 : 4), backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border, gap: spacing(3) }, elevMd]}>
-      <Pressable onPress={() => router.back()} style={({ pressed }) => ({ width: compact ? 38 : 44, height: compact ? 38 : 44, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center' as const, justifyContent: 'center' as const, opacity: pressed ? 0.8 : 1 })}>
+      <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('Go Back')} style={({ pressed }) => ({ width: compact ? 38 : 44, height: compact ? 38 : 44, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center' as const, justifyContent: 'center' as const, opacity: pressed ? 0.8 : 1 })}>
         <Ionicons name="arrow-back" size={compact ? 18 : 20} color={colors.primary} />
       </Pressable>
 
       <View style={{ flex: 1 }}>
-        <Text style={[typography.h2, { color: colors.textPrimary, fontSize: compact ? 15 : undefined }]}>Student Profile</Text>
+        <Text style={[typography.h2, { color: colors.textPrimary, fontSize: compact ? 15 : undefined }]}>{t('Student Profile')}</Text>
         {!compact && (
           <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
-            {isDirty ? '● Unsaved changes' : 'All changes saved'}
+            {isDirty ? `● ${t('Unsaved changes')}` : t('All changes saved')}
           </Text>
         )}
       </View>
@@ -1236,10 +1244,10 @@ function StudentProfileContent() {
         })}
       >
         {saving ? <ActivityIndicator color={colors.primary} size="small" /> : <Ionicons name="checkmark-circle-outline" size={compact ? 15 : 17} color={isDirty ? '#fff' : colors.textMuted} />}
-        {!compact && <Text style={[typography.label, { color: saving ? colors.primary : isDirty ? '#fff' : colors.textMuted, fontSize: 12 }]}>{saving ? 'SAVING…' : 'SAVE'}</Text>}
+        {!compact && <Text style={[typography.label, { color: saving ? colors.primary : isDirty ? '#fff' : colors.textMuted, fontSize: 12 }]}>{saving ? t('SAVING…') : t('SAVE')}</Text>}
       </Pressable>
 
-      <Pressable onPress={openMenu} style={({ pressed }) => ({ width: compact ? 38 : 44, height: compact ? 38 : 44, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center' as const, justifyContent: 'center' as const, opacity: pressed ? 0.8 : 1 })}>
+      <Pressable onPress={openMenu} accessibilityRole="button" accessibilityLabel={t('Open student menu')} style={({ pressed }) => ({ width: compact ? 38 : 44, height: compact ? 38 : 44, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center' as const, justifyContent: 'center' as const, opacity: pressed ? 0.8 : 1 })}>
         <Ionicons name="menu" size={compact ? 20 : 22} color={colors.textPrimary} />
       </Pressable>
     </View>
@@ -1252,7 +1260,7 @@ function StudentProfileContent() {
       {loadingProfile ? (
         <View style={{ padding: spacing(8), alignItems: 'center', gap: spacing(3) }}>
           <ActivityIndicator color={colors.primary} />
-          <Text style={[typography.caption, { color: colors.textMuted }]}>Loading your profile…</Text>
+          <Text style={[typography.caption, { color: colors.textMuted }]}>{t('Loading your profile…')}</Text>
         </View>
       ) : (
         <View style={{ padding: compact ? spacing(4) : spacing(7) }}>
@@ -1260,12 +1268,12 @@ function StudentProfileContent() {
             <Avatar initials={initials || '?'} photoURL={photoURL} onPress={handleOpenPhotoPreview} uploading={photoUploading} size={compact ? 72 : 96} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginBottom: spacing(compact ? 2 : 3) }}>
-                <StatusBadge label="STUDENT"  icon="school-outline"           color={colors.primary} compact={compact} />
-                <StatusBadge label="ACTIVE"   icon="checkmark-circle-outline" color={colors.success} compact={compact} />
-                {currentUser.emailVerified && <StatusBadge label="VERIFIED" icon="shield-checkmark-outline" color={colors.warning} compact={compact} />}
+                <StatusBadge label={t('STUDENT')}  icon="school-outline"           color={colors.primary} compact={compact} />
+                <StatusBadge label={t('ACTIVE')}   icon="checkmark-circle-outline" color={colors.success} compact={compact} />
+                {currentUser.emailVerified && <StatusBadge label={t('VERIFIED')} icon="shield-checkmark-outline" color={colors.warning} compact={compact} />}
               </View>
               <Text style={{ fontSize: compact ? 18 : 26, lineHeight: compact ? 23 : 32, fontWeight: '900', color: name.trim() ? colors.textPrimary : colors.textMuted }} numberOfLines={1}>
-                {name.trim() || 'Your Name'}
+                {name.trim() || t('Your Name')}
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginTop: spacing(1) }}>
                 <Ionicons name="mail-outline" size={compact ? 11 : 13} color={colors.textMuted} />
@@ -1280,10 +1288,10 @@ function StudentProfileContent() {
           <View style={{ height: 1, backgroundColor: colors.divider, marginVertical: compact ? spacing(4) : spacing(5) }} />
 
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: compact ? spacing(2) : spacing(3) }}>
-            <HeroStat icon="school-outline"           label="Institution" value={schoolAbbr}          accent={colors.primary} compact={compact} />
-            <HeroStat icon="sparkles-outline"         label="Profile"     value={`${completeness}%`}  accent={colors.success} compact={compact} />
-            <HeroStat icon="shield-checkmark-outline" label="Status"      value={currentUser.emailVerified ? 'Verified' : 'Unverified'} accent={colors.warning} compact={compact} />
-            <HeroStat icon="calendar-outline"         label="Year"        value={yearForm || '—'}     accent={colors.primary} compact={compact} />
+            <HeroStat icon="school-outline"           label={t('Institution')} value={schoolAbbr}          accent={colors.primary} compact={compact} />
+            <HeroStat icon="sparkles-outline"         label={t('Profile')}     value={`${completeness}%`}  accent={colors.success} compact={compact} />
+            <HeroStat icon="shield-checkmark-outline" label={t('Status')}      value={currentUser.emailVerified ? t('Verified') : t('Unverified')} accent={colors.warning} compact={compact} />
+            <HeroStat icon="calendar-outline"         label={t('Year')}        value={yearForm || '—'}     accent={colors.primary} compact={compact} />
           </View>
         </View>
       )}
@@ -1292,28 +1300,28 @@ function StudentProfileContent() {
 
   // ── Form card ─────────────────────────────────────────────────────────────
   const FormCard = (
-    <SectionCard title="Personal Information" icon="person-outline" accentColor={colors.primary} compact={compact}>
+    <SectionCard title={t('Personal Information')} icon="person-outline" accentColor={colors.primary} compact={compact}>
       {isDirty && !saving && <UnsavedBanner onSave={handleSave} saving={saving} compact={compact} />}
 
       <Text style={[typography.body, { color: colors.textSecondary, marginBottom: compact ? spacing(5) : spacing(6), lineHeight: compact ? 20 : 22, fontSize: compact ? 13 : 14 }]}>
-        This information is saved to your account and synced across all your devices.
+        {t('This information is saved to your account and synced across all your devices.')}
       </Text>
 
       {/* Identity section */}
-      <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '800', letterSpacing: 1, fontSize: 11, marginBottom: spacing(3) }]}>IDENTITY</Text>
+      <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '800', letterSpacing: 1, fontSize: 11, marginBottom: spacing(3) }]}>{t('IDENTITY')}</Text>
       <FormGrid columns={formColumns} gap={spacing(4)}>
-        <Field label="Full Name"     icon="person-outline" placeholder="Enter your full name" value={name} onChangeText={setName} autoCapitalize="words" compact={compact} />
-        <Field label="Email Address" icon="mail-outline"   placeholder="your@email.com"       value={email} locked helper="Email cannot be changed here" compact={compact} />
+        <Field label={t('Full Name')}     icon="person-outline" placeholder={t('Enter your full name')} value={name} onChangeText={setName} autoCapitalize="words" compact={compact} />
+        <Field label={t('Email Address')} icon="mail-outline"   placeholder="your@email.com"       value={email} locked helper={t('Email cannot be changed here')} compact={compact} />
       </FormGrid>
 
       <View style={{ height: 1, backgroundColor: colors.divider, marginVertical: compact ? spacing(5) : spacing(6) }} />
 
       {/* Contact & education section */}
-      <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '800', letterSpacing: 1, fontSize: 11, marginBottom: spacing(3) }]}>CONTACT & EDUCATION</Text>
+      <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '800', letterSpacing: 1, fontSize: 11, marginBottom: spacing(3) }]}>{t('CONTACT & EDUCATION')}</Text>
       <FormGrid columns={formColumns} gap={spacing(4)}>
-        <Field label="Phone Number" icon="call-outline"     placeholder="+267 71 XXX XXX"          value={phone}    onChangeText={setPhone}    keyboardType="phone-pad"  compact={compact} />
-        <Field label="Institution"  icon="school-outline"   placeholder="Your school or university" value={school}   onChangeText={setSchool}   autoCapitalize="words"    compact={compact} />
-        <Field label="Year / Form"  icon="calendar-outline" placeholder="e.g. Form 5 or Year 2"    value={yearForm} onChangeText={setYearForm}                            compact={compact} />
+        <Field label={t('Phone Number')} icon="call-outline"     placeholder="+267 71 XXX XXX"          value={phone}    onChangeText={setPhone}    keyboardType="phone-pad"  compact={compact} />
+        <Field label={t('Institution')}  icon="school-outline"   placeholder={t('Your school or university')} value={school}   onChangeText={setSchool}   autoCapitalize="words"    compact={compact} />
+        <Field label={t('Year / Form')}  icon="calendar-outline" placeholder={t('e.g. Form 5 or Year 2')}    value={yearForm} onChangeText={setYearForm}                            compact={compact} />
         {formColumns === 2 && <View />}
       </FormGrid>
 
@@ -1321,13 +1329,13 @@ function StudentProfileContent() {
 
       {/* Bio section */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing(2) }}>
-        <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '800', letterSpacing: 1, fontSize: 11 }]}>ABOUT YOU</Text>
+        <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '800', letterSpacing: 1, fontSize: 11 }]}>{t('ABOUT YOU')}</Text>
         <Text style={[typography.caption, { color: colors.textMuted, fontSize: 10 }]}>{bio.length} / 500</Text>
       </View>
       <View style={{ borderWidth: 1, borderRadius: radii.lg, borderColor: colors.border, backgroundColor: colors.surfaceAlt, paddingHorizontal: compact ? spacing(3) : spacing(4), paddingVertical: compact ? spacing(2) : spacing(3), marginBottom: compact ? spacing(5) : spacing(6), ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6 }, android: { elevation: 2 }, web: { boxShadow: '0 2px 8px rgba(0,0,0,0.12)' } as any, default: {} }) }}>
         <TextInput
           multiline value={bio} onChangeText={(v) => setBio(v.slice(0, 500))}
-          placeholder="Tell us about yourself, your goals, and achievements…"
+          placeholder={t('Tell us about yourself, your goals, and achievements…')}
           placeholderTextColor={colors.textMuted}
           style={[typography.body, { color: colors.textPrimary, minHeight: compact ? 100 : 130, textAlignVertical: 'top', lineHeight: compact ? 20 : 22, fontSize: compact ? 13 : 14 }]}
         />
@@ -1336,12 +1344,14 @@ function StudentProfileContent() {
       {/* Account ID */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(3), marginBottom: compact ? spacing(4) : spacing(5), backgroundColor: `${colors.primary}0A`, borderRadius: radii.lg, borderWidth: 1, borderColor: `${colors.primary}1A` }}>
         <Ionicons name="finger-print-outline" size={14} color={colors.textMuted} />
-        <Text style={[typography.caption, { color: colors.textMuted, flex: 1, fontSize: 11 }]} numberOfLines={1} ellipsizeMode="middle">Account ID: {currentUser.uid}</Text>
+        <Text style={[typography.caption, { color: colors.textMuted, flex: 1, fontSize: 11 }]} numberOfLines={1} ellipsizeMode="middle">{t('Account ID')}: {currentUser.uid}</Text>
       </View>
 
       {/* Save button */}
       <Pressable
         onPress={handleSave} disabled={saving || !isDirty}
+        accessibilityRole="button"
+        accessibilityLabel={saving ? t('SAVING…') : t('SAVE PROFILE')}
         style={({ pressed }) => ({
           height: compact ? 50 : 56, borderRadius: radii.xl,
           backgroundColor: !isDirty ? colors.surfaceAlt : saving ? colors.surfaceAlt : colors.primary,
@@ -1353,12 +1363,12 @@ function StudentProfileContent() {
         })}
       >
         {saving ? (
-          <><ActivityIndicator color={colors.primary} size="small" /><Text style={[typography.label, { color: colors.primary, letterSpacing: 0.5, fontSize: compact ? 12 : undefined }]}>SAVING…</Text></>
+          <><ActivityIndicator color={colors.primary} size="small" /><Text style={[typography.label, { color: colors.primary, letterSpacing: 0.5, fontSize: compact ? 12 : undefined }]}>{t('SAVING…')}</Text></>
         ) : (
           <>
             <Ionicons name={isDirty ? 'cloud-upload-outline' : 'checkmark-circle-outline'} size={compact ? 17 : 20} color={isDirty ? '#fff' : colors.textMuted} />
             <Text style={[typography.label, { color: isDirty ? '#fff' : colors.textMuted, letterSpacing: 0.5, fontSize: compact ? 12 : undefined }]}>
-              {isDirty ? 'SAVE PROFILE' : 'NO CHANGES TO SAVE'}
+              {isDirty ? t('SAVE PROFILE') : t('NO CHANGES TO SAVE')}
             </Text>
           </>
         )}
@@ -1371,16 +1381,16 @@ function StudentProfileContent() {
   // now appear as a proper card section on mobile and tablet.
   const QuickLinksCard = !isDesktop && (
     <View style={{ marginTop: spacing(compact ? 5 : 7) }}>
-      <SectionCard title="Account & Navigation" icon="apps-outline" accentColor={colors.primary} compact={compact}>
+      <SectionCard title={t('Account & Navigation')} icon="apps-outline" accentColor={colors.primary} compact={compact}>
         <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing(4), fontSize: compact ? 13 : 14, lineHeight: 20 }]}>
-          Manage your password, records, and account settings.
+          {t('Manage your password, records, and account settings.')}
         </Text>
 
         {/* Completion tip */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(4), backgroundColor: `${colors.primary}12`, borderRadius: radii.lg, borderLeftWidth: 3, borderLeftColor: colors.primary, marginBottom: spacing(4) }}>
           <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
           <Text style={[typography.caption, { color: colors.textSecondary, flex: 1, lineHeight: 18 }]}>
-            Complete your profile to unlock stronger course and scholarship recommendations.
+            {t('Complete your profile to unlock stronger course and scholarship recommendations.')}
           </Text>
         </View>
 
@@ -1394,8 +1404,8 @@ function StudentProfileContent() {
             <NavRow
               key={link.key}
               icon={link.icon}
-              label={link.label}
-              description={link.description}
+              label={t(link.label)}
+              description={t(link.description)}
               accent={link.accent}
               onPress={() => router.push(link.href as any)}
               last={i === ACCOUNT_LINKS.length - 1}
@@ -1408,7 +1418,7 @@ function StudentProfileContent() {
         {/* Sync status */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), padding: spacing(3), backgroundColor: `${colors.success}12`, borderRadius: radii.lg, borderWidth: 1, borderColor: `${colors.success}22` }}>
           <Ionicons name="cloud-done-outline" size={14} color={colors.success} />
-          <Text style={[typography.caption, { color: colors.success, fontWeight: '600' }]}>Synced across all devices</Text>
+          <Text style={[typography.caption, { color: colors.success, fontWeight: '600' }]}>{t('Synced across all devices')}</Text>
         </View>
       </SectionCard>
     </View>
@@ -1417,14 +1427,14 @@ function StudentProfileContent() {
   // ── Desktop sidebar ───────────────────────────────────────────────────────
   const Sidebar = isDesktop && (
     <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
-      <SectionCard title="Account" icon="settings-outline" accentColor={colors.primary}>
+      <SectionCard title={t('Account')} icon="settings-outline" accentColor={colors.primary}>
         <View style={{ marginHorizontal: -spacing(6), marginBottom: spacing(2) }}>
           {ACCOUNT_LINKS.map((link, i) => (
             <NavRow
               key={link.key}
               icon={link.icon}
-              label={link.label}
-              description={link.description}
+              label={t(link.label)}
+              description={t(link.description)}
               accent={link.accent}
               onPress={() => router.push(link.href as any)}
               last={i === ACCOUNT_LINKS.length - 1}
@@ -1438,13 +1448,13 @@ function StudentProfileContent() {
 
         <View style={{ marginTop: spacing(4), padding: spacing(4), backgroundColor: `${colors.primary}14`, borderRadius: radii.lg, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
           <Text style={[typography.caption, { color: colors.textSecondary, lineHeight: 18 }]}>
-            💡 Complete profiles receive stronger course and scholarship recommendations across the platform.
+            {t('💡 Complete profiles receive stronger course and scholarship recommendations across the platform.')}
           </Text>
         </View>
 
         <View style={{ marginTop: spacing(3), flexDirection: 'row', alignItems: 'center', gap: spacing(2), padding: spacing(3), backgroundColor: `${colors.success}12`, borderRadius: radii.lg, borderWidth: 1, borderColor: `${colors.success}22` }}>
           <Ionicons name="cloud-done-outline" size={14} color={colors.success} />
-          <Text style={[typography.caption, { color: colors.success, fontWeight: '600' }]}>Synced across all devices</Text>
+          <Text style={[typography.caption, { color: colors.success, fontWeight: '600' }]}>{t('Synced across all devices')}</Text>
         </View>
       </SectionCard>
     </View>
@@ -1464,17 +1474,17 @@ function StudentProfileContent() {
             <View style={{ paddingHorizontal: padX, paddingTop: spacing(compact ? 5 : 7), maxWidth: 1280, alignSelf: 'center', width: '100%' }}>
               {/* Breadcrumb */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(compact ? 4 : 6) }}>
-                <Pressable onPress={() => router.back()} style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(compact ? 3 : 4), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}>
+                <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('Go Back')} style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(compact ? 3 : 4), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}>
                   <Ionicons name="arrow-back" size={compact ? 14 : 16} color={colors.primary} />
-                  <Text style={[typography.label, { color: colors.primary, fontSize: compact ? 12 : undefined }]}>Back</Text>
+                  <Text style={[typography.label, { color: colors.primary, fontSize: compact ? 12 : undefined }]}>{t('Go Back')}</Text>
                 </Pressable>
                 <Text style={[typography.caption, { color: colors.textMuted, flex: 1, fontSize: compact ? 10 : undefined }]} numberOfLines={1}>
-                  Dashboard › Student Profile
+                  {t('Dashboard › Student Profile')}
                 </Text>
                 {isDirty && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1) }}>
                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.warning }} />
-                    <Text style={[typography.caption, { color: colors.warning, fontSize: compact ? 10 : undefined }]}>Unsaved</Text>
+                    <Text style={[typography.caption, { color: colors.warning, fontSize: compact ? 10 : undefined }]}>{t('Unsaved')}</Text>
                   </View>
                 )}
               </View>
@@ -1490,6 +1500,11 @@ function StudentProfileContent() {
                 </View>
                 {Sidebar}
               </View>
+
+              <StudentFooter
+                topSpacing={isMobile ? spacing(8) : spacing(10)}
+                maxWidth={1280}
+              />
             </View>
           </ScrollView>
         </KeyboardAvoidingView>

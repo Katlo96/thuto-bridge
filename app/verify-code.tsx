@@ -9,6 +9,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { verifyPhoneOTP, sendPhoneOTP, getStoredConfirmation, parseFirebaseError } from '../services/authService';
+import { useLanguage } from '../contexts/LanguageContext';
+import StudentFooter from '../components/student/StudentFooter';
 
 const sp = (n: number) => n * 4;
 const typo = {
@@ -22,6 +24,7 @@ const radii = { md: 12, lg: 16, xl: 20 };
 const DIGITS = 6;
 
 export default function VerifyCode() {
+  const { t } = useLanguage();
   const { width } = useWindowDimensions();
   const scheme    = useColorScheme() || 'light';
   const params    = useLocalSearchParams<{ phone: string; fullName: string; mode: string }>();
@@ -65,8 +68,8 @@ export default function VerifyCode() {
   // Countdown timer
   useEffect(() => {
     if (countdown <= 0) { setCanResend(true); return; }
-    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
   }, [countdown]);
 
   const handleDigitChange = (index: number, value: string) => {
@@ -86,11 +89,11 @@ export default function VerifyCode() {
 
   const handleVerify = useCallback(async (codeStr?: string) => {
     const otpCode = codeStr ?? code.join('');
-    if (otpCode.length !== DIGITS) { setError(`Please enter the full ${DIGITS}-digit code.`); return; }
+    if (otpCode.length !== DIGITS) { setError(`${t('Please enter the full')} ${DIGITS}-${t('digit code.')}`); return; }
 
     // Make sure we still have a confirmation result in the module store
     if (!getStoredConfirmation()) {
-      setError('Session expired. Please go back and request a new code.');
+      setError(t('Session expired. Please go back and request a new code.'));
       return;
     }
 
@@ -105,7 +108,7 @@ export default function VerifyCode() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [code, fullName, mode]);
+  }, [code, fullName, mode, t]);
 
   const handleResend = useCallback(async () => {
     if (!phone) return;
@@ -116,13 +119,16 @@ export default function VerifyCode() {
       setCountdown(60);
       setCanResend(false);
       setTimeout(() => inputRefs.current[0]?.focus(), 100);
-      Alert.alert('Code Sent', `A new verification code has been sent to ${phone}.`);
+      Alert.alert(
+        t('Code Sent'),
+        `${t('A new verification code has been sent to')} ${phone}.`,
+      );
     } catch (e: any) {
       setError(parseFirebaseError(e));
     } finally {
       setIsResending(false);
     }
-  }, [phone]);
+  }, [phone, t]);
 
   const maskedPhone = phone.length > 6
     ? `${phone.slice(0, 4)}****${phone.slice(-3)}`
@@ -138,10 +144,13 @@ export default function VerifyCode() {
             <Animated.View style={[s.wrap, { maxWidth: 460, opacity: fadeAnim, transform: [{ translateY: translateAnim }] }]}>
 
               {/* Back button */}
-              <Pressable onPress={() => router.back()}
+              <Pressable
+onPress={() => router.back()}
+accessibilityRole="button"
+accessibilityLabel={t('Go Back')}
                 style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: sp(2), marginBottom: sp(6), opacity: pressed ? 0.7 : 1 })}>
                 <Ionicons name="arrow-back" size={20} color={colors.primary} />
-                <Text style={[typo.caption, { color: colors.primary, fontWeight: '700' }]}>Back</Text>
+                <Text style={[typo.caption, { color: colors.primary, fontWeight: '700' }]}>{t('Go Back')}</Text>
               </Pressable>
 
               {/* Icon */}
@@ -149,7 +158,7 @@ export default function VerifyCode() {
                 <View style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: `${colors.primary}18`, borderWidth: 2, borderColor: `${colors.primary}33`, alignItems: 'center', justifyContent: 'center', marginBottom: sp(4) }}>
                   <Ionicons name="phone-portrait-outline" size={34} color={colors.primary} />
                 </View>
-                <Text style={[typo.title, { color: colors.textPrimary, textAlign: 'center' }]}>Enter Verification Code</Text>
+                <Text style={[typo.title, { color: colors.textPrimary, textAlign: 'center' }]}>{t('Enter Verification Code')}</Text>
                 <Text style={[typo.subtitle, { color: colors.textSecondary, textAlign: 'center', marginTop: sp(2), maxWidth: 320, lineHeight: 22 }]}>
                   We sent a {DIGITS}-digit code to{'\n'}
                   <Text style={{ color: colors.primary, fontWeight: '700' }}>{maskedPhone}</Text>
@@ -177,7 +186,7 @@ export default function VerifyCode() {
                     placeholder="·"
                     placeholderTextColor={colors.textMuted}
                     selectionColor={colors.primary}
-                    accessibilityLabel={`Digit ${i + 1}`}
+                    accessibilityLabel={`${t('Digit')} ${i + 1}`}
                   />
                 ))}
               </View>
@@ -204,22 +213,28 @@ export default function VerifyCode() {
                 {isSubmitting ? <ActivityIndicator color="#fff" /> : (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp(2) }}>
                     <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
-                    <Text style={[typo.body, { color: '#fff', fontWeight: '700' }]}>Verify & Continue</Text>
+                    <Text style={[typo.body, { color: '#fff', fontWeight: '700' }]}>{t('Verify & Continue')}</Text>
                   </View>
                 )}
               </Pressable>
 
               {/* Resend */}
               <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: sp(5), gap: sp(1) }}>
-                <Text style={[typo.caption, { color: colors.textMuted }]}>Didn't receive it?</Text>
+                <Text style={[typo.caption, { color: colors.textMuted }]}>{t("Didn't receive it?")}</Text>
                 {canResend ? (
-                  <Pressable onPress={handleResend} disabled={isResending} hitSlop={8}>
+                  <Pressable
+onPress={handleResend}
+disabled={isResending}
+accessibilityRole="button"
+accessibilityLabel={t('Resend Code')}
+hitSlop={8}
+>
                     <Text style={[typo.caption, { color: colors.primary, fontWeight: '700' }]}>
-                      {isResending ? 'Sending…' : 'Resend Code'}
+                      {isResending ? t('Sending…') : t('Resend Code')}
                     </Text>
                   </Pressable>
                 ) : (
-                  <Text style={[typo.caption, { color: colors.textMuted }]}>Resend in {countdown}s</Text>
+                  <Text style={[typo.caption, { color: colors.textMuted }]}>{t('Resend in')} {countdown}s</Text>
                 )}
               </View>
 
@@ -232,6 +247,11 @@ export default function VerifyCode() {
               </View>
 
             </Animated.View>
+
+            <StudentFooter
+              topSpacing={sp(isMobile ? 8 : 10)}
+              maxWidth={1240}
+            />
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -242,7 +262,7 @@ export default function VerifyCode() {
 const s = StyleSheet.create({
   fill:      { flex: 1 },
   container: { flex: 1 },
-  scroll:    { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
+  scroll:    { flexGrow: 1, justifyContent: 'center', alignItems: 'center', width: '100%' },
   wrap:      { width: '100%', alignSelf: 'center' },
   otpBox:    { borderWidth: 1.5, borderRadius: radii.md, textAlign: 'center', fontSize: 22, fontWeight: '800', color: '#4A9FC6' },
   errorBox:  { flexDirection: 'row', alignItems: 'flex-start', padding: 12, borderRadius: radii.md, borderWidth: 1 },

@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StudentMenuProvider, useStudentMenu } from '../../components/student/StudentMenu';
 import { spacing, typography, radii, useTheme } from '../../components/student/DashboardLayout';
+import StudentFooter from '../../components/student/StudentFooter';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 // Firebase
 import { db, auth } from '../../constants/firebase';
@@ -145,6 +147,7 @@ function PointsBar({ points, color, compact }: { points: number; color: string; 
 
 function SubjectRow({ subject, compact, last }: { subject: Subject; compact?: boolean; last?: boolean }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   const gradeCfg = GRADE_CFG[subject.grade];
   const catCfg = CATEGORY_CFG[subject.category];
   return (
@@ -155,14 +158,14 @@ function SubjectRow({ subject, compact, last }: { subject: Subject; compact?: bo
           <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: compact ? 12 : 14, lineHeight: compact ? 17 : 20 }]} numberOfLines={1}>{subject.name}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1), marginTop: spacing(1) }}>
             <Ionicons name={catCfg.icon} size={compact ? 9 : 11} color={catCfg.color} />
-            <Text style={[typography.caption, { color: catCfg.color, fontSize: compact ? 9 : 10, fontWeight: '600' }]}>{subject.category}</Text>
+            <Text style={[typography.caption, { color: catCfg.color, fontSize: compact ? 9 : 10, fontWeight: '600' }]}>{t(subject.category)}</Text>
           </View>
         </View>
         <View style={{ width: compact ? 70 : 90 }}>
           <PointsBar points={subject.points} color={gradeCfg.color} compact={compact} />
         </View>
         <View style={{ paddingHorizontal: spacing(compact ? 2 : 3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: gradeCfg.bg, borderWidth: 1, borderColor: `${gradeCfg.color}33` }}>
-          <Text style={[typography.caption, { color: gradeCfg.color, fontWeight: '700', fontSize: compact ? 9 : 10 }]}>{gradeCfg.label}</Text>
+          <Text style={[typography.caption, { color: gradeCfg.color, fontWeight: '700', fontSize: compact ? 9 : 10 }]}>{t(gradeCfg.label)}</Text>
         </View>
       </View>
     </View>
@@ -171,6 +174,7 @@ function SubjectRow({ subject, compact, last }: { subject: Subject; compact?: bo
 
 function ResultsCard({ record, compact }: { record: AcademicYear; compact?: boolean }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   const elevation = useElevation('md');
   const [expanded, setExpanded] = useState(record.id === '1');
   const statusCfg = STATUS_CFG[record.status];
@@ -190,20 +194,20 @@ function ResultsCard({ record, compact }: { record: AcademicYear; compact?: bool
   return (
     <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }, elevation]}>
       <View style={{ height: 4, backgroundColor: GRADE_CFG[bestGrade].color }} />
-      <Pressable onPress={() => setExpanded(p => !p)} style={({ pressed }) => ({ padding: compact ? spacing(4) : spacing(6), opacity: pressed ? 0.9 : 1, gap: spacing(compact ? 3 : 4) })}>
+      <Pressable onPress={() => setExpanded(p => !p)} accessibilityRole="button" accessibilityLabel={`${t(record.label)} - ${expanded ? t('Close') : t('View details')}`} style={({ pressed }) => ({ padding: compact ? spacing(4) : spacing(6), opacity: pressed ? 0.9 : 1, gap: spacing(compact ? 3 : 4) })}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing(3) }}>
           <View style={{ flex: 1 }}>
-            <Text style={[typography.h2, { color: colors.textPrimary, fontSize: compact ? 15 : 18 }]}>{record.label}</Text>
+            <Text style={[typography.h2, { color: colors.textPrimary, fontSize: compact ? 15 : 18 }]}>{t(record.label)}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginTop: spacing(1) }}>
               <Ionicons name="calendar-outline" size={compact ? 11 : 13} color={colors.textMuted} />
-              <Text style={[typography.caption, { color: colors.textMuted, fontSize: compact ? 10 : 11 }]}>{record.year} · {record.board} · {record.subjects.length} subjects</Text>
+              <Text style={[typography.caption, { color: colors.textMuted, fontSize: compact ? 10 : 11 }]}>{record.year} · {record.board} · {record.subjects.length} {t('SUBJECTS')}</Text>
             </View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
             <View style={{ paddingHorizontal: spacing(compact ? 2 : 3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: statusCfg.bg, borderWidth: 1, borderColor: `${statusCfg.color}33` }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1) }}>
                 <Ionicons name={statusCfg.icon} size={compact ? 10 : 12} color={statusCfg.color} />
-                <Text style={[typography.caption, { color: statusCfg.color, fontWeight: '700', fontSize: compact ? 9 : 10 }]}>{record.status}</Text>
+                <Text style={[typography.caption, { color: statusCfg.color, fontWeight: '700', fontSize: compact ? 9 : 10 }]}>{t(record.status)}</Text>
               </View>
             </View>
             <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={compact ? 16 : 18} color={colors.textMuted} />
@@ -213,15 +217,15 @@ function ResultsCard({ record, compact }: { record: AcademicYear; compact?: bool
         <View style={{ flexDirection: 'row', gap: compact ? spacing(2) : spacing(3) }}>
           <View style={{ flex: 1, backgroundColor: `${colors.primary}0F`, borderRadius: radii.lg, borderWidth: 1, borderColor: `${colors.primary}22`, padding: compact ? spacing(3) : spacing(4), alignItems: 'center', gap: spacing(1) }}>
             <Text style={{ color: colors.primary, fontWeight: '900', fontSize: compact ? 20 : 26 }}>{record.totalPoints}</Text>
-            <Text style={[typography.caption, { color: colors.textSecondary, fontSize: compact ? 9 : 10 }]}>TOTAL PTS</Text>
+            <Text style={[typography.caption, { color: colors.textSecondary, fontSize: compact ? 9 : 10 }]}>{t('BGCSE Total Points')}</Text>
           </View>
           <View style={{ flex: 1, backgroundColor: `${GRADE_CFG[bestGrade].color}0F`, borderRadius: radii.lg, borderWidth: 1, borderColor: `${GRADE_CFG[bestGrade].color}22`, padding: compact ? spacing(3) : spacing(4), alignItems: 'center', gap: spacing(1) }}>
             <Text style={{ color: GRADE_CFG[bestGrade].color, fontWeight: '900', fontSize: compact ? 20 : 26 }}>{bestGrade}</Text>
-            <Text style={[typography.caption, { color: colors.textSecondary, fontSize: compact ? 9 : 10 }]}>BEST GRADE</Text>
+            <Text style={[typography.caption, { color: colors.textSecondary, fontSize: compact ? 9 : 10 }]}>{t('Best Grade')}</Text>
           </View>
           <View style={{ flex: 1, backgroundColor: `${colors.success}0F`, borderRadius: radii.lg, borderWidth: 1, borderColor: `${colors.success}22`, padding: compact ? spacing(3) : spacing(4), alignItems: 'center', gap: spacing(1) }}>
             <Text style={{ color: colors.success, fontWeight: '900', fontSize: compact ? 20 : 26 }}>{record.subjects.length}</Text>
-            <Text style={[typography.caption, { color: colors.textSecondary, fontSize: compact ? 9 : 10 }]}>SUBJECTS</Text>
+            <Text style={[typography.caption, { color: colors.textSecondary, fontSize: compact ? 9 : 10 }]}>{t('SUBJECTS')}</Text>
           </View>
         </View>
 
@@ -242,7 +246,7 @@ function ResultsCard({ record, compact }: { record: AcademicYear; compact?: bool
       {expanded && (
         <View style={{ borderTopWidth: 1, borderTopColor: colors.divider }}>
           <View style={{ paddingHorizontal: compact ? spacing(4) : spacing(6), paddingVertical: spacing(2) }}>
-            <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, fontSize: compact ? 9 : 10 }]}>SUBJECT BREAKDOWN</Text>
+            <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, fontSize: compact ? 9 : 10 }]}>{t('Subject Breakdown')}</Text>
           </View>
           {record.subjects.map((subject, idx) => (
             <SubjectRow key={subject.id} subject={subject} compact={compact} last={idx === record.subjects.length - 1} />
@@ -256,6 +260,7 @@ function ResultsCard({ record, compact }: { record: AcademicYear; compact?: bool
 // SidebarPanel - FIXED with proper children
 function SidebarPanel({ academicData }: { academicData: AcademicYear[] }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   const bgcse = academicData[0];
   const allSubjects = bgcse?.subjects ?? [];
   const totalPoints = bgcse?.totalPoints ?? 0;
@@ -265,13 +270,13 @@ function SidebarPanel({ academicData }: { academicData: AcademicYear[] }) {
 
   return (
     <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
-      <SectionCard title="Academic Summary" icon="analytics-outline" accentColor={colors.primary}>
+      <SectionCard title={t('Academic Summary')} icon="analytics-outline" accentColor={colors.primary}>
         <View style={{ gap: spacing(3) }}>
           {[
-            { icon: 'ribbon-outline' as const, label: 'BGCSE Total Points', value: `${totalPoints}`, color: colors.primary },
-            { icon: 'book-outline' as const, label: 'Subjects Completed', value: `${subjectCount}`, color: '#34D399' },
-            { icon: 'trending-up-outline' as const, label: 'Average Points', value: `${avgPoints}/9`, color: '#FBBF24' },
-            { icon: 'calendar-outline' as const, label: 'Exam Year', value: bgcse?.year ?? '2024', color: '#60A5FA' },
+            { icon: 'ribbon-outline' as const, label: t('BGCSE Total Points'), value: `${totalPoints}`, color: colors.primary },
+            { icon: 'book-outline' as const, label: t('Subjects Completed'), value: `${subjectCount}`, color: '#34D399' },
+            { icon: 'trending-up-outline' as const, label: t('Average Points'), value: `${avgPoints}/9`, color: '#FBBF24' },
+            { icon: 'calendar-outline' as const, label: t('Exam Year'), value: bgcse?.year ?? '2024', color: '#60A5FA' },
           ].map(({ icon, label, value, color }) => (
             <View key={label} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing(2), borderBottomWidth: 1, borderBottomColor: colors.divider }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
@@ -284,42 +289,42 @@ function SidebarPanel({ academicData }: { academicData: AcademicYear[] }) {
         </View>
       </SectionCard>
 
-      <SectionCard title="Sponsorship Check" icon="cash-outline" accentColor={eligible ? '#34D399' : '#FBBF24'}>
+      <SectionCard title={t('Sponsorship Check')} icon="cash-outline" accentColor={eligible ? '#34D399' : '#FBBF24'}>
         <View style={{ gap: spacing(4) }}>
           <View style={{ padding: spacing(4), backgroundColor: eligible ? 'rgba(52,211,153,0.1)' : 'rgba(251,191,36,0.1)', borderRadius: radii.lg, borderWidth: 1, borderColor: eligible ? 'rgba(52,211,153,0.3)' : 'rgba(251,191,36,0.3)', flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
             <Ionicons name={eligible ? 'checkmark-circle' : 'alert-circle'} size={22} color={eligible ? '#34D399' : '#FBBF24'} />
             <View style={{ flex: 1 }}>
-              <Text style={[typography.bodyStrong, { color: eligible ? '#34D399' : '#FBBF24', fontSize: 13 }]}>{eligible ? 'Likely Eligible' : 'May Not Qualify'}</Text>
-              <Text style={[typography.caption, { color: '#94A3B8', fontSize: 10, marginTop: 2 }]}>Gov. bursary requires 36+ pts</Text>
+              <Text style={[typography.bodyStrong, { color: eligible ? '#34D399' : '#FBBF24', fontSize: 13 }]}>{eligible ? t('Likely Eligible') : t('May Not Qualify')}</Text>
+              <Text style={[typography.caption, { color: '#94A3B8', fontSize: 10, marginTop: 2 }]}>{t('Gov. bursary requires 36+ pts')}</Text>
             </View>
           </View>
           {[
-            { label: 'BURS Bursary', req: '36 pts', met: totalPoints >= 36, color: '#60A5FA' },
-            { label: 'Debswana Scholarship', req: '40 pts', met: totalPoints >= 40, color: '#34D399' },
-            { label: 'Standard Bank Bursary', req: '34 pts', met: totalPoints >= 34, color: '#FBBF24' },
-            { label: 'BIUST Merit Award', req: '42 pts', met: totalPoints >= 42, color: '#F472B6' },
+            { label: t('BURS Bursary'), req: '36 pts', met: totalPoints >= 36, color: '#60A5FA' },
+            { label: t('Debswana Scholarship'), req: '40 pts', met: totalPoints >= 40, color: '#34D399' },
+            { label: t('Standard Bank Bursary'), req: '34 pts', met: totalPoints >= 34, color: '#FBBF24' },
+            { label: t('BIUST Merit Award'), req: '42 pts', met: totalPoints >= 42, color: '#F472B6' },
           ].map(({ label, req, met, color }) => (
             <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
               <Ionicons name={met ? 'checkmark-circle-outline' : 'close-circle-outline'} size={16} color={met ? '#34D399' : '#94A3B8'} />
               <View style={{ flex: 1 }}>
                 <Text style={[typography.body, { color: colors.textPrimary, fontSize: 12 }]}>{label}</Text>
-                <Text style={[typography.caption, { color: colors.textMuted, fontSize: 10 }]}>Requires {req}</Text>
+                <Text style={[typography.caption, { color: colors.textMuted, fontSize: 10 }]}>{t('Required ')}{req}</Text>
               </View>
-              <Text style={[typography.caption, { color: met ? '#34D399' : '#94A3B8', fontWeight: '700', fontSize: 10 }]}>{met ? 'ELIGIBLE' : 'N/A'}</Text>
+              <Text style={[typography.caption, { color: met ? '#34D399' : '#94A3B8', fontWeight: '700', fontSize: 10 }]}>{met ? t('ELIGIBLE') : t('N/A')}</Text>
             </View>
           ))}
         </View>
       </SectionCard>
 
-      <SectionCard title="Quick Actions" icon="flash-outline" accentColor="#FBBF24">
+      <SectionCard title={t('Quick Actions')} icon="flash-outline" accentColor="#FBBF24">
         <View style={{ gap: spacing(3) }}>
           {[
-            { icon: 'cloud-upload-outline' as const, label: 'Upload Results PDF', color: colors.primary },
-            { icon: 'calculator-outline' as const, label: 'Calculate Points', color: '#34D399' },
-            { icon: 'ribbon-outline' as const, label: 'Check Scholarships', color: '#FBBF24', route: '/student/scholarships' },
-            { icon: 'school-outline' as const, label: 'Explore Universities', color: '#60A5FA', route: '/student/universities' },
+            { icon: 'cloud-upload-outline' as const, label: t('Upload Results PDF'), color: colors.primary },
+            { icon: 'calculator-outline' as const, label: t('Calculate Points'), color: '#34D399' },
+            { icon: 'ribbon-outline' as const, label: t('Check Scholarships'), color: '#FBBF24', route: '/student/scholarships' },
+            { icon: 'school-outline' as const, label: t('Explore Universities'), color: '#60A5FA', route: '/student/universities' },
           ].map(({ icon, label, color, route }) => (
-            <Pressable key={label} onPress={() => route && router.push(route as any)} style={({ pressed }) => ({
+            <Pressable key={label} onPress={() => route && router.push(route as any)} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => ({
               flexDirection: 'row' as const,
               alignItems: 'center' as const,
               gap: spacing(3),
@@ -349,6 +354,7 @@ function SidebarPanel({ academicData }: { academicData: AcademicYear[] }) {
 function AcademicRecordsContent() {
   const { width } = useWindowDimensions();
   const colors = useTheme();
+  const { t } = useLanguage();
   const { openMenu } = useStudentMenu();
 
   const [profile, setProfile] = useState<StudentProfile | null>(null);
@@ -433,27 +439,27 @@ function AcademicRecordsContent() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing(4) }]}>Loading academic records...</Text>
+        <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing(4) }]}>{t('Loading academic records...')}</Text>
       </View>
     );
   }
 
   const NavBar = (
     <View style={[{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: padX, paddingVertical: spacing(compact ? 3 : 4), backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border, gap: spacing(3) }, elevMd]}>
-      <Pressable onPress={() => router.back()} style={({ pressed }) => ({ width: compact ? 38 : 44, height: compact ? 38 : 44, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}>
+      <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('Go Back')} style={({ pressed }) => ({ width: compact ? 38 : 44, height: compact ? 38 : 44, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}>
         <Ionicons name="arrow-back" size={compact ? 18 : 20} color={colors.primary} />
       </Pressable>
       <View style={{ flex: 1 }}>
-        <Text style={[typography.h2, { color: colors.textPrimary, fontSize: compact ? 15 : undefined }]}>Academic Records</Text>
-        {!compact && <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>Your verified results and academic history</Text>}
+        <Text style={[typography.h2, { color: colors.textPrimary, fontSize: compact ? 15 : undefined }]}>{t('Academic Records')}</Text>
+        {!compact && <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>{t('Your verified results and academic history')}</Text>}
       </View>
       {!compact && (
-        <Pressable onPress={() => router.push('/student/profile' as any)} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}>
+        <Pressable onPress={() => router.push('/student/profile' as any)} accessibilityRole="button" accessibilityLabel={t('Profile')} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}>
           <Ionicons name="person-outline" size={15} color={colors.textSecondary} />
-          <Text style={[typography.label, { color: colors.textSecondary, fontSize: 12 }]}>Profile</Text>
+          <Text style={[typography.label, { color: colors.textSecondary, fontSize: 12 }]}>{t('Profile')}</Text>
         </Pressable>
       )}
-      <Pressable onPress={openMenu} style={({ pressed }) => ({ width: compact ? 38 : 44, height: compact ? 38 : 44, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}>
+      <Pressable onPress={openMenu} accessibilityRole="button" accessibilityLabel={t('Open student menu')} style={({ pressed }) => ({ width: compact ? 38 : 44, height: compact ? 38 : 44, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}>
         <Ionicons name="menu" size={compact ? 20 : 22} color={colors.textPrimary} />
       </Pressable>
     </View>
@@ -476,13 +482,18 @@ function AcademicRecordsContent() {
                 )) : (
                   <View style={{ padding: spacing(12), alignItems: 'center', backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border }}>
                     <Ionicons name="school-outline" size={72} color={colors.textMuted} />
-                    <Text style={[typography.h2, { color: colors.textPrimary, marginTop: spacing(6) }]}>No Records Yet</Text>
-                    <Text style={[typography.body, { color: colors.textMuted, textAlign: 'center', marginTop: spacing(3) }]}>Add results in Progress to see them here.</Text>
+                    <Text style={[typography.h2, { color: colors.textPrimary, marginTop: spacing(6) }]}>{t('No Records Yet')}</Text>
+                    <Text style={[typography.body, { color: colors.textMuted, textAlign: 'center', marginTop: spacing(3) }]}>{t('Add results in Progress to see them here.')}</Text>
                   </View>
                 )}
               </View>
               {isDesktop && <SidebarPanel academicData={finalAcademicData} />}
             </View>
+
+            <StudentFooter
+              topSpacing={compact ? spacing(8) : spacing(10)}
+              maxWidth={1280}
+            />
           </View>
         </ScrollView>
       </SafeAreaView>

@@ -16,6 +16,7 @@ import {
   StudentMenuProvider,
   useStudentMenu,
 } from '../../components/student/StudentMenu';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared Design System
@@ -26,6 +27,7 @@ import {
   radii,
   useTheme,
 } from '../../components/student/DashboardLayout';
+import StudentFooter from '../../components/student/StudentFooter';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Local Elevation Helper
@@ -117,6 +119,7 @@ export default function StudentNotificationsScreen() {
 function StudentNotificationsContent() {
   const { width } = useWindowDimensions();
   const colors = useTheme();
+  const { t } = useLanguage();
   const { openMenu } = useStudentMenu();
   const elevationMd = useElevation('md');
 
@@ -190,6 +193,8 @@ function StudentNotificationsContent() {
 
             <Pressable
               onPress={openMenu}
+              accessibilityRole="button"
+              accessibilityLabel={t('Open student menu')}
               style={({ pressed }) => ({
                 width: 48,
                 height: 48,
@@ -227,12 +232,12 @@ function StudentNotificationsContent() {
 
             <View style={{ flexDirection: 'row', gap: spacing(3), flexWrap: 'wrap' }}>
               <ActionBtn
-                label="Mark all read"
+                label={t('Mark all read')}
                 icon="checkmark-done-outline"
                 onPress={markAllRead}
               />
               <ActionBtn
-                label="Clear read"
+                label={t('Clear read')}
                 icon="trash-outline"
                 onPress={clearRead}
               />
@@ -270,6 +275,11 @@ function StudentNotificationsContent() {
               ))
             )}
           </View>
+
+          <StudentFooter
+            topSpacing={isMobile ? spacing(8) : spacing(10)}
+            maxWidth={1280}
+          />
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -292,6 +302,9 @@ function FilterChip({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
       style={({ pressed }) => ({
         paddingHorizontal: spacing(5),
         paddingVertical: spacing(2.5),
@@ -327,6 +340,8 @@ function ActionBtn({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
@@ -357,6 +372,7 @@ function NotificationCard({
   onPress: () => void;
 }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   const elevation = useElevation('md');
 
   const icon =
@@ -376,6 +392,9 @@ function NotificationCard({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.read ? t('Mark as unread') : t('Mark as read')}: ${item.title}`}
+      accessibilityState={{ selected: !item.read }}
       style={({ pressed }) => ([
         {
           flexDirection: 'row',

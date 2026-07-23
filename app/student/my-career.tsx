@@ -48,7 +48,9 @@ import DashboardLayout, {
   typography,
   useTheme,
 } from '../../components/student/DashboardLayout';
+import StudentFooter from '../../components/student/StudentFooter';
 import { StudentMenuProvider } from '../../components/student/StudentMenu';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 const CAREER_CACHE_KEY = '@thuto-bridge/career-explorer/v2';
 const CAREER_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -969,6 +971,7 @@ function NoticeCard({
   colors: any;
   compact?: boolean;
 }) {
+  const { t } = useLanguage();
   return (
     <View
       style={{
@@ -1010,7 +1013,7 @@ function NoticeCard({
             { color: colors.textPrimary, marginBottom: spacing(1) },
           ]}
         >
-          Featured course-linked careers
+          {t('Featured course-linked careers')}
         </Text>
         <Text
           style={[
@@ -1018,10 +1021,7 @@ function NoticeCard({
             { color: colors.textSecondary, lineHeight: 19 },
           ]}
         >
-          This explorer does not represent every career available in Botswana or
-          worldwide. It displays careers currently connected to courses listed
-          on Thuto-Bridge. Career options may expand as more institutions and
-          programmes are added.
+          {t('This explorer does not represent every career available in Botswana or worldwide. It displays careers currently connected to courses listed on Thuto-Bridge. Career options may expand as more institutions and programmes are added.')}
         </Text>
       </View>
     </View>
@@ -1106,11 +1106,12 @@ function CareerFieldsSkeleton({
 }
 
 function SlowLoadBanner({ colors }: { colors: any }) {
+  const { t } = useLanguage();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setVisible(true), SLOW_LOAD_BANNER_DELAY_MS);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setVisible(true), SLOW_LOAD_BANNER_DELAY_MS);
+    return () => clearTimeout(timer);
   }, []);
 
   if (!visible) return null;
@@ -1132,7 +1133,7 @@ function SlowLoadBanner({ colors }: { colors: any }) {
     >
       <Ionicons name="wifi-outline" size={16} color={colors.warning} />
       <Text style={[typography.caption, { color: colors.warning, flex: 1, fontWeight: '600' }]}>
-        Slow connection detected — still loading…
+        {t('Slow connection detected — still loading…')}
       </Text>
     </View>
   );
@@ -1155,6 +1156,7 @@ function InstModal({
   colors: any;
   isMobile: boolean;
 }) {
+  const { t } = useLanguage();
   if (!inst) return null;
 
   const typeColors = typeStyle(inst.type);
@@ -1330,24 +1332,24 @@ function InstModal({
             >
               {[
                 {
-                  label: 'Duration',
+                  label: t('Duration'),
                   value: inst.duration,
                   icon: 'time-outline' as const,
                 },
                 {
-                  label: 'Min Points',
+                  label: t('Min Points'),
                   value: inst.minPoints !== null
                     ? `${inst.minPoints} pts`
                     : 'Not specified',
                   icon: 'star-outline' as const,
                 },
                 {
-                  label: 'Entry Subjects',
+                  label: t('Entry Subjects'),
                   value: inst.minGrade,
                   icon: 'ribbon-outline' as const,
                 },
                 {
-                  label: 'Annual Fee',
+                  label: t('Annual Fee'),
                   value: inst.fee,
                   icon: 'card-outline' as const,
                 },
@@ -1487,6 +1489,7 @@ function DetailView({
   onSave: () => void;
   onBack: () => void;
 }) {
+  const { t } = useLanguage();
   const [selectedInstitution, setSelectedInstitution] =
     useState<Institution | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -1569,7 +1572,7 @@ function DetailView({
                   },
                 ]}
               >
-                {field.label.toUpperCase()}
+                {t(field.label).toUpperCase()}
               </Text>
               <Text
                 style={{
@@ -1586,7 +1589,7 @@ function DetailView({
             <Pressable
               onPress={onSave}
               accessibilityRole="button"
-              accessibilityLabel={saved ? `Career ${role.title} is saved` : `Save career ${role.title}`}
+              accessibilityLabel={saved ? `${role.title}: ${t('Saved')}` : `${t('Save Career')}: ${role.title}`}
               style={({ pressed }) => ({
                 minWidth: isMobile ? 48 : 132,
                 height: 48,
@@ -1609,7 +1612,7 @@ function DetailView({
               />
               {!isMobile && (
                 <Text style={[typography.label, { color: saved ? colors.success : field.color }]}>
-                  {saved ? 'Saved' : 'Save Career'}
+                  {saved ? t('Saved') : t('Save Career')}
                 </Text>
               )}
             </Pressable>
@@ -1637,19 +1640,19 @@ function DetailView({
           >
             {[
               {
-                label: 'Related Courses',
+                label: t('Related Courses'),
                 value: `${role.courseCount}`,
                 icon: 'book-outline' as const,
                 tint: colors.primary,
               },
               {
-                label: 'Institutions',
+                label: t('Institutions'),
                 value: `${role.institutionCount}`,
                 icon: 'school-outline' as const,
                 tint: colors.success,
               },
               {
-                label: 'Starting Points',
+                label: t('Starting Points'),
                 value: role.minimumPoints !== null
                   ? `From ${role.minimumPoints}`
                   : 'Varies',
@@ -1657,8 +1660,8 @@ function DetailView({
                 tint: colors.warning,
               },
               {
-                label: 'Source',
-                value: 'Firestore courses',
+                label: t('Source'),
+                value: t('Firestore courses'),
                 icon: 'cloud-done-outline' as const,
                 tint: field.color,
               },
@@ -1978,6 +1981,7 @@ function RolesView({
   onBack: () => void;
   onSelect: (role: Role) => void;
 }) {
+  const { t } = useLanguage();
   return (
     <View>
       <Pressable
@@ -2056,7 +2060,7 @@ function RolesView({
                 },
               ]}
             >
-              {field.tagline}
+              {t(field.tagline)}
             </Text>
           </View>
         </View>
@@ -2246,6 +2250,7 @@ function FieldsView({
   onQuery: (query: string) => void;
   onSelect: (field: Field) => void;
 }) {
+  const { t } = useLanguage();
   const filtered = useMemo(() => {
     if (!query.trim()) return fields;
 
@@ -2678,6 +2683,7 @@ function StateCard({
   onAction?: () => void;
   loading?: boolean;
 }) {
+  const { t } = useLanguage();
   return (
     <View
       style={{
@@ -2717,7 +2723,7 @@ function StateCard({
           },
         ]}
       >
-        {title}
+        {t(title)}
       </Text>
 
       <Text
@@ -2731,7 +2737,7 @@ function StateCard({
           },
         ]}
       >
-        {message}
+        {t(message)}
       </Text>
 
       {actionLabel && onAction && (
@@ -2752,7 +2758,7 @@ function StateCard({
         >
           <Ionicons name="refresh-outline" size={18} color="#fff" />
           <Text style={[typography.label, { color: '#fff' }]}>
-            {actionLabel}
+            {t(actionLabel)}
           </Text>
         </Pressable>
       )}
@@ -2777,6 +2783,7 @@ function StepIndicator({
   colors: any;
   isMobile: boolean;
 }) {
+  const { t } = useLanguage();
   const steps = [
     {
       key: 'fields',
@@ -2900,6 +2907,7 @@ function StepIndicator({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function CareerContent() {
+  const { t } = useLanguage();
   const { width } = useWindowDimensions();
   const colors = useTheme();
 
@@ -3405,7 +3413,7 @@ function CareerContent() {
     if (!auth.currentUser) {
       Alert.alert(
         'Sign in required',
-        'Please sign in before saving a career so it can sync across your devices.',
+        t('Please sign in before saving a career so it can sync across your devices.'),
       );
       return;
     }
@@ -3417,8 +3425,8 @@ function CareerContent() {
           'Already saved',
           `${role.title} is already available in your Saved Careers.`,
           [
-            { text: 'View Saved', onPress: () => router.push('/student/saved') },
-            { text: 'OK' },
+            { text: t('View Saved'), onPress: () => router.push('/student/saved') },
+            { text: t('OK') },
           ],
         );
         return;
@@ -3444,13 +3452,13 @@ function CareerContent() {
         'Career saved',
         `${role.title} has been saved to your account and will be available on your other devices.`,
         [
-          { text: 'View Saved', onPress: () => router.push('/student/saved') },
-          { text: 'Done' },
+          { text: t('View Saved'), onPress: () => router.push('/student/saved') },
+          { text: t('Done') },
         ],
       );
     } catch (error) {
       console.error('Failed to save career:', error);
-      Alert.alert('Could not save career', getSavedItemsErrorMessage(error));
+      Alert.alert(t('Could not save career'), getSavedItemsErrorMessage(error));
     }
   }, []);
 
@@ -3490,7 +3498,7 @@ function CareerContent() {
 
   return (
     <DashboardLayout
-      title="My Career"
+      title={t('My Career')}
       subtitle="Explore paths, discover opportunities"
       showPointsCard={false}
     >
@@ -3776,6 +3784,12 @@ function CareerContent() {
             onBack={backRoles}
           />
         )}
+
+      {/* Shared responsive student footer */}
+      <StudentFooter
+        topSpacing={isMobile ? spacing(8) : spacing(10)}
+        maxWidth={1280}
+      />
     </DashboardLayout>
   );
 }

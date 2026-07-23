@@ -2,40 +2,50 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
-  Image,
   Pressable,
   Animated,
   StyleSheet,
   useWindowDimensions,
   Platform,
-  useColorScheme,
   AccessibilityInfo,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useLanguage } from '../contexts/LanguageContext';
+import StudentFooter from '../components/student/StudentFooter';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens
 // ─────────────────────────────────────────────────────────────────────────────
 const PALETTE = {
-  // Deep midnight → rich teal — more confident than stock blue
-  gradientTop:    '#071828',
-  gradientMid:    '#0D3554',
-  gradientBottom: '#1B6CA8',
-  // Accent gold — knowledge / achievement
-  gold:           '#F5C842',
-  goldSoft:       '#F5C84230',
-  // Text
-  white:          '#FFFFFF',
-  whiteHigh:      'rgba(255,255,255,0.95)',
-  whiteMed:       'rgba(255,255,255,0.72)',
-  whiteLow:       'rgba(255,255,255,0.42)',
-  // Book colours — three distinct hues
-  book1:          '#F5C842',   // gold
-  book2:          '#4FC3F7',   // sky blue
-  book3:          '#81C784',   // green
+  // Core Thuto Bridge colours used throughout the application
+  backgroundLight: '#F8FCFD',
+  backgroundDark:  '#0A111A',
+  surfaceDark:     '#1E2A36',
+  surfaceAltDark:  '#222B36',
+
+  // Splash gradient based on the shared app background and primary colour
+  gradientTop:     '#0A111A',
+  gradientMid:     '#173247',
+  gradientBottom:  '#4A9FC6',
+
+  // Shared project primary colour and transparent variants
+  primary:         '#4A9FC6',
+  primarySoft:     'rgba(74,159,198,0.20)',
+  primaryFaint:    'rgba(74,159,198,0.10)',
+
+  // Text colours consistent with the dark application theme
+  white:           '#FFFFFF',
+  whiteHigh:       'rgba(234,242,248,0.96)',
+  whiteMed:        'rgba(234,242,248,0.74)',
+  whiteLow:        'rgba(234,242,248,0.42)',
+
+  // Illustration colours derived from the shared blue/teal identity
+  book1:           '#4A9FC6',
+  book2:           '#78BEDD',
+  book3:           '#75B8A6',
 };
 
 const BASE = 4;
@@ -210,7 +220,7 @@ function FloatingParticle({ x, startY, size, duration, delay, reduceMotion }: Pa
         width:           size,
         height:          size,
         borderRadius:    size / 2,
-        backgroundColor: PALETTE.gold,
+        backgroundColor: PALETTE.primary,
         opacity,
         transform:       [{ translateY }],
       }}
@@ -225,7 +235,7 @@ function useGlowPulse(delay = 1800) {
   const glow = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       Animated.loop(
         Animated.sequence([
           Animated.timing(glow, { toValue: 1, duration: 1100, useNativeDriver: false }),
@@ -233,31 +243,10 @@ function useGlowPulse(delay = 1800) {
         ]),
       ).start();
     }, delay);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, []);
 
   return glow;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Progress dots (page indicator style — shows this is step 1 of the journey)
-// ─────────────────────────────────────────────────────────────────────────────
-function ProgressDots() {
-  return (
-    <View style={{ flexDirection: 'row', gap: sp(2), alignItems: 'center' }}>
-      {[true, false, false].map((active, i) => (
-        <View
-          key={i}
-          style={{
-            width:           active ? sp(5) : sp(2),
-            height:          sp(2),
-            borderRadius:    sp(1),
-            backgroundColor: active ? PALETTE.gold : PALETTE.whiteLow,
-          }}
-        />
-      ))}
-    </View>
-  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -293,15 +282,15 @@ function FeatureItem({ icon, text, delay, reduceMotion }: { icon: string; text: 
           width:           sp(8),
           height:          sp(8),
           borderRadius:    sp(4),
-          backgroundColor: PALETTE.goldSoft,
+          backgroundColor: PALETTE.primarySoft,
           borderWidth:     1,
-          borderColor:     `${PALETTE.gold}55`,
+          borderColor:     `${PALETTE.primary}55`,
           alignItems:      'center',
           justifyContent:  'center',
           flexShrink:      0,
         }}
       >
-        <Ionicons name={icon as any} size={15} color={PALETTE.gold} />
+        <Ionicons name={icon as any} size={15} color={PALETTE.primary} />
       </View>
       <Text style={{ fontSize: 13, lineHeight: 18, color: PALETTE.whiteMed, fontWeight: '500', flex: 1 }}>
         {text}
@@ -314,6 +303,7 @@ function FeatureItem({ icon, text, delay, reduceMotion }: { icon: string; text: 
 // Main splash screen
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Splash() {
+  const { t } = useLanguage();
   const { width, height } = useWindowDimensions();
 
   const uiMode = useMemo<'mobile' | 'tablet' | 'desktop'>(() => {
@@ -401,7 +391,7 @@ export default function Splash() {
 
   const glowBorderColor = glowAnim.interpolate({
     inputRange:  [0, 1],
-    outputRange: [`${PALETTE.gold}44`, `${PALETTE.gold}CC`],
+    outputRange: [`${PALETTE.primary}44`, `${PALETTE.primary}CC`],
   });
   const glowShadowOpacity = glowAnim.interpolate({
     inputRange:  [0, 1],
@@ -430,10 +420,10 @@ export default function Splash() {
           width:           width * 0.75,
           height:          width * 0.75,
           borderRadius:    width * 0.375,
-          backgroundColor: 'rgba(75,159,198,0.18)',
+          backgroundColor: PALETTE.primarySoft,
           // blur via shadow on iOS, transform scale trick elsewhere
           ...Platform.select({
-            ios: { shadowColor: '#4A9FC6', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 60 },
+            ios: { shadowColor: PALETTE.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 60 },
           }),
         }}
       />
@@ -443,7 +433,7 @@ export default function Splash() {
         <FloatingParticle key={i} {...p} reduceMotion={reduceMotion} />
       ))}
 
-      <SafeAreaView style={{ flex: 1, justifyContent: 'space-between' }} edges={['top', 'bottom']}>
+      <SafeAreaView style={{ flex: 1, justifyContent: 'space-between', width: '100%' }} edges={['top', 'bottom']}>
         {/* ── Top logo / brand mark ── */}
         <Animated.View
           style={{
@@ -460,14 +450,14 @@ export default function Splash() {
               width:           32,
               height:          32,
               borderRadius:    10,
-              backgroundColor: PALETTE.goldSoft,
+              backgroundColor: PALETTE.primarySoft,
               borderWidth:     1,
-              borderColor:     `${PALETTE.gold}66`,
+              borderColor:     `${PALETTE.primary}66`,
               alignItems:      'center',
               justifyContent:  'center',
             }}
           >
-            <Ionicons name="school" size={17} color={PALETTE.gold} />
+            <Ionicons name="school" size={17} color={PALETTE.primary} />
           </View>
           <Text style={{ fontSize: 15, fontWeight: '800', color: PALETTE.whiteHigh, letterSpacing: 0.3 }}>
             Thuto-Bridge
@@ -555,14 +545,14 @@ export default function Splash() {
                   width:           56,
                   height:          56,
                   borderRadius:    28,
-                  backgroundColor: PALETTE.goldSoft,
+                  backgroundColor: PALETTE.primarySoft,
                   borderWidth:     2,
-                  borderColor:     `${PALETTE.gold}66`,
+                  borderColor:     `${PALETTE.primary}66`,
                   alignItems:      'center',
                   justifyContent:  'center',
                 }}
               >
-                <Ionicons name="school" size={26} color={PALETTE.gold} />
+                <Ionicons name="school" size={26} color={PALETTE.primary} />
               </View>
             </Animated.View>
           </View>
@@ -585,15 +575,15 @@ export default function Splash() {
                 paddingHorizontal: sp(4),
                 paddingVertical:   sp(1),
                 borderRadius:      20,
-                backgroundColor:   PALETTE.goldSoft,
+                backgroundColor:   PALETTE.primarySoft,
                 borderWidth:       1,
-                borderColor:       `${PALETTE.gold}44`,
+                borderColor:       `${PALETTE.primary}44`,
                 marginBottom:      sp(3),
               }}
             >
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: PALETTE.gold }} />
-              <Text style={{ fontSize: 11, fontWeight: '700', color: PALETTE.gold, letterSpacing: 1.2 }}>
-                YOUR ACADEMIC JOURNEY STARTS HERE
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: PALETTE.primary }} />
+              <Text style={{ fontSize: 11, fontWeight: '700', color: PALETTE.primary, letterSpacing: 1.2 }}>
+                {t('YOUR ACADEMIC JOURNEY STARTS HERE')}
               </Text>
             </View>
 
@@ -609,8 +599,8 @@ export default function Splash() {
               accessible
               accessibilityRole="header"
             >
-              Learn.{'\n'}Discover.{'\n'}
-              <Text style={{ color: PALETTE.gold }}>Achieve.</Text>
+              {t('Learn.')}{'\n'}{t('Discover.')}{'\n'}
+              <Text style={{ color: PALETTE.primary }}>{t('Achieve.')}</Text>
             </Text>
           </Animated.View>
 
@@ -627,7 +617,7 @@ export default function Splash() {
               marginBottom: sp(8),
             }}
           >
-            Your all-in-one platform for university guidance, course discovery, and scholarship insights across Botswana.
+            {t('Your all-in-one platform for university guidance, course discovery, and scholarship insights across Botswana.')}
           </Animated.Text>
 
           {/* ── CTA button ── */}
@@ -646,18 +636,18 @@ export default function Splash() {
                 style={({ pressed }) => ({
                   height:          56,
                   borderRadius:    16,
-                  backgroundColor: PALETTE.gold,
+                  backgroundColor: PALETTE.primary,
                   alignItems:      'center',
                   justifyContent:  'center',
                   flexDirection:   'row',
                   gap:             sp(2),
                   opacity:         pressed ? 0.88 : 1,
                   transform:       pressed ? [{ scale: 0.97 }] : [],
-                  boxShadow:       `0 6px 28px ${PALETTE.gold}55`,
+                  boxShadow:       `0 6px 28px ${PALETTE.primary}55`,
                 } as any)}
-                accessibilityLabel="Get Started"
+                accessibilityLabel={t('Get Started')}
                 accessibilityRole="button"
-                accessibilityHint="Proceed to login"
+                accessibilityHint={t('Proceed to login')}
               >
                 <Text style={{ fontSize: 16, fontWeight: '800', color: PALETTE.gradientTop, letterSpacing: 0.3 }}>
                   Get Started
@@ -673,7 +663,7 @@ export default function Splash() {
                   borderColor:   glowBorderColor,
                   ...Platform.select({
                     ios: {
-                      shadowColor:    PALETTE.gold,
+                      shadowColor:    PALETTE.primary,
                       shadowOffset:   { width: 0, height: 6 },
                       shadowOpacity:  glowShadowOpacity as any,
                       shadowRadius:   18,
@@ -687,7 +677,7 @@ export default function Splash() {
                   style={({ pressed }) => ({
                     height:          56,
                     borderRadius:    15,
-                    backgroundColor: PALETTE.gold,
+                    backgroundColor: PALETTE.primary,
                     alignItems:      'center',
                     justifyContent:  'center',
                     flexDirection:   'row',
@@ -695,12 +685,12 @@ export default function Splash() {
                     opacity:         pressed ? 0.88 : 1,
                     transform:       pressed ? [{ scale: 0.97 }] : [],
                   })}
-                  accessibilityLabel="Get Started"
+                  accessibilityLabel={t('Get Started')}
                   accessibilityRole="button"
-                  accessibilityHint="Proceed to login"
+                  accessibilityHint={t('Proceed to login')}
                 >
                   <Text style={{ fontSize: 16, fontWeight: '800', color: PALETTE.gradientTop, letterSpacing: 0.3 }}>
-                    Get Started
+                    {t('Get Started')}
                   </Text>
                   <Ionicons name="arrow-forward" size={18} color={PALETTE.gradientTop} />
                 </Pressable>
@@ -718,38 +708,27 @@ export default function Splash() {
             }}
           >
             {[
-              { icon: 'book-outline',       text: 'Personalised course recommendations',  delay: 1350 },
-              { icon: 'ribbon-outline',     text: 'Scholarship & funding opportunities',  delay: 1480 },
-              { icon: 'trending-up-outline',text: 'Track your academic progress',         delay: 1610 },
+              { icon: 'book-outline',       text: t('Personalised course recommendations'),  delay: 1350 },
+              { icon: 'ribbon-outline',     text: t('Scholarship & funding opportunities'),  delay: 1480 },
+              { icon: 'trending-up-outline',text: t('Track your academic progress'),         delay: 1610 },
             ].map((f, i) => (
               <FeatureItem key={i} icon={f.icon} text={f.text} delay={f.delay} reduceMotion={reduceMotion} />
             ))}
           </Animated.View>
         </View>
 
-        {/* ── Footer: progress dots + login link ── */}
         <Animated.View
           style={{
-            opacity:          bgOpacity,
-            paddingBottom:    sp(6),
-            paddingHorizontal: sp(6),
-            alignItems:       'center',
-            gap:              sp(4),
+            opacity: bgOpacity,
+            paddingHorizontal: sp(4),
+            paddingBottom: sp(3),
+            width: '100%',
           }}
         >
-          <ProgressDots />
-
-          <Pressable
-            onPress={() => router.push('/login')}
-            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-            accessibilityRole="button"
-            accessibilityLabel="Already have an account? Sign in"
-          >
-            <Text style={{ fontSize: 13, color: PALETTE.whiteMed, textAlign: 'center' }}>
-              Already have an account?{' '}
-              <Text style={{ color: PALETTE.gold, fontWeight: '700' }}>Sign in</Text>
-            </Text>
-          </Pressable>
+          <StudentFooter
+            topSpacing={sp(4)}
+            maxWidth={1240}
+          />
         </Animated.View>
       </SafeAreaView>
     </View>

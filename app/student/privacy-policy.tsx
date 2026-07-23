@@ -16,6 +16,7 @@ import {
   StudentMenuProvider,
   useStudentMenu,
 } from '../../components/student/StudentMenu';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 import {
   spacing,
@@ -23,6 +24,7 @@ import {
   radii,
   useTheme,
 } from '../../components/student/DashboardLayout';
+import StudentFooter from '../../components/student/StudentFooter';
 
 type Breakpoint = 'mobile' | 'tablet' | 'desktop';
 
@@ -118,6 +120,7 @@ function SectionCard({
   accent,
 }: PolicySection & { index: number }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   const elevation = useElevation('md');
 
   return (
@@ -169,10 +172,10 @@ function SectionCard({
               </View>
             </View>
             <Text style={[typography.h2, { color: colors.textPrimary, fontSize: 17, marginBottom: spacing(2) }]}>
-              {title}
+              {t(title)}
             </Text>
             <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 23, fontSize: 14.5 }]}>
-              {body}
+              {t(body)}
             </Text>
           </View>
         </View>
@@ -186,6 +189,7 @@ function SectionCard({
 // ─────────────────────────────────────────────────────────────────────────────
 function SidebarPanel() {
   const colors = useTheme();
+  const { t } = useLanguage();
   const elevation = useElevation('md');
 
   return (
@@ -259,7 +263,7 @@ function SidebarPanel() {
           {DATA_RIGHTS.map(r => (
             <View key={r.label} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2.5) }}>
               <Ionicons name={r.icon} size={15} color={colors.textSecondary} />
-              <Text style={[typography.body, { color: colors.textSecondary, fontSize: 13.5 }]}>{r.label}</Text>
+              <Text style={[typography.body, { color: colors.textSecondary, fontSize: 13.5 }]}>{t(r.label)}</Text>
             </View>
           ))}
         </View>
@@ -283,7 +287,11 @@ function SidebarPanel() {
         <Text style={[typography.body, { color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: spacing(2.5) }]}>
           Contact our Data Protection Officer at Thuto-Bridge.
         </Text>
-        <Pressable onPress={() => Linking.openURL('mailto:privacy@thutobridge.com')}>
+        <Pressable
+          onPress={() => Linking.openURL('mailto:privacy@thutobridge.com')}
+          accessibilityRole="link"
+          accessibilityLabel="privacy@thutobridge.com"
+        >
           <Text style={[typography.label, { color: colors.primary, fontSize: 13 }]}>privacy@thutobridge.com →</Text>
         </Pressable>
       </View>
@@ -297,6 +305,7 @@ function SidebarPanel() {
 function PrivacyPolicyContent() {
   const { width } = useWindowDimensions();
   const colors = useTheme();
+  const { t } = useLanguage();
   const { openMenu } = useStudentMenu();
   const elevMd = useElevation('md');
   const elevLg = useElevation('lg');
@@ -331,7 +340,7 @@ function PrivacyPolicyContent() {
       <Pressable
         onPress={() => router.back()}
         accessibilityRole="button"
-        accessibilityLabel="Go back"
+        accessibilityLabel={t('Go Back')}
         style={({ pressed }) => ({
           width: 42,
           height: 42,
@@ -361,6 +370,8 @@ function PrivacyPolicyContent() {
       {!isMobile && (
         <Pressable
           onPress={() => router.push('/student/settings')}
+          accessibilityRole="button"
+          accessibilityLabel={t('Settings')}
           style={({ pressed }) => ({
             flexDirection: 'row',
             alignItems: 'center',
@@ -381,7 +392,8 @@ function PrivacyPolicyContent() {
 
       <Pressable
         onPress={openMenu}
-        accessibilityLabel="Open student menu"
+        accessibilityRole="button"
+        accessibilityLabel={t('Open student menu')}
         style={({ pressed }) => ({
           width: 42,
           height: 42,
@@ -478,7 +490,7 @@ function PrivacyPolicyContent() {
                 borderWidth: 1, borderColor: `${colors.success}28`,
               }}>
                 <Ionicons name="lock-closed" size={12} color={colors.success} />
-                <Text style={[typography.caption, { color: colors.success, fontWeight: '700' }]}>Encrypted</Text>
+                <Text style={[typography.caption, { color: colors.success, fontWeight: '700' }]}>{t('Encrypted')}</Text>
               </View>
               <View style={{
                 flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -515,36 +527,6 @@ function PrivacyPolicyContent() {
     </View>
   );
 
-  const Footer = (
-    <View
-      style={{
-        marginTop: spacing(10),
-        paddingTop: spacing(5),
-        borderTopWidth: 1,
-        borderTopColor: colors.divider,
-        alignItems: 'center',
-        gap: spacing(2),
-      }}
-    >
-      <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 14 }]}>
-        Thuto-Bridge
-      </Text>
-      <Text style={[typography.caption, { color: colors.textSecondary, textAlign: 'center', lineHeight: 18 }]}>
-        Connecting Botswana students to university opportunities.
-      </Text>
-      <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center', fontSize: 11.5 }]}>
-        Designed and developed by{' '}
-        <Text style={{ fontWeight: '700', color: colors.textSecondary }}>BrightCode Studios</Text>
-        {'\n'}© {new Date().getFullYear()} Thuto-Bridge. All rights reserved.
-      </Text>
-      <View style={{ flexDirection: 'row', gap: spacing(4), marginTop: spacing(1), flexWrap: 'wrap', justifyContent: 'center' }}>
-        <Pressable onPress={() => router.push('/student/terms')}><Text style={[typography.caption, { color: colors.textMuted }]}>Terms</Text></Pressable>
-        <Pressable onPress={() => router.push('/student/contact-support')}><Text style={[typography.caption, { color: colors.textMuted }]}>Support</Text></Pressable>
-        <Pressable onPress={() => Linking.openURL('mailto:privacy@thutobridge.com')}><Text style={[typography.caption, { color: colors.textMuted }]}>privacy@thutobridge.com</Text></Pressable>
-      </View>
-    </View>
-  );
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
@@ -563,6 +545,8 @@ function PrivacyPolicyContent() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2.5), marginBottom: spacing(4), flexWrap: 'wrap' }}>
               <Pressable
                 onPress={() => router.back()}
+                accessibilityRole="button"
+                accessibilityLabel={t('Go Back')}
                 style={({ pressed }) => ({
                   flexDirection: 'row', alignItems: 'center', gap: spacing(1.5),
                   paddingHorizontal: spacing(3), paddingVertical: spacing(1.5),
@@ -572,9 +556,9 @@ function PrivacyPolicyContent() {
                 })}
               >
                 <Ionicons name="arrow-back" size={14} color={colors.primary} />
-                <Text style={[typography.label, { color: colors.primary, fontSize: 12.5 }]}>Back</Text>
+                <Text style={[typography.label, { color: colors.primary, fontSize: 12.5 }]}>{t('Go Back')}</Text>
               </Pressable>
-              <Text style={[typography.caption, { color: colors.textMuted }]}>Settings › Privacy Policy</Text>
+              <Text style={[typography.caption, { color: colors.textMuted }]}>{t('Settings › Privacy Policy')}</Text>
             </View>
 
             {HeroBanner}
@@ -623,7 +607,10 @@ function PrivacyPolicyContent() {
               {isDesktop && <SidebarPanel />}
             </View>
 
-            {Footer}
+            <StudentFooter
+              topSpacing={isMobile ? spacing(8) : spacing(10)}
+              maxWidth={1200}
+            />
           </View>
         </ScrollView>
       </SafeAreaView>

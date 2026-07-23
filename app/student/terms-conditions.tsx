@@ -5,7 +5,6 @@ import {
   Pressable,
   Platform,
   ScrollView,
-  Linking,
   useWindowDimensions,
   type ViewStyle,
 } from 'react-native';
@@ -16,6 +15,7 @@ import {
   StudentMenuProvider,
   useStudentMenu,
 } from '../../components/student/StudentMenu';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 import {
   spacing,
@@ -23,6 +23,7 @@ import {
   radii,
   useTheme,
 } from '../../components/student/DashboardLayout';
+import StudentFooter from '../../components/student/StudentFooter';
 
 type Breakpoint = 'mobile' | 'tablet' | 'desktop';
 
@@ -110,6 +111,7 @@ function SectionCard({
   body,
   accent,
 }: TermSection & { index: number }) {
+  const { t } = useLanguage();
   const colors = useTheme();
   const elevation = useElevation('md');
 
@@ -170,10 +172,10 @@ function SectionCard({
             </View>
 
             <Text style={[typography.h2, { color: colors.textPrimary, fontSize: 17, marginBottom: spacing(2) }]}>
-              {title}
+              {t(title)}
             </Text>
             <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 23, fontSize: 14.5 }]}>
-              {body}
+              {t(body)}
             </Text>
           </View>
         </View>
@@ -186,6 +188,7 @@ function SectionCard({
 // Sidebar panel
 // ─────────────────────────────────────────────────────────────────────────────
 function SidebarPanel() {
+  const { t } = useLanguage();
   const colors = useTheme();
   const elevation = useElevation('md');
 
@@ -299,8 +302,12 @@ function SidebarPanel() {
         <Text style={[typography.body, { color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: spacing(2.5) }]}>
           Our student support team is happy to explain anything in plain English or Setswana.
         </Text>
-        <Pressable onPress={() => router.push('/student/contact-support')}>
-          <Text style={[typography.label, { color: colors.primary, fontSize: 13 }]}>Contact Support →</Text>
+        <Pressable
+          onPress={() => router.push('/student/contact-support')}
+          accessibilityRole="button"
+          accessibilityLabel={t('Contact Support')}
+        >
+          <Text style={[typography.label, { color: colors.primary, fontSize: 13 }]}>{t('Contact Support')} →</Text>
         </Pressable>
       </View>
     </View>
@@ -311,6 +318,7 @@ function SidebarPanel() {
 // Main content
 // ─────────────────────────────────────────────────────────────────────────────
 function TermsConditionsContent() {
+  const { t } = useLanguage();
   const { width } = useWindowDimensions();
   const colors = useTheme();
   const { openMenu } = useStudentMenu();
@@ -347,7 +355,7 @@ function TermsConditionsContent() {
       <Pressable
         onPress={() => router.back()}
         accessibilityRole="button"
-        accessibilityLabel="Go back"
+        accessibilityLabel={t('Go Back')}
         style={({ pressed }) => ({
           width: 42,
           height: 42,
@@ -391,14 +399,14 @@ function TermsConditionsContent() {
       >
         <Ionicons name="settings-outline" size={14} color={colors.textSecondary} />
         {!isMobile && (
-          <Text style={[typography.label, { color: colors.textSecondary, fontSize: 12.5 }]}>Settings</Text>
+          <Text style={[typography.label, { color: colors.textSecondary, fontSize: 12.5 }]}>{t('Settings')}</Text>
         )}
       </Pressable>
 
       <Pressable
         onPress={openMenu}
         accessibilityRole="button"
-        accessibilityLabel="Open menu"
+        accessibilityLabel={t('Open student menu')}
         style={({ pressed }) => ({
           width: 42,
           height: 42,
@@ -459,7 +467,7 @@ function TermsConditionsContent() {
             >
               <Ionicons name="document-text-outline" size={13} color={colors.primary} />
               <Text style={[typography.caption, { color: colors.primary, fontWeight: '700', letterSpacing: 0.3 }]}>
-                LEGAL
+                {t('LEGAL')}
               </Text>
             </View>
 
@@ -497,7 +505,7 @@ function TermsConditionsContent() {
           >
             <Ionicons name="list-outline" size={14} color={colors.primary} />
             <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>
-              {SECTIONS.length} sections
+              {SECTIONS.length} {t('sections')}
             </Text>
           </View>
         </View>
@@ -557,38 +565,10 @@ function TermsConditionsContent() {
           >
             <Text style={[typography.caption, { color: s.accent, fontWeight: '700', fontSize: 10 }]}>{i + 1}</Text>
             <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600', fontSize: 11 }]}>
-              {s.title.split(' ')[0]}
+              {t(s.title).split(' ')[0]}
             </Text>
           </View>
         ))}
-      </View>
-    </View>
-  );
-
-  const Footer = (
-    <View
-      style={{
-        marginTop: spacing(10),
-        paddingTop: spacing(5),
-        borderTopWidth: 1,
-        borderTopColor: colors.divider,
-        alignItems: 'center',
-        gap: spacing(2),
-      }}
-    >
-      <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 14 }]}>Thuto-Bridge</Text>
-      <Text style={[typography.caption, { color: colors.textSecondary, textAlign: 'center', lineHeight: 18 }]}>
-        Connecting Botswana students to university opportunities.
-      </Text>
-      <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center', fontSize: 11.5 }]}>
-        Designed and developed by{' '}
-        <Text style={{ fontWeight: '700', color: colors.textSecondary }}>BrightCode Studios</Text>
-        {'\n'}© {new Date().getFullYear()} Thuto-Bridge. All rights reserved.
-      </Text>
-      <View style={{ flexDirection: 'row', gap: spacing(4), marginTop: spacing(1), flexWrap: 'wrap', justifyContent: 'center' }}>
-        <Pressable onPress={() => router.push('/student/privacy')}><Text style={[typography.caption, { color: colors.textMuted }]}>Privacy</Text></Pressable>
-        <Pressable onPress={() => router.push('/student/contact-support')}><Text style={[typography.caption, { color: colors.textMuted }]}>Support</Text></Pressable>
-        <Pressable onPress={() => Linking.openURL('mailto:support@thutobridge.com')}><Text style={[typography.caption, { color: colors.textMuted }]}>support@thutobridge.com</Text></Pressable>
       </View>
     </View>
   );
@@ -620,9 +600,9 @@ function TermsConditionsContent() {
                 })}
               >
                 <Ionicons name="arrow-back" size={14} color={colors.primary} />
-                <Text style={[typography.label, { color: colors.primary, fontSize: 12.5 }]}>Back</Text>
+                <Text style={[typography.label, { color: colors.primary, fontSize: 12.5 }]}>{t('Go Back')}</Text>
               </Pressable>
-              <Text style={[typography.caption, { color: colors.textMuted }]}>Settings › Terms & Conditions</Text>
+              <Text style={[typography.caption, { color: colors.textMuted }]}>{t('Settings › Terms & Conditions')}</Text>
             </View>
 
             {HeroBanner}
@@ -672,7 +652,7 @@ function TermsConditionsContent() {
                     >
                       <Ionicons name="checkmark-done-outline" size={20} color={colors.success} />
                     </View>
-                    <Text style={[typography.h2, { color: colors.textPrimary, fontSize: 17 }]}>Your Agreement</Text>
+                    <Text style={[typography.h2, { color: colors.textPrimary, fontSize: 17 }]}>{t('Your Agreement')}</Text>
                   </View>
 
                   <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 22, fontSize: 14.5 }]}>
@@ -696,7 +676,7 @@ function TermsConditionsContent() {
                       })}
                     >
                       <Ionicons name="help-circle-outline" size={18} color="#fff" />
-                      <Text style={[typography.label, { color: '#fff' }]}>Contact Support</Text>
+                      <Text style={[typography.label, { color: '#fff' }]}>{t('Contact Support')}</Text>
                     </Pressable>
 
                     <Pressable
@@ -717,7 +697,7 @@ function TermsConditionsContent() {
                       })}
                     >
                       <Ionicons name="arrow-back" size={17} color={colors.textPrimary} />
-                      <Text style={[typography.label, { color: colors.textPrimary }]}>Go Back</Text>
+                      <Text style={[typography.label, { color: colors.textPrimary }]}>{t('Go Back')}</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -726,7 +706,10 @@ function TermsConditionsContent() {
               {isDesktop && <SidebarPanel />}
             </View>
 
-            {Footer}
+            <StudentFooter
+              topSpacing={isMobile ? spacing(8) : spacing(10)}
+              maxWidth={1200}
+            />
           </View>
         </ScrollView>
       </SafeAreaView>

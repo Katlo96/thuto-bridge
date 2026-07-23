@@ -9,6 +9,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { forgotPassword, parseFirebaseError } from '../services/authService';
+import { useLanguage } from '../contexts/LanguageContext';
+import StudentFooter from '../components/student/StudentFooter';
 
 const LOGO = require('../assets/images/splash-illustration.png');
 const sp = (n: number) => n * 4;
@@ -23,6 +25,7 @@ const typo = {
 const radii = { sm: 8, md: 12, lg: 16, xl: 20, full: 9999 };
 
 export default function ForgotPassword() {
+  const { t } = useLanguage();
   const { width } = useWindowDimensions();
   const scheme = useColorScheme() || 'light';
 
@@ -61,8 +64,8 @@ export default function ForgotPassword() {
 
   const handleSend = async () => {
     const trimmed = email.trim();
-    if (!trimmed) { setError('Email is required.'); return; }
-    if (!/\S+@\S+\.\S+/.test(trimmed)) { setError('Please enter a valid email address.'); return; }
+    if (!trimmed) { setError(t('Email is required.')); return; }
+    if (!/\S+@\S+\.\S+/.test(trimmed)) { setError(t('Please enter a valid email address.')); return; }
 
     setIsSubmitting(true); setError(null);
     try {
@@ -94,7 +97,7 @@ export default function ForgotPassword() {
                 <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: `${colors.success}18`, borderWidth: 2, borderColor: `${colors.success}44`, alignItems: 'center', justifyContent: 'center', marginBottom: sp(4) }}>
                   <Ionicons name="mail-open-outline" size={36} color={colors.success} />
                 </View>
-                <Text style={[typo.title, { color: colors.textPrimary, textAlign: 'center' }]}>Check Your Inbox</Text>
+                <Text style={[typo.title, { color: colors.textPrimary, textAlign: 'center' }]}>{t('Check Your Inbox')}</Text>
                 <Text style={[typo.subtitle, { color: colors.textSecondary, textAlign: 'center', marginTop: sp(2), maxWidth: 360, lineHeight: 22 }]}>
                   If an account exists for <Text style={{ fontWeight: '700', color: colors.primary }}>{email.trim()}</Text>, a password reset link has been sent. Check your inbox and spam folder.
                 </Text>
@@ -103,9 +106,9 @@ export default function ForgotPassword() {
               {/* Info box */}
               <View style={{ padding: sp(4), backgroundColor: `${colors.primary}0F`, borderRadius: radii.lg, borderWidth: 1, borderColor: `${colors.primary}22`, marginBottom: sp(6), gap: sp(3) }}>
                 {[
-                  'The link expires after 1 hour.',
-                  'Click the link in the email to set a new password.',
-                  'If you don\'t see it, check your spam or junk folder.',
+                  t("The link expires after 1 hour."),
+                  t("Click the link in the email to set a new password."),
+                  t("If you don't see it, check your spam or junk folder."),
                 ].map((tip, i) => (
                   <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sp(2) }}>
                     <Ionicons name="checkmark-circle-outline" size={15} color={colors.primary} style={{ marginTop: 1 }} />
@@ -115,15 +118,26 @@ export default function ForgotPassword() {
               </View>
 
               {/* Resend */}
-              <Pressable onPress={() => { setSent(false); setEmail(''); }}
+              <Pressable
+onPress={() => { setSent(false); setEmail(''); }}
+accessibilityRole="button"
+accessibilityLabel={t('Send Another Link')}
                 style={({ pressed }) => [s.btn, { backgroundColor: colors.primary }, pressed && { opacity: 0.88, transform: [{ scale: 0.97 }] }]}>
-                <Text style={[typo.body, { color: '#fff', fontWeight: '700' }]}>Send Another Link</Text>
+                <Text style={[typo.body, { color: '#fff', fontWeight: '700' }]}>{t('Send Another Link')}</Text>
               </Pressable>
 
-              <Pressable onPress={() => router.replace('/login')} style={({ pressed }) => ({ marginTop: sp(4), opacity: pressed ? 0.7 : 1 })}>
-                <Text style={[typo.caption, { color: colors.primary, textAlign: 'center', fontWeight: '700' }]}>Back to Sign In</Text>
+              <Pressable
+onPress={() => router.replace('/login')}
+accessibilityRole="button"
+accessibilityLabel={t('Back to Sign In')} style={({ pressed }) => ({ marginTop: sp(4), opacity: pressed ? 0.7 : 1 })}>
+                <Text style={[typo.caption, { color: colors.primary, textAlign: 'center', fontWeight: '700' }]}>{t('Back to Sign In')}</Text>
               </Pressable>
             </Animated.View>
+
+            <StudentFooter
+              topSpacing={sp(isMobile ? 8 : 10)}
+              maxWidth={1240}
+            />
           </ScrollView>
         </SafeAreaView>
       </View>
@@ -144,12 +158,12 @@ export default function ForgotPassword() {
                     <Image source={LOGO} style={{ width: 48, height: 48 }} resizeMode="contain" />
                     <Text style={[typo.hero, { color: colors.textPrimary }]}>THUTO BRIDGE</Text>
                   </View>
-                  <Text style={[typo.subtitle, { color: colors.textSecondary, marginTop: sp(4), marginBottom: sp(6) }]}>Reset your password securely in just one step.</Text>
+                  <Text style={[typo.subtitle, { color: colors.textSecondary, marginTop: sp(4), marginBottom: sp(6) }]}>{t('Reset your password securely in just one step.')}</Text>
                   <View style={{ gap: sp(4) }}>
                     {[
-                      { num: '1', title: 'Enter your email',          desc: 'We\'ll send a reset link to your inbox' },
-                      { num: '2', title: 'Click the link in the email', desc: 'Opens Firebase\'s secure reset page'    },
-                      { num: '3', title: 'Set your new password',      desc: 'Choose a strong new password and done'  },
+                      { num: '1', title: t("Enter your email"),          desc: t("We'll send a reset link to your inbox") },
+                      { num: '2', title: t("Click the link in the email"), desc: t("Opens Firebase's secure reset page")    },
+                      { num: '3', title: t("Set your new password"),      desc: t("Choose a strong new password and done")  },
                     ].map((step, i) => (
                       <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sp(4) }}>
                         <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: `${colors.primary}18`, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -174,19 +188,20 @@ export default function ForgotPassword() {
                   </View>
                 )}
 
-                <Text style={[typo.title, { color: colors.textPrimary, marginBottom: sp(2), textAlign: isMobile ? 'center' : 'left' }]} accessibilityRole="header">Forgot Password</Text>
-                <Text style={[typo.subtitle, { color: colors.textSecondary, marginBottom: sp(6), textAlign: isMobile ? 'center' : 'left' }]}>Enter your email and we'll send you a reset link.</Text>
+                <Text style={[typo.title, { color: colors.textPrimary, marginBottom: sp(2), textAlign: isMobile ? 'center' : 'left' }]} accessibilityRole="header">{t('Forgot Password')}</Text>
+                <Text style={[typo.subtitle, { color: colors.textSecondary, marginBottom: sp(6), textAlign: isMobile ? 'center' : 'left' }]}>{t("Enter your email and we'll send you a reset link.")}</Text>
 
                 {/* Email input */}
                 <View style={[s.input, { borderColor: focused ? colors.borderFocus : colors.border, borderWidth: focused ? 1.5 : 1, backgroundColor: colors.surfaceAlt }]}>
                   <Ionicons name="mail-outline" size={20} color={focused ? colors.primary : colors.textMuted} style={{ marginRight: sp(2) }} />
                   <TextInput
                     value={email}
-                    onChangeText={(t) => { setEmail(t); setError(null); }}
+                    onChangeText={(value) => { setEmail(value); setError(null); }}
                     onFocus={() => setFocused(true)}
                     onBlur={() => setFocused(false)}
-                    placeholder="Your email address"
+                    placeholder={t('Your email address')}
                     placeholderTextColor={colors.textMuted}
+                    accessibilityLabel={t('Your email address')}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -194,7 +209,12 @@ export default function ForgotPassword() {
                     onSubmitEditing={handleSend}
                     style={[typo.body, { flex: 1, color: colors.textPrimary }]}
                   />
-                  {email.length > 0 && <Pressable onPress={() => setEmail('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textMuted} /></Pressable>}
+                  {email.length > 0 && <Pressable
+onPress={() => setEmail('')}
+accessibilityRole="button"
+accessibilityLabel={t('Clear')}
+hitSlop={8}
+><Ionicons name="close-circle" size={18} color={colors.textMuted} /></Pressable>}
                 </View>
 
                 {/* Error */}
@@ -208,20 +228,29 @@ export default function ForgotPassword() {
                 {/* Submit */}
                 <Pressable onPress={handleSend} disabled={isSubmitting}
                   style={({ pressed }) => [s.btn, { backgroundColor: colors.primary, marginTop: sp(5) }, pressed && { transform: [{ scale: 0.97 }], opacity: 0.92 }, isSubmitting && { opacity: 0.7 }]}
-                  accessibilityRole="button">
+                  accessibilityRole="button"
+                  accessibilityLabel={t('Send Reset Link')}>
                   {isSubmitting ? <ActivityIndicator color="#fff" /> : (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: sp(2) }}>
                       <Ionicons name="paper-plane-outline" size={17} color="#fff" />
-                      <Text style={[typo.body, { color: '#fff', fontWeight: '700' }]}>Send Reset Link</Text>
+                      <Text style={[typo.body, { color: '#fff', fontWeight: '700' }]}>{t('Send Reset Link')}</Text>
                     </View>
                   )}
                 </Pressable>
 
-                <Pressable onPress={() => router.back()} style={({ pressed }) => ({ marginTop: sp(5), opacity: pressed ? 0.7 : 1 })}>
-                  <Text style={[typo.caption, { color: colors.primary, textAlign: 'center', fontWeight: '700' }]}>Back to Sign In</Text>
+                <Pressable
+onPress={() => router.back()}
+accessibilityRole="button"
+accessibilityLabel={t('Back to Sign In')} style={({ pressed }) => ({ marginTop: sp(5), opacity: pressed ? 0.7 : 1 })}>
+                  <Text style={[typo.caption, { color: colors.primary, textAlign: 'center', fontWeight: '700' }]}>{t('Back to Sign In')}</Text>
                 </Pressable>
               </View>
             </Animated.View>
+
+            <StudentFooter
+              topSpacing={sp(isMobile ? 8 : 10)}
+              maxWidth={1240}
+            />
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -231,7 +260,7 @@ export default function ForgotPassword() {
 
 const s = StyleSheet.create({
   fill: { flex: 1 }, container: { flex: 1 },
-  scroll: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
+  scroll: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', width: '100%' },
   wrap:  { width: '100%', alignSelf: 'center' },
   side:  { padding: 24, flex: 1, maxWidth: 480 },
   form:  { padding: 24, borderRadius: 20 },

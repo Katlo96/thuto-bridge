@@ -15,6 +15,7 @@ import {
 StudentMenuProvider,
 useStudentMenu,
 } from '../../components/student/StudentMenu';
+import { useLanguage } from '../../contexts/LanguageContext';
 // ─────────────────────────────────────────────────────────────────────────────
 // DashboardLayout & design tokens
 // ─────────────────────────────────────────────────────────────────────────────
@@ -24,6 +25,7 @@ typography,
 radii,
 useTheme,
 } from '../../components/student/DashboardLayout';
+import StudentFooter from '../../components/student/StudentFooter';
 // ─────────────────────────────────────────────────────────────────────────────
 // Firebase
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,6 +111,7 @@ university: University;
 onPress: () => void;
 compact?: boolean;
 }) {
+const { t } = useLanguage();
 const colors = useTheme();
 const elevation = useElevation('md');
 const typeColor = TYPE_COLORS[university.type] ?? colors.primary;
@@ -116,12 +119,12 @@ return (
 <Pressable
 onPress={onPress}
 accessibilityRole="button"
-accessibilityLabel={`Open ${university.name}`}
+accessibilityLabel={`${t('View details')}: ${university.name}`}
 style={({ pressed }): ViewStyle => ({
-width: '48%' as any,
+width: compact ? '100%' : '48%' as any,
 ...elevation,
 backgroundColor: colors.card,
-borderRadius: radii.xxl,
+borderRadius: compact ? radii.xl : radii.xxl,
 borderWidth: 1,
 borderColor: colors.border,
 overflow: 'hidden',
@@ -130,8 +133,8 @@ transform: pressed ? [{ scale: 0.985 }] : [],
       })}
 >
 {/* Accent bar */}
-<View style={{ height: 3, backgroundColor: university.accentColor }} />
-<View style={{ padding: compact ? spacing(3) : spacing(5), gap: compact ? spacing(2) : spacing(3) }}>
+<View style={{ height: compact ? 4 : 3, backgroundColor: university.accentColor }} />
+<View style={{ padding: compact ? spacing(4) : spacing(5), gap: compact ? spacing(3) : spacing(3) }}>
 {/* Badge + chevron */}
 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
 <View style={{
@@ -166,7 +169,7 @@ justifyContent: 'center',
 </View>
 {/* Name */}
 <Text
-style={[typography.h2, { color: colors.textPrimary, fontSize: compact ? 13 : undefined, lineHeight: compact ? 18 : undefined }]}
+style={[typography.h2, { color: colors.textPrimary, fontSize: compact ? 16 : undefined, lineHeight: compact ? 22 : undefined }]}
 numberOfLines={2}
 >
 {university.name}
@@ -179,11 +182,19 @@ numberOfLines={2}
 </Text>
 </View>
 {/* Tagline — hidden on compact to save space */}
-{!compact && (
-<Text style={[typography.body, { color: colors.textSecondary, lineHeight: 20 }]} numberOfLines={2}>
+<Text
+style={[
+  typography.body,
+  {
+    color: colors.textSecondary,
+    lineHeight: compact ? 19 : 20,
+    fontSize: compact ? 12.5 : undefined,
+  },
+]}
+numberOfLines={compact ? 2 : 2}
+>
 {university.tagline}
 </Text>
-        )}
 {/* Meta pills */}
 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(1) }}>
 <View style={{
@@ -199,7 +210,7 @@ borderColor: `${typeColor}33`,
           }}>
 <View style={{ width: compact ? 5 : 7, height: compact ? 5 : 7, borderRadius: 4, backgroundColor: typeColor }} />
 <Text style={[typography.caption, { color: typeColor, fontWeight: '700', fontSize: compact ? 9 : undefined }]}>
-{university.type}
+{t(university.type)}
 </Text>
 </View>
 <View style={{
@@ -241,6 +252,7 @@ justifyContent: 'space-between',
 // EmptyState
 // ─────────────────────────────────────────────────────────────────────────────
 function EmptyState({ onReset }: { onReset: () => void }) {
+const { t } = useLanguage();
 const colors = useTheme();
 const elevation = useElevation('sm');
 return (
@@ -248,13 +260,17 @@ return (
 <View style={{ width: 68, height: 68, borderRadius: radii.xl, backgroundColor: `${colors.primary}22`, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginBottom: spacing(5) }}>
 <Ionicons name="search-outline" size={28} color={colors.primary} />
 </View>
-<Text style={[typography.h2, { color: colors.textPrimary, textAlign: 'center' }]}>No universities found</Text>
+<Text style={[typography.h2, { color: colors.textPrimary, textAlign: 'center' }]}>{t('No universities found')}</Text>
 <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2), textAlign: 'center', maxWidth: 300 }]}>
         Try a different institution name, location, or keyword.
 </Text>
-<Pressable onPress={onReset} style={({ pressed }) => ({ marginTop: spacing(6), flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(6), paddingVertical: spacing(4), borderRadius: radii.lg, backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 })}>
+<Pressable
+onPress={onReset}
+accessibilityRole="button"
+accessibilityLabel={t('RESET SEARCH')}
+style={({ pressed }) => ({ marginTop: spacing(6), flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(6), paddingVertical: spacing(4), borderRadius: radii.lg, backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 })}>
 <Ionicons name="refresh-outline" size={17} color="#fff" />
-<Text style={[typography.label, { color: '#fff', letterSpacing: 0.4 }]}>RESET SEARCH</Text>
+<Text style={[typography.label, { color: '#fff', letterSpacing: 0.4 }]}>{t('RESET SEARCH')}</Text>
 </Pressable>
 </View>
   );
@@ -263,11 +279,12 @@ return (
 // LoadingState
 // ─────────────────────────────────────────────────────────────────────────────
 function LoadingState() {
+const { t } = useLanguage();
 const colors = useTheme();
 return (
 <View style={{ padding: spacing(12), alignItems: 'center', justifyContent: 'center' }}>
 <ActivityIndicator size="large" color={colors.primary} />
-<Text style={[typography.h2, { color: colors.textPrimary, marginTop: spacing(4) }]}>Loading universities...</Text>
+<Text style={[typography.h2, { color: colors.textPrimary, marginTop: spacing(4) }]}>{t('Loading universities...')}</Text>
 </View>
   );
 }
@@ -275,8 +292,10 @@ return (
 // Main content
 // ─────────────────────────────────────────────────────────────────────────────
 function UniversitiesContent() {
+const { t } = useLanguage();
 const { width } = useWindowDimensions();
 const colors = useTheme();
+
 const { openMenu } = useStudentMenu();
 const elevation = useElevation('md');
 const breakpoint = useMemo<Breakpoint>(() => {
@@ -387,23 +406,28 @@ const Sidebar = isDesktop && (
 <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }, elevation]}>
 <View style={{ height: 3, backgroundColor: colors.primary }} />
 <View style={{ padding: spacing(6), gap: spacing(4) }}>
-<Text style={[typography.h2, { color: colors.textPrimary }]}>Overview</Text>
+<Text style={[typography.h2, { color: colors.textPrimary }]}>{t('Overview')}</Text>
 <View style={{ gap: spacing(3) }}>
-<StatPill icon="school-outline" label="Total Universities" value={`${universities.length}`} />
-<StatPill icon="search-outline" label="Search Results" value={`${filtered.length}`} />
-<StatPill icon="location-outline" label="Coverage" value="Botswana" />
+<StatPill icon="school-outline" label={t('Total Universities')} value={`${universities.length}`} />
+<StatPill icon="search-outline" label={t('Search Results')} value={`${filtered.length}`} />
+<StatPill icon="location-outline" label={t('Coverage')} value="Botswana" />
 </View>
 <View style={{ height: 1, backgroundColor: colors.divider }} />
-<Text style={[typography.h2, { color: colors.textPrimary }]}>Filter by Type</Text>
+<Text style={[typography.h2, { color: colors.textPrimary }]}>{t('Filter by Type')}</Text>
 <View style={{ gap: spacing(2) }}>
 {([
-              { key: 'All', label: 'All Universities', count: universities.length, icon: 'apps-outline' as const },
-              { key: 'Public', label: 'Public', count: publicCount, icon: 'business-outline' as const },
-              { key: 'Private', label: 'Private', count: privateCount, icon: 'lock-closed-outline' as const },
+              { key: 'All', label: t('All Universities'), count: universities.length, icon: 'apps-outline' as const },
+              { key: 'Public', label: t('Public'), count: publicCount, icon: 'business-outline' as const },
+              { key: 'Private', label: t('Private'), count: privateCount, icon: 'lock-closed-outline' as const },
             ] as { key: typeof typeFilter; label: string; count: number; icon: keyof typeof Ionicons.glyphMap }[]).map(({ key, label, count, icon }) => {
 const active = typeFilter === key;
 return (
-<Pressable key={key} onPress={() => setTypeFilter(key)}
+<Pressable
+key={key}
+onPress={() => setTypeFilter(key)}
+accessibilityRole="button"
+accessibilityLabel={label}
+accessibilityState={{ selected: active }}
 style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(3), paddingHorizontal: spacing(4), paddingVertical: spacing(3), borderRadius: radii.lg, borderWidth: 1, borderColor: active ? colors.primary : colors.border, backgroundColor: active ? `${colors.primary}14` : colors.surfaceAlt, opacity: pressed ? 0.85 : 1 })}>
 <Ionicons name={icon} size={17} color={active ? colors.primary : colors.textPrimary} />
 <Text style={[typography.label, { color: active ? colors.primary : colors.textPrimary, flex: 1 }]}>{label}</Text>
@@ -415,11 +439,11 @@ style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' a
             })}
 </View>
 <View style={{ height: 1, backgroundColor: colors.divider }} />
-<Text style={[typography.h2, { color: colors.textPrimary }]}>Quick Actions</Text>
+<Text style={[typography.h2, { color: colors.textPrimary }]}>{t('Quick Actions')}</Text>
 <View style={{ gap: spacing(3) }}>
-<SidebarAction icon="menu-outline" label="Open Menu" onPress={openMenu} variant="primary" />
-<SidebarAction icon="refresh-outline" label="Clear Search" onPress={() => { setSearch(''); setTypeFilter('All'); }} />
-<SidebarAction icon="school-outline" label="All Institutions" onPress={() => router.push('/student/institutions')} />
+<SidebarAction icon="menu-outline" label={t('Open Menu')} onPress={openMenu} variant="primary" />
+<SidebarAction icon="refresh-outline" label={t('Clear Search')} onPress={() => { setSearch(''); setTypeFilter('All'); }} />
+<SidebarAction icon="school-outline" label={t('All Institutions')} onPress={() => router.push('/student/institutions')} />
 </View>
 <View style={{ padding: spacing(4), backgroundColor: `${colors.primary}14`, borderRadius: radii.lg, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
 <Text style={[typography.caption, { color: colors.textSecondary, lineHeight: 18 }]}>
@@ -433,8 +457,8 @@ style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' a
 
 // ── Hero banner ────────────────────────────────────────────────────────────
 const HeroBanner = (
-<View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: isMobile ? spacing(4) : spacing(7), marginBottom: spacing(5), width: '100%' }, elevation]}>
-<View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing(3) }}>
+<View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: isMobile ? spacing(5) : spacing(7), marginBottom: spacing(5), width: '100%' }, elevation]}>
+<View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing(isMobile ? 4 : 3) }}>
 <View style={{ flex: 1 }}>
 <Text style={[typography.hero, { color: colors.textPrimary, fontSize: isMobile ? 18 : 28, lineHeight: isMobile ? 24 : 34 }]}>
             Find the right university
@@ -443,9 +467,11 @@ const HeroBanner = (
             Explore universities across Botswana, compare options, and view detailed programme and admission information.
 </Text>
 </View>
-<View style={{ flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: `${colors.primary}22`, borderWidth: 1, borderColor: `${colors.primary}44` }}>
+<View style={{ flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing(2), flexGrow: isMobile ? 1 : 0, justifyContent: 'center' as const, paddingHorizontal: spacing(3), paddingVertical: spacing(2.5), borderRadius: radii.pill, backgroundColor: `${colors.primary}22`, borderWidth: 1, borderColor: `${colors.primary}44` }}>
 <Ionicons name="school-outline" size={14} color={colors.primary} />
-<Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>{filtered.length}</Text>
+<Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>
+{filtered.length} {filtered.length === 1 ? t('Result') : t('Results')}
+</Text>
 </View>
 </View>
 </View>
@@ -453,13 +479,13 @@ const HeroBanner = (
 
 // ── Mobile stats strip ─────────────────────────────────────────────────────
 const MobileStatsStrip = isMobile && (
-<View style={{ flexDirection: 'row', gap: spacing(2), marginBottom: spacing(4), width: '100%' }}>
+<View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginBottom: spacing(4), width: '100%' }}>
 {[
-        { icon: 'school-outline' as const, label: 'Total', value: `${universities.length}` },
-        { icon: 'search-outline' as const, label: 'Results', value: `${filtered.length}` },
-        { icon: 'location-outline' as const, label: 'Region', value: 'BW' },
+        { icon: 'school-outline' as const, label: t('Total Universities'), value: `${universities.length}` },
+        { icon: 'search-outline' as const, label: t('Search Results'), value: `${filtered.length}` },
+        { icon: 'location-outline' as const, label: t('Region'), value: 'BW' },
       ].map((s) => (
-<View key={s.label} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing(2), backgroundColor: colors.surface, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, padding: spacing(2) }}>
+<View key={s.label} style={{ flexGrow: 1, flexBasis: isMobile ? '30%' : undefined, minWidth: 94, flexDirection: 'row', alignItems: 'center', gap: spacing(2), backgroundColor: colors.surface, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, padding: spacing(2) }}>
 <Ionicons name={s.icon} size={12} color={colors.primary} />
 <View style={{ flex: 1, minWidth: 0 }}>
 <Text style={[typography.caption, { color: colors.textSecondary, fontSize: 9 }]} numberOfLines={1}>{s.label}</Text>
@@ -473,14 +499,19 @@ const MobileStatsStrip = isMobile && (
 // ── Type filter strip (mobile + tablet) ───────────────────────────────────
 const TypeFilterStrip = !isDesktop && (
 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginBottom: spacing(4) }}>
-{(['All', 'Public', 'Private'] as const).map((t) => {
-const active = typeFilter === t;
-const color = t === 'Public' ? TYPE_COLORS.Public : t === 'Private' ? TYPE_COLORS.Private : colors.primary;
+{(['All', 'Public', 'Private'] as const).map((filterOption) => {
+const active = typeFilter === filterOption;
+const color = filterOption === 'Public' ? TYPE_COLORS.Public : filterOption === 'Private' ? TYPE_COLORS.Private : colors.primary;
 return (
-<Pressable key={t} onPress={() => setTypeFilter(t)}
+<Pressable
+key={filterOption}
+onPress={() => setTypeFilter(filterOption)}
+accessibilityRole="button"
+accessibilityLabel={t(filterOption)}
+accessibilityState={{ selected: active }}
 style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, borderWidth: 1, borderColor: active ? color : colors.border, backgroundColor: active ? color : colors.surfaceAlt, opacity: pressed ? 0.85 : 1 })}>
-{t !== 'All' && <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: active ? '#fff' : color }} />}
-<Text style={[typography.caption, { color: active ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: isMobile ? 11 : undefined }]}>{t}</Text>
+{filterOption !== 'All' && <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: active ? '#fff' : color }} />}
+<Text style={[typography.caption, { color: active ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: isMobile ? 11 : undefined }]}>{t(filterOption)}</Text>
 </Pressable>
         );
       })}
@@ -490,20 +521,24 @@ style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' a
 // ── Search bar ─────────────────────────────────────────────────────────────
 const SearchBar = (
 <View style={{ marginBottom: spacing(5), width: '100%' }}>
-<Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(2), fontSize: isMobile ? 10 : undefined }]}>SEARCH</Text>
+<Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(2), fontSize: isMobile ? 10 : undefined }]}>{t('SEARCH')}</Text>
 <View style={[{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing(3), minHeight: isMobile ? 44 : 52 }, elevation]}>
 <Ionicons name="search-outline" size={isMobile ? 17 : 20} color={colors.textSecondary} />
 <TextInput
 value={search}
 onChangeText={setSearch}
-placeholder={isMobile ? 'Search universities...' : 'Search by name, location, or specialty...'}
+placeholder={isMobile ? t('Search universities...') : t('Search by name, location, or specialty...')}
 placeholderTextColor={colors.textMuted}
 style={[typography.body, { flex: 1, marginLeft: spacing(2), paddingVertical: spacing(3), color: colors.textPrimary, fontSize: isMobile ? 13 : undefined }]}
-accessibilityLabel="Search universities"
+accessibilityLabel={t('Search universities')}
 returnKeyType="search"
 />
 {search.length > 0 && (
-<Pressable onPress={() => setSearch('')} style={({ pressed }) => ({ padding: spacing(2), opacity: pressed ? 0.7 : 1 })}>
+<Pressable
+onPress={() => setSearch('')}
+accessibilityRole="button"
+accessibilityLabel={t('Clear Search')}
+style={({ pressed }) => ({ padding: spacing(2), opacity: pressed ? 0.7 : 1 })}>
 <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
 </Pressable>
         )}
@@ -522,7 +557,7 @@ const Grid = loading ? (
           UNIVERSITIES · {filtered.length} FOUND
 </Text>
 {/* 2-column grid */}
-<View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: CARD_GAP }}>
+<View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: isMobile ? spacing(4) : CARD_GAP }}>
 {filtered.map((uni) => (
 <UniversityCard
 key={uni.id}
@@ -540,16 +575,16 @@ compact={isMobile}
 // ─────────────────────────────────────────────────────────────────────────
 return (
 <DashboardLayout
-title="Universities"
-subtitle="Explore institutions across Botswana"
+title={t('Universities')}
+subtitle={t('Explore institutions across Botswana')}
 showPointsCard={false}
 >
 {/* Back + breadcrumb */}
-<View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(5) }}>
+<View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginBottom: spacing(isMobile ? 4 : 5) }}>
 <Pressable
 onPress={() => router.back()}
 accessibilityRole="button"
-accessibilityLabel="Go back"
+accessibilityLabel={t('Go Back')}
 style={({ pressed }) => ({
 flexDirection: 'row' as const,
 alignItems: 'center' as const,
@@ -564,7 +599,7 @@ opacity: pressed ? 0.8 : 1,
           })}
 >
 <Ionicons name="arrow-back" size={16} color={colors.primary} />
-<Text style={[typography.label, { color: colors.primary, fontSize: isMobile ? 12 : undefined }]}>Back</Text>
+<Text style={[typography.label, { color: colors.primary, fontSize: isMobile ? 12 : undefined }]}>{t('Go Back')}</Text>
 </Pressable>
 <Text style={[typography.caption, { color: colors.textMuted, flex: 1, fontSize: isMobile ? 11 : undefined }]} numberOfLines={1}>
           Institutions › Universities
@@ -589,6 +624,11 @@ alignItems: 'flex-start',
 {/* Sidebar — desktop only */}
 {Sidebar}
 </View>
+
+<StudentFooter
+topSpacing={isMobile ? spacing(8) : spacing(10)}
+maxWidth={1280}
+/>
 </DashboardLayout>
   );
 }

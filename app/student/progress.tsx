@@ -21,6 +21,7 @@ import {
   StudentMenuProvider,
   useStudentMenu,
 } from '../../components/student/StudentMenu';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DashboardLayout & design tokens
@@ -31,6 +32,7 @@ import DashboardLayout, {
   radii,
   useTheme,
 } from '../../components/student/DashboardLayout';
+import StudentFooter from '../../components/student/StudentFooter';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Firebase
@@ -222,14 +224,17 @@ function SelectionPill({
   onPress,
   icon,
   description,
+  translateLabel = true,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
   icon?: keyof typeof Ionicons.glyphMap;
   description?: string;
+  translateLabel?: boolean;
 }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   const scale = useRef(new Animated.Value(1)).current;
 
   const handlePress = () => {
@@ -267,7 +272,7 @@ function SelectionPill({
           </View>
         )}
         <View style={{ flex: 1 }}>
-          <Text style={[typography.label, { color: selected ? colors.primary : colors.textPrimary, fontWeight: '700' }]}>{label}</Text>
+          <Text style={[typography.label, { color: selected ? colors.primary : colors.textPrimary, fontWeight: '700' }]}>{translateLabel ? t(label) : label}</Text>
           {description && <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>{description}</Text>}
         </View>
         <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: selected ? colors.primary : colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? colors.primary : 'transparent' }}>
@@ -283,6 +288,7 @@ function SelectionPill({
 // ─────────────────────────────────────────────────────────────────────────────
 function WizardStepBar({ currentStep }: { currentStep: WizardStep }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   const currentIdx = WIZARD_STEPS.findIndex(s => s.key === currentStep);
 
   return (
@@ -307,7 +313,7 @@ function WizardStepBar({ currentStep }: { currentStep: WizardStep }) {
                 }
               </View>
               <Text style={[typography.caption, { color: active ? colors.primary : done ? colors.success : colors.textMuted, fontWeight: active ? '700' : '400' }]}>
-                {s.label}
+                {t(s.label)}
               </Text>
             </View>
             {i < WIZARD_STEPS.length - 1 && (
@@ -325,6 +331,7 @@ function WizardStepBar({ currentStep }: { currentStep: WizardStep }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => void }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
@@ -347,7 +354,7 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
     else if (step === 'subjects') {
       const filled = extraInputs.filter((s) => s.trim()).map((s) => s.trim());
       if (filled.length < ADDITIONAL_SUBJECTS) {
-        Alert.alert('Incomplete', `Please enter all ${ADDITIONAL_SUBJECTS} additional subjects.`);
+        Alert.alert(t('Incomplete'), `${t('Please enter all')} ${ADDITIONAL_SUBJECTS} ${t('additional subjects.')}`);
         return;
       }
       const allSubjects = [...defaults, ...filled];
@@ -368,10 +375,10 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
     (step === 'subjects' && extraInputs.filter((s) => s.trim()).length >= ADDITIONAL_SUBJECTS);
 
   const stepDescriptions: Record<WizardStep, { title: string; subtitle: string }> = {
-    system: { title: 'Choose Your System', subtitle: 'Select the examination board you are registered with.' },
-    track: { title: 'Select Your Track', subtitle: 'This determines your default subject set.' },
-    form: { title: 'What Year Are You In?', subtitle: 'We use this to personalise your academic timeline.' },
-    subjects: { title: 'Confirm Your Subjects', subtitle: `Your ${defaults.length} core subjects are pre-loaded. Add ${ADDITIONAL_SUBJECTS} electives.` },
+    system: { title: t('Choose Your System'), subtitle: t('Select the examination board you are registered with.') },
+    track: { title: t('Select Your Track'), subtitle: t('This determines your default subject set.') },
+    form: { title: t('What Year Are You In?'), subtitle: t('We use this to personalise your academic timeline.') },
+    subjects: { title: t('Confirm Your Subjects'), subtitle: `${t('Your')} ${defaults.length} ${t('core subjects are pre-loaded. Add')} ${ADDITIONAL_SUBJECTS} ${t('electives.')}` },
     done: { title: '', subtitle: '' },
   };
 
@@ -394,14 +401,16 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
         <View style={{ gap: spacing(3) }}>
           <SelectionPill
             label="BGCSE"
-            description="Botswana General Certificate of Secondary Education"
+            translateLabel={false}
+            description={t('Botswana General Certificate of Secondary Education')}
             selected={system === 'BGCSE'}
             onPress={() => setSystem('BGCSE')}
             icon="school-outline"
           />
           <SelectionPill
             label="IGCSE"
-            description="International General Certificate of Secondary Education"
+            translateLabel={false}
+            description={t('International General Certificate of Secondary Education')}
             selected={system === 'IGCSE'}
             onPress={() => setSystem('IGCSE')}
             icon="globe-outline"
@@ -412,10 +421,17 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
       {step === 'track' && system && (
         <View style={{ gap: spacing(3) }}>
           {(system === 'BGCSE'
-            ? [{ t: 'Pure', desc: 'All three sciences as separate subjects' }, { t: 'Double', desc: 'Combined double science award' }, { t: 'Single', desc: 'Combined single science award' }] as { t: BGCSETrack; desc: string }[]
-            : [{ t: 'Advanced', desc: 'Extended Mathematics & Sciences' }, { t: 'Ordinary', desc: 'Core level across subjects' }] as { t: IGCSETrack; desc: string }[]
-          ).map(({ t, desc }) => (
-            <SelectionPill key={t} label={t} description={desc} selected={track === t} onPress={() => setTrack(t)} icon="flask-outline" />
+            ? [{ value: 'Pure', desc: 'All three sciences as separate subjects' }, { value: 'Double', desc: 'Combined double science award' }, { value: 'Single', desc: 'Combined single science award' }] as { value: BGCSETrack; desc: string }[]
+            : [{ value: 'Advanced', desc: 'Extended Mathematics & Sciences' }, { value: 'Ordinary', desc: 'Core level across subjects' }] as { value: IGCSETrack; desc: string }[]
+          ).map(({ value, desc }) => (
+            <SelectionPill
+              key={value}
+              label={value}
+              description={t(desc)}
+              selected={track === value}
+              onPress={() => setTrack(value)}
+              icon="flask-outline"
+            />
           ))}
         </View>
       )}
@@ -434,7 +450,7 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginBottom: spacing(3) }}>
               <View style={{ width: 4, height: 16, borderRadius: 2, backgroundColor: colors.primary }} />
-              <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 1, fontWeight: '700' }]}>CORE SUBJECTS ({defaults.length})</Text>
+              <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 1, fontWeight: '700' }]}>{t('CORE SUBJECTS')} ({defaults.length})</Text>
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) }}>
               {defaults.map((s, i) => (
@@ -463,7 +479,7 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginBottom: spacing(3) }}>
               <View style={{ width: 4, height: 16, borderRadius: 2, backgroundColor: colors.warning }} />
-              <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 1, fontWeight: '700' }]}>ADD {ADDITIONAL_SUBJECTS} ELECTIVES</Text>
+              <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 1, fontWeight: '700' }]}>{t('ADD')} {ADDITIONAL_SUBJECTS} {t('ELECTIVES')}</Text>
             </View>
             <View style={{ gap: spacing(3) }}>
               {extraInputs.map((val, i) => (
@@ -478,7 +494,7 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
                       copy[i] = text;
                       setExtraInputs(copy);
                     }}
-                    placeholder={`Elective subject ${i + 1}`}
+                    placeholder={`${t('Elective subject')} ${i + 1}`}
                     placeholderTextColor={colors.textMuted}
                     style={{
                       flex: 1,
@@ -518,7 +534,7 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
             })}
           >
             <Ionicons name="arrow-back" size={16} color={colors.textSecondary} />
-            <Text style={[typography.label, { color: colors.textPrimary }]}>Back</Text>
+            <Text style={[typography.label, { color: colors.textPrimary }]}>{t('Back')}</Text>
           </Pressable>
         )}
 
@@ -538,7 +554,7 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
           })}
         >
           <Text style={[typography.label, { color: canNext ? '#fff' : colors.textMuted, fontSize: 15, fontWeight: '700' }]}>
-            {step === 'subjects' ? 'Save Profile' : 'Continue'}
+            {step === 'subjects' ? t('Save Profile') : t('Continue')}
           </Text>
           {step !== 'subjects' && canNext && <Ionicons name="arrow-forward" size={16} color="#fff" />}
           {step === 'subjects' && canNext && <Ionicons name="checkmark" size={16} color="#fff" />}
@@ -651,6 +667,7 @@ function AddRecordModal({
   onClose: () => void;
 }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const modalElevation = useElevation('lg');
@@ -687,12 +704,12 @@ function AddRecordModal({
           <View style={{ height: 5, backgroundColor: grade.color }} />
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing(6), paddingBottom: spacing(4) }}>
             <View>
-              <Text style={[typography.h2, { color: colors.textPrimary }]}>Add Result</Text>
+              <Text style={[typography.h2, { color: colors.textPrimary }]}>{t('Add Result')}</Text>
               <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(1) }]}>
-                {subject ? `${subject} · ${grade.letter} grade` : 'Select a subject to get started'}
+                {subject ? `${subject} · ${grade.letter} ${t('grade')}` : t('Select a subject to get started')}
               </Text>
             </View>
-            <Pressable onPress={onClose} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={t('Close')} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
               <Ionicons name="close" size={18} color={colors.textSecondary} />
             </Pressable>
           </View>
@@ -701,7 +718,7 @@ function AddRecordModal({
 
             {/* Subject */}
             <View>
-              <Text style={[typography.label, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>SUBJECT</Text>
+              <Text style={[typography.label, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>{t('SUBJECT')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={{ flexDirection: 'row', gap: spacing(2) }}>
                   {subjects.map((s) => (
@@ -727,13 +744,13 @@ function AddRecordModal({
 
             {/* Score */}
             <View>
-              <Text style={[typography.label, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>SCORE</Text>
+              <Text style={[typography.label, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>{t('SCORE')}</Text>
               <ScoreSlider value={score} onChange={setScore} />
             </View>
 
             {/* Exam Type */}
             <View>
-              <Text style={[typography.label, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>EXAM TYPE</Text>
+              <Text style={[typography.label, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>{t('EXAM TYPE')}</Text>
               <View style={{ gap: spacing(2) }}>
                 {EXAM_TYPES.map((type) => (
                   <Pressable
@@ -755,7 +772,7 @@ function AddRecordModal({
                       <Ionicons name={EXAM_TYPE_ICONS[type]} size={16} color={examType === type ? '#fff' : colors.textMuted} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[typography.label, { color: examType === type ? colors.primary : colors.textPrimary }]}>{type}</Text>
+                      <Text style={[typography.label, { color: examType === type ? colors.primary : colors.textPrimary }]}>{t(type)}</Text>
                     </View>
                     <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: examType === type ? colors.primary : colors.border, backgroundColor: examType === type ? colors.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
                       {examType === type && <Ionicons name="checkmark" size={11} color="#fff" />}
@@ -767,7 +784,7 @@ function AddRecordModal({
 
             {/* Date */}
             <View>
-              <Text style={[typography.label, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>DATE</Text>
+              <Text style={[typography.label, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>{t('DATE')}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(4), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1.5, borderColor: colors.border }}>
                 <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
                 <TextInput
@@ -795,7 +812,7 @@ function AddRecordModal({
               })}
             >
               <Ionicons name="checkmark-circle" size={20} color={canSave ? '#fff' : colors.textMuted} />
-              <Text style={[typography.label, { color: canSave ? '#fff' : colors.textMuted, fontSize: 15, fontWeight: '700' }]}>SAVE RESULT</Text>
+              <Text style={[typography.label, { color: canSave ? '#fff' : colors.textMuted, fontSize: 15, fontWeight: '700' }]}>{t('SAVE RESULT')}</Text>
             </Pressable>
           </ScrollView>
         </Pressable>
@@ -809,6 +826,7 @@ function AddRecordModal({
 // ─────────────────────────────────────────────────────────────────────────────
 function GradeDistributionBar({ subjectStats }: { subjectStats: { avg: number | null }[] }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   const bands = [
     { label: 'A (80+)', color: '#34D399', count: subjectStats.filter(s => s.avg !== null && s.avg >= 80).length },
     { label: 'B (70–79)', color: '#60A5FA', count: subjectStats.filter(s => s.avg !== null && s.avg >= 70 && s.avg < 80).length },
@@ -822,7 +840,7 @@ function GradeDistributionBar({ subjectStats }: { subjectStats: { avg: number | 
 
   return (
     <View style={{ gap: spacing(3) }}>
-      <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, fontWeight: '700' }]}>GRADE DISTRIBUTION</Text>
+      <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, fontWeight: '700' }]}>{t('GRADE DISTRIBUTION')}</Text>
       <View style={{ flexDirection: 'row', height: 10, borderRadius: 5, overflow: 'hidden', gap: 1 }}>
         {bands.filter(b => b.count > 0).map((b) => (
           <View key={b.label} style={{ flex: b.count, backgroundColor: b.color }} />
@@ -863,6 +881,7 @@ function SubjectCard({
   delay: number;
 }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   const [expanded, setExpanded] = useState(false);
   const elev = useElevation('sm');
   const grade = avg !== null ? getGrade(avg) : null;
@@ -885,7 +904,7 @@ function SubjectCard({
             <View style={{ flexDirection: 'row', gap: spacing(3), marginTop: spacing(2), flexWrap: 'wrap' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1) }}>
                 <Ionicons name="document-text-outline" size={12} color={colors.textMuted} />
-                <Text style={[typography.caption, { color: colors.textMuted }]}>{count} test{count !== 1 ? 's' : ''}</Text>
+                <Text style={[typography.caption, { color: colors.textMuted }]}>{count} {count === 1 ? t('test') : t('tests')}</Text>
               </View>
               {latestDate && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1) }}>
@@ -895,7 +914,7 @@ function SubjectCard({
               )}
             </View>
           ) : (
-            <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(1) }]}>No results yet</Text>
+            <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(1) }]}>{t('No results yet')}</Text>
           )}
         </View>
 
@@ -904,7 +923,7 @@ function SubjectCard({
           {examType && (
             <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: `${colors.primary}18` }}>
               <Text style={[typography.caption, { color: colors.primary, fontWeight: '700', fontSize: 10 }]}>
-                {EXAM_TYPE_SHORT[examType as ExamType] ?? examType}
+                {t(EXAM_TYPE_SHORT[examType as ExamType] ?? examType)}
               </Text>
             </View>
           )}
@@ -916,7 +935,7 @@ function SubjectCard({
       {expanded && (
         <View style={{ borderTopWidth: 1, borderTopColor: colors.divider, padding: spacing(5), gap: spacing(3) }}>
           {subjectMarks.length === 0 ? (
-            <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center' }]}>No results recorded for this subject yet.</Text>
+            <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center' }]}>{t('No results recorded for this subject yet.')}</Text>
           ) : (
             subjectMarks.map((m, i) => {
               const g = getGrade(m.score);
@@ -926,7 +945,7 @@ function SubjectCard({
                     <Text style={{ fontSize: 12, fontWeight: '900', color: g.color }}>{g.letter}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 13 }]}>{EXAM_TYPE_SHORT[m.examType]} · {m.score}%</Text>
+                    <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 13 }]}>{t(EXAM_TYPE_SHORT[m.examType])} · {m.score}%</Text>
                     <Text style={[typography.caption, { color: colors.textMuted }]}>{m.date}</Text>
                   </View>
                   <View style={{ height: 36, width: 36, alignItems: 'center', justifyContent: 'center' }}>
@@ -957,6 +976,7 @@ function PerformanceTable({
   onReset: () => void;
 }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isDesktop = width >= 1024;
@@ -1015,7 +1035,7 @@ function PerformanceTable({
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(5) }}>
               <GradeRing score={overallAvg} size={96} />
               <View>
-                <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, fontWeight: '700' }]}>OVERALL AVERAGE</Text>
+                <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, fontWeight: '700' }]}>{t('OVERALL AVERAGE')}</Text>
                 <Text style={{ fontSize: 38, fontWeight: '900', color: overallGrade?.color ?? colors.textMuted, lineHeight: 46 }}>
                   {overallAvg !== null ? `${overallAvg}%` : '—'}
                 </Text>
@@ -1039,7 +1059,7 @@ function PerformanceTable({
                     <Ionicons name={stat.icon} size={18} color={stat.color} />
                   </View>
                   <Text style={{ fontSize: 22, fontWeight: '900', color: colors.textPrimary }}>{stat.value}</Text>
-                  <Text style={[typography.caption, { color: colors.textMuted }]}>{stat.label}</Text>
+                  <Text style={[typography.caption, { color: colors.textMuted }]}>{t(stat.label)}</Text>
                 </View>
               ))}
             </View>
@@ -1058,12 +1078,12 @@ function PerformanceTable({
             <TextInput
               value={search}
               onChangeText={setSearch}
-              placeholder="Search subjects…"
+              placeholder={t('Search subjects…')}
               placeholderTextColor={colors.textMuted}
               style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}
             />
             {search.length > 0 && (
-              <Pressable onPress={() => setSearch('')}>
+              <Pressable onPress={() => setSearch('')} accessibilityRole="button" accessibilityLabel={t('Clear Search')}>
                 <Ionicons name="close-circle" size={18} color={colors.textMuted} />
               </Pressable>
             )}
@@ -1097,7 +1117,7 @@ function PerformanceTable({
                     })}
                   >
                     <Ionicons name={icon} size={13} color={filter === key ? '#fff' : colors.textSecondary} />
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: filter === key ? '#fff' : colors.textPrimary }}>{label}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: filter === key ? '#fff' : colors.textPrimary }}>{t(label)}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -1117,7 +1137,7 @@ function PerformanceTable({
               >
                 <Ionicons name="swap-vertical-outline" size={14} color={colors.textSecondary} />
                 <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>
-                  {sortBy === 'subject' ? 'A–Z' : sortBy === 'avg' ? 'By Avg' : 'By Count'}
+                  {sortBy === 'subject' ? t('A–Z') : sortBy === 'avg' ? t('By Avg') : t('By Count')}
                 </Text>
               </Pressable>
 
@@ -1132,7 +1152,7 @@ function PerformanceTable({
                 })}
               >
                 <Ionicons name="add" size={16} color="#fff" />
-                <Text style={[typography.label, { color: '#fff', fontSize: 13 }]}>Add Result</Text>
+                <Text style={[typography.label, { color: '#fff', fontSize: 13 }]}>{t('Add Result')}</Text>
               </Pressable>
 
               <Pressable
@@ -1157,8 +1177,8 @@ function PerformanceTable({
           <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
             <Ionicons name="search-outline" size={28} color={colors.textMuted} />
           </View>
-          <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>No subjects match</Text>
-          <Text style={[typography.body, { color: colors.textMuted, textAlign: 'center' }]}>Try a different filter or search term.</Text>
+          <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>{t('No subjects match')}</Text>
+          <Text style={[typography.body, { color: colors.textMuted, textAlign: 'center' }]}>{t('Try a different filter or search term.')}</Text>
         </AnimatedCard>
       ) : (
         <View style={{ gap: spacing(3) }}>
@@ -1186,6 +1206,9 @@ function PerformanceTable({
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Progress() {
   const colors = useTheme();
+  const { t } = useLanguage();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [marks, setMarks] = useState<MarkRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1213,7 +1236,7 @@ export default function Progress() {
       setProfile(newProfile);
     } catch (err) {
       console.error(err);
-      Alert.alert('Error', 'Failed to save profile. Check Firestore rules.');
+      Alert.alert(t('Error'), t('Failed to save profile. Check Firestore rules.'));
     }
   };
 
@@ -1224,12 +1247,12 @@ export default function Progress() {
       setMarks(prev => [...prev, record]);
     } catch (err) {
       console.error(err);
-      Alert.alert('Error', 'Failed to save record. Check Firestore rules.');
+      Alert.alert(t('Error'), t('Failed to save record. Check Firestore rules.'));
     }
   };
 
   const handleReset = async () => {
-    if (!userId || !confirm('Delete ALL progress data? This cannot be undone.')) return;
+    if (!userId || !confirm(t('Delete ALL progress data? This cannot be undone.'))) return;
     try {
       await deleteDoc(doc(db, 'students', userId, 'profile', 'main'));
       const marksSnap = await getDocs(collection(db, 'students', userId, 'marks'));
@@ -1238,16 +1261,16 @@ export default function Progress() {
       setMarks([]);
     } catch (err) {
       console.error(err);
-      Alert.alert('Error', 'Failed to reset data.');
+      Alert.alert(t('Error'), t('Failed to reset data.'));
     }
   };
 
   if (loading) {
     return (
-      <DashboardLayout title="Progress" subtitle="Loading your data…" showPointsCard={false}>
+      <DashboardLayout title={t('Progress')} subtitle={t('Loading your data…')} showPointsCard={false}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing(4), paddingTop: spacing(12) }}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[typography.body, { color: colors.textMuted }]}>Fetching your results…</Text>
+          <Text style={[typography.body, { color: colors.textMuted }]}>{t('Fetching your results…')}</Text>
         </View>
       </DashboardLayout>
     );
@@ -1255,8 +1278,8 @@ export default function Progress() {
 
   return (
     <DashboardLayout
-      title={profile ? 'Progress Analytics' : 'Set Up Your Profile'}
-      subtitle={profile ? `${profile.system} · ${profile.track} · ${profile.form}` : 'Tell us about your studies to get started.'}
+      title={profile ? t('Progress Analytics') : t('Set Up Your Profile')}
+      subtitle={profile ? `${profile.system} · ${profile.track} · ${profile.form}` : t('Tell us about your studies to get started.')}
       showPointsCard={false}
     >
       {!profile ? (
@@ -1269,6 +1292,11 @@ export default function Progress() {
           onReset={handleReset}
         />
       )}
+
+      <StudentFooter
+        topSpacing={isMobile ? spacing(8) : spacing(10)}
+        maxWidth={1280}
+      />
 
       <AddRecordModal
         visible={addModalOpen}

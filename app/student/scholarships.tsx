@@ -12,6 +12,7 @@ import { router } from 'expo-router';
 import {
   StudentMenuProvider,
 } from '../../components/student/StudentMenu';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { useEffect } from 'react';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../../constants/firebase';
@@ -22,6 +23,7 @@ import DashboardLayout, {
   radii,
   useTheme,
 } from '../../components/student/DashboardLayout';
+import StudentFooter from '../../components/student/StudentFooter';
 
 type Breakpoint = 'mobile' | 'tablet' | 'desktop';
 type Category = 'ALL' | 'Local' | 'International';
@@ -161,6 +163,7 @@ function ScholarshipCard({
   compact?: boolean;
   cardWidth?: `${number}%`;
 }) {
+  const { t } = useLanguage();
   const colors = useTheme();
   const elevation = useElevation('md');
   const vc = variantColors(scholarship.variant, colors);
@@ -170,7 +173,7 @@ function ScholarshipCard({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`View ${scholarship.title}`}
+      accessibilityLabel={`${t('View details')}: ${scholarship.title}`}
       style={({ pressed }): ViewStyle => ({
         width: cardWidth,
         ...elevation,
@@ -354,7 +357,9 @@ function ScholarshipCard({
                 },
               ]}
             >
-              {scholarship.daysLeft <= 0 ? 'Closed' : `${scholarship.daysLeft}d`}
+              {scholarship.daysLeft <= 0
+                ? t('Closed')
+                : `${scholarship.daysLeft}${t('d')}`}
             </Text>
           </View>
 
@@ -439,7 +444,7 @@ function ScholarshipCard({
                 },
               ]}
             >
-              +{scholarship.requirements.length - (compact ? 1 : 2)} more
+              +{scholarship.requirements.length - (compact ? 1 : 2)} {t('more')}
             </Text>
           )}
         </View>
@@ -479,7 +484,7 @@ function ScholarshipCard({
             >
               {compact
                 ? scholarship.deadline.split(',')[0]
-                : `Due ${scholarship.deadline}`}
+                : `${t('Due')} ${scholarship.deadline}`}
             </Text>
           </View>
 
@@ -512,6 +517,7 @@ function ScholarshipCard({
 }
 
 function EmptyState({ onReset }: { onReset: () => void }) {
+  const { t } = useLanguage();
   const colors = useTheme();
   const elevation = useElevation('sm');
 
@@ -583,7 +589,7 @@ function EmptyState({ onReset }: { onReset: () => void }) {
         })}
       >
         <Ionicons name="refresh-outline" size={17} color="#fff" />
-        <Text style={[typography.label, { color: '#fff' }]}>Show All</Text>
+        <Text style={[typography.label, { color: '#fff' }]}>{t('Show All')}</Text>
       </Pressable>
     </View>
   );
@@ -600,6 +606,7 @@ function SidebarPanel({
   category: Category;
   onCategory: (c: Category) => void;
 }) {
+  const { t } = useLanguage();
   const colors = useTheme();
   const elevation = useElevation('md');
 
@@ -637,19 +644,19 @@ function SidebarPanel({
             {[
               {
                 icon: 'ribbon-outline' as const,
-                label: 'Total',
+                label: t('Total'),
                 value: `${scholarships.length}`,
                 color: colors.primary,
               },
               {
                 icon: 'checkmark-circle-outline' as const,
-                label: 'You May Qualify',
+                label: t('You May Qualify'),
                 value: `${qualifyCount}`,
                 color: colors.success,
               },
               {
                 icon: 'time-outline' as const,
-                label: 'Urgent',
+                label: t('Urgent'),
                 value: `${urgentCount}`,
                 color: colors.danger,
               },
@@ -697,19 +704,19 @@ function SidebarPanel({
             {([
               {
                 key: 'ALL',
-                label: 'All Scholarships',
+                label: t('All Scholarships'),
                 count: scholarships.length,
                 icon: 'apps-outline' as const,
               },
               {
                 key: 'Local',
-                label: 'Local',
+                label: t('Local'),
                 count: localCount,
                 icon: 'location-outline' as const,
               },
               {
                 key: 'International',
-                label: 'International',
+                label: t('International'),
                 count: intlCount,
                 icon: 'globe-outline' as const,
               },
@@ -812,6 +819,7 @@ function SidebarPanel({
 }
 
 function ScholarshipsContent() {
+  const { t } = useLanguage();
   const { width } = useWindowDimensions();
   const colors = useTheme();
   const elevation = useElevation('md');
@@ -984,7 +992,7 @@ function ScholarshipsContent() {
           >
             <Ionicons name="ribbon-outline" size={15} color={colors.primary} />
             <Text style={[typography.label, { color: colors.primary }]}>
-              {filtered.length} result{filtered.length !== 1 ? 's' : ''}
+              {filtered.length} {filtered.length === 1 ? t('Result') : t('Results')}
             </Text>
           </View>
         </View>
@@ -999,25 +1007,25 @@ function ScholarshipsContent() {
         >
           <StatPill
             icon="apps-outline"
-            label="Total"
+            label={t('Total')}
             value={`${scholarships.length}`}
             color={colors.primary}
           />
           <StatPill
             icon="checkmark-circle-outline"
-            label="You Qualify"
+            label={t('You Qualify')}
             value={`${qualifyCount}`}
             color={colors.success}
           />
           <StatPill
             icon="time-outline"
-            label="Urgent"
+            label={t('Urgent')}
             value={`${urgentCount}`}
             color={colors.danger}
           />
           <StatPill
             icon="location-outline"
-            label="Local"
+            label={t('Local')}
             value={`${localCount}`}
             color={colors.warning}
           />
@@ -1037,11 +1045,11 @@ function ScholarshipsContent() {
       }}
     >
       {([
-        { key: 'ALL', label: 'All', icon: 'apps-outline' as const },
-        { key: 'Local', label: 'Local', icon: 'location-outline' as const },
+        { key: 'ALL', label: t('All'), icon: 'apps-outline' as const },
+        { key: 'Local', label: t('Local'), icon: 'location-outline' as const },
         {
           key: 'International',
-          label: 'International',
+          label: t('International'),
           icon: 'globe-outline' as const,
         },
       ] as {
@@ -1094,13 +1102,18 @@ function ScholarshipsContent() {
   if (loading) {
     return (
       <DashboardLayout
-        title="Scholarships"
-        subtitle="Discover opportunities and stay on top of deadlines"
+        title={t('Scholarships')}
+        subtitle={t('Discover opportunities and stay on top of deadlines')}
         showPointsCard={false}
       >
         <Text style={[typography.body, { color: colors.textSecondary }]}>
           Loading scholarships...
         </Text>
+
+        <StudentFooter
+          topSpacing={isMobile ? spacing(8) : spacing(10)}
+          maxWidth={1280}
+        />
       </DashboardLayout>
     );
   }
@@ -1148,8 +1161,8 @@ function ScholarshipsContent() {
 
   return (
     <DashboardLayout
-      title="Scholarships"
-      subtitle="Discover opportunities and stay on top of deadlines"
+      title={t('Scholarships')}
+      subtitle={t('Discover opportunities and stay on top of deadlines')}
       showPointsCard={false}
     >
       <View
@@ -1164,7 +1177,7 @@ function ScholarshipsContent() {
         <Pressable
           onPress={() => router.back()}
           accessibilityRole="button"
-          accessibilityLabel="Go back"
+          accessibilityLabel={t('Go Back')}
           style={({ pressed }) => ({
             flexDirection: 'row' as const,
             alignItems: 'center' as const,
@@ -1189,7 +1202,7 @@ function ScholarshipsContent() {
               { color: colors.primary, fontSize: isMobile ? 12 : undefined },
             ]}
           >
-            Back
+            {t('Go Back')}
           </Text>
         </Pressable>
 
@@ -1227,6 +1240,11 @@ function ScholarshipsContent() {
           />
         )}
       </View>
+
+      <StudentFooter
+        topSpacing={isMobile ? spacing(8) : spacing(10)}
+        maxWidth={1280}
+      />
     </DashboardLayout>
   );
 }

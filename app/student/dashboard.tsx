@@ -16,7 +16,7 @@ import {
   Platform,
   Animated,
   type ViewStyle,
-    type StyleProp,
+  type StyleProp,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -26,18 +26,14 @@ import DashboardLayout, {
   useTheme,
   radii,
 } from '../../components/student/DashboardLayout';
-import { StudentMenuProvider } from '../../components/student/StudentMenu';
-
 import { db, auth } from '../../constants/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, type User } from 'firebase/auth';
+import { useLanguage } from '../../contexts/LanguageContext';
+import StudentFooter from '../../components/student/StudentFooter';
 
 export default function StudentDashboardScreen() {
-  return (
-    <StudentMenuProvider>
-      <DashboardContent />
-    </StudentMenuProvider>
-  );
+  return <DashboardContent />;
 }
 
 // ─── Responsive breakpoints ──────────────────────────────────────────────────
@@ -50,6 +46,8 @@ function useLayout() {
   const recCols    = isMobile ? 1 : isTablet ? 2 : 3;
   return { width, isMobile, isTablet, isDesktop, actionCols, recCols };
 }
+
+
 
 // ─── Spring entrance hook ────────────────────────────────────────────────────
 function useEntranceAnim(delay = 0) {
@@ -129,11 +127,14 @@ function computeCompleteness(data: DashboardProfileData): number {
   return s;
 }
 
-function formatCalculatedDate(iso?: string): string | undefined {
+function formatCalculatedDate(
+  iso: string | undefined,
+  language: 'en' | 'tn',
+): string | undefined {
   if (!iso) return undefined;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return undefined;
-  return new Intl.DateTimeFormat('en-GB', {
+  return new Intl.DateTimeFormat(language === 'tn' ? 'tn-BW' : 'en-BW', {
     day:   'numeric',
     month: 'long',
     year:  'numeric',
@@ -142,6 +143,8 @@ function formatCalculatedDate(iso?: string): string | undefined {
 
 // ─── Profile completion alert banner ─────────────────────────────────────────
 function ProfileAlertBanner({ colors, isMobile }: { colors: any; isMobile: boolean }) {
+  const { t } = useLanguage();
+
   return (
     <View
       style={{
@@ -173,15 +176,17 @@ function ProfileAlertBanner({ colors, isMobile }: { colors: any; isMobile: boole
 
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ fontSize: isMobile ? 12.5 : 13.5, fontWeight: '700', color: colors.textPrimary }}>
-          Finish updating your profile
+          {t('Finish updating your profile')}
         </Text>
         <Text style={{ fontSize: isMobile ? 11 : 12, color: colors.textSecondary, marginTop: 2, lineHeight: 16 }}>
-          Complete your profile to unlock stronger recommendations.
+          {t('Complete your profile to unlock stronger recommendations.')}
         </Text>
       </View>
 
       <Pressable
         onPress={() => router.push('/student/profile')}
+        accessibilityRole="button"
+        accessibilityLabel={t('UPDATE')}
         style={({ pressed }) => ({
           flexDirection:     'row',
           alignItems:        'center',
@@ -194,16 +199,19 @@ function ProfileAlertBanner({ colors, isMobile }: { colors: any; isMobile: boole
           flexShrink:        0,
         })}
       >
-        <Text style={{ fontSize: 11, fontWeight: '800', color: '#000' }}>UPDATE</Text>
+        <Text style={{ fontSize: 11, fontWeight: '800', color: '#000' }}>{t('UPDATE')}</Text>
         <Ionicons name="chevron-forward" size={12} color="#000" />
       </Pressable>
     </View>
   );
 }
 
+
+
 // ─── Dashboard Content ────────────────────────────────────────────────────────
 function DashboardContent() {
   const colors = useTheme();
+  const { t, language } = useLanguage();
   const layout = useLayout();
 
   const [showInstitutionModal, setShowInstitutionModal] = useState(false);
@@ -239,69 +247,71 @@ function DashboardContent() {
   const name          = profileData.name?.trim() || '';
   const completeness  = useMemo(() => computeCompleteness(profileData), [profileData]);
   const hasPoints     = profileLoaded && typeof profileData.pointsTotal === 'number';
-  const lastUpdated   = formatCalculatedDate(profileData.pointsCalculatedAt);
+  const lastUpdated   = formatCalculatedDate(profileData.pointsCalculatedAt, language);
 
-  const title = name ? `Welcome back, ${name}` : undefined;
+  const title = name ? `${t('Welcome back, ')}${name}` : undefined;
 
   const showProfileBanner = profileLoaded && !!currentUser && completeness < 100;
 
   const quickActions = useMemo(
     () => [
       {
-        label:   'Enter Results',
+        label:   t('Enter Results'),
         icon:    'create-outline'       as const,
         href:    '/student/enter-results',
         accent:  ACTION_ACCENTS[0],
-        desc:    'Log your marks',
+        desc:    t('Log your marks'),
       },
       {
-        label:   'View Courses',
+        label:   t('View Courses'),
         icon:    'eye-outline'          as const,
         href:    '/student/courses',
-        accent:  ACTION_ACCENTS[2],
-        desc:    'Browse programmes',
+        accent:  ACTION_ACCENTS[1],
+        desc:    t('Browse programmes'),
       },
       {
-        label:   'Institutions',
+        label:   t('Institutions'),
         icon:    'school-outline'       as const,
         onPress: openInstitutionModal,
-        accent:  ACTION_ACCENTS[3],
-        desc:    'Find your school',
+        accent:  ACTION_ACCENTS[2],
+        desc:    t('Find your school'),
       },
       {
-        label:   'Scholarships',
+        label:   t('Scholarships'),
         icon:    'ribbon-outline'       as const,
         href:    '/student/scholarships',
-        accent:  ACTION_ACCENTS[4],
-        desc:    'Funding options',
+        accent:  ACTION_ACCENTS[3],
+        desc:    t('Funding options'),
       },
       {
-        label:   'Progress',
+        label:   t('Progress'),
         icon:    'trending-up-outline'  as const,
         href:    '/student/progress',
-        accent:  ACTION_ACCENTS[5],
-        desc:    'Track your grades',
+        accent:  ACTION_ACCENTS[4],
+        desc:    t('Track your grades'),
       },
       // ── NEW ITEMS ─────────────────────────────────────
       {
-        label:   'My Career',
+        label:   t('My Career'),
         icon:    'compass-outline'      as const,
         href:    '/student/my-career',
-        accent:  ACTION_ACCENTS[6],
-        desc:    'Explore career paths',
+        accent:  ACTION_ACCENTS[5],
+        desc:    t('Explore career paths'),
       },
       {
-        label:   'Saved',
+        label:   t('Saved'),
         icon:    'bookmark-outline'     as const,
         href:    '/student/saved',
-        accent:  ACTION_ACCENTS[7],
-        desc:    'Bookmarked items',
+        accent:  ACTION_ACCENTS[6],
+        desc:    t('Bookmarked items'),
       },
     ],
-    [openInstitutionModal],
+    [openInstitutionModal, t],
   );
 
   const { actionCols, isMobile } = layout;
+
+  
 
   return (
     <DashboardLayout
@@ -320,8 +330,8 @@ function DashboardContent() {
       {/* ── Quick Actions ── */}
       <FadeIn delay={140} style={{ marginTop: spacing(8) }}>
         <SectionHeader
-          title="Quick Actions"
-          subtitle="Everything you need, one tap away"
+          title={t('Quick Actions')}
+          subtitle={t('Everything you need, one tap away')}
           colors={colors}
           isMobile={isMobile}
         />
@@ -329,7 +339,7 @@ function DashboardContent() {
         <View style={[styles.grid, { marginHorizontal: -spacing(isMobile ? 1.5 : 2) }]}>
           {quickActions.map((action, index) => (
             <FadeIn
-              key={index}
+              key={action.href ?? action.label}
               delay={180 + index * 55}
               style={[
                 styles.gridItem,
@@ -354,6 +364,14 @@ function DashboardContent() {
         <TipsBanner colors={colors} isMobile={isMobile} />
       </FadeIn>
 
+      {/* ── Shared responsive student footer ── */}
+      <FadeIn delay={700}>
+        <StudentFooter
+          topSpacing={spacing(isMobile ? 6 : 8)}
+          maxWidth={1200}
+        />
+      </FadeIn>
+
       {/* ── Institution Modal ── */}
       <InstitutionModal
         visible={showInstitutionModal}
@@ -370,9 +388,11 @@ const ACTIVITY_ITEMS = [
   { icon: 'book-outline' as const, label: 'Courses available', color: '#34D399' },
   { icon: 'ribbon-outline' as const, label: 'Scholarships open', color: '#FBBF24' },
   { icon: 'school-outline' as const, label: 'Institutions listed', color: '#FB923C' },
-];
+] as const;
 
 function ActivityStrip({ isMobile, colors }: { isMobile: boolean; colors: any }) {
+  const { t } = useLanguage();
+
   return (
     <View style={{
       flexDirection:     'row',
@@ -380,9 +400,11 @@ function ActivityStrip({ isMobile, colors }: { isMobile: boolean; colors: any })
       paddingVertical:   spacing(1),
       flexWrap:          isMobile ? 'wrap' : 'nowrap',
     }}>
-      {ACTIVITY_ITEMS.map((item, i) => (
+      {ACTIVITY_ITEMS.map(item => (
         <View
-          key={i}
+          key={item.label}
+          accessible
+          accessibilityLabel={t(item.label)}
           style={{
             flex:              isMobile ? undefined : 1,
             flexDirection:     'row',
@@ -402,7 +424,7 @@ function ActivityStrip({ isMobile, colors }: { isMobile: boolean; colors: any })
             fontWeight: '600',
             color:      item.color,
           }}>
-            {item.label}
+            {t(item.label)}
           </Text>
         </View>
       ))}
@@ -606,9 +628,10 @@ const TIPS = [
   { icon: 'bulb-outline' as const, text: 'Explore courses that match your academic interests.' },
   { icon: 'medal-outline' as const, text: 'Check scholarship opportunities regularly before deadlines close.' },
   { icon: 'rocket-outline' as const, text: 'Save courses and institutions so you can compare them later.' },
-];
+] as const;
 
 function TipsBanner({ colors, isMobile }: { colors: any; isMobile: boolean }) {
+  const { t } = useLanguage();
   const [tipIdx, setTipIdx] = useState(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -655,7 +678,7 @@ function TipsBanner({ colors, isMobile }: { colors: any; isMobile: boolean }) {
           opacity:    fadeAnim,
         }}
       >
-        {tip.text}
+        {t(tip.text)}
       </Animated.Text>
 
       <Pressable
@@ -673,7 +696,8 @@ function TipsBanner({ colors, isMobile }: { colors: any; isMobile: boolean }) {
           opacity:         pressed ? 0.7 : 1,
           flexShrink:      0,
         })}
-        accessibilityLabel="Next tip"
+        accessibilityRole="button"
+        accessibilityLabel={t('Next tip')}
       >
         <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
       </Pressable>
@@ -710,7 +734,7 @@ const INSTITUTION_OPTIONS = [
     desc:      'Technical & vocational training',
     count:     '45 centres',
   },
-];
+] as const;
 
 function InstitutionModal({
   visible,
@@ -723,6 +747,7 @@ function InstitutionModal({
   colors:   any;
   isMobile: boolean;
 }) {
+  const { t } = useLanguage();
   const scaleAnim = useRef(new Animated.Value(0.92)).current;
   const opacAnim  = useRef(new Animated.Value(0)).current;
 
@@ -746,6 +771,7 @@ function InstitutionModal({
       transparent
       animationType="none"
       onRequestClose={onClose}
+      accessibilityViewIsModal
     >
       <Animated.View style={[modalStyles.overlay, { opacity: opacAnim }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
@@ -771,16 +797,18 @@ function InstitutionModal({
               </View>
               <View>
                 <Text style={[modalStyles.title, { color: colors.textPrimary }]}>
-                  Choose Institution
+                  {t('Choose Institution')}
                 </Text>
                 <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
-                  85 institutions in Botswana
+                  {t('85 institutions in Botswana')}
                 </Text>
               </View>
             </View>
             <Pressable
               onPress={onClose}
               hitSlop={16}
+              accessibilityRole="button"
+              accessibilityLabel={t('Close')}
               style={({ pressed }) => ([
                 modalStyles.closeBtn,
                 { backgroundColor: colors.surfaceAlt, opacity: pressed ? 0.7 : 1 },
@@ -792,14 +820,14 @@ function InstitutionModal({
 
           {/* Subtitle */}
           <Text style={[modalStyles.subtitle, { color: colors.textSecondary }]}>
-            Select the type of institution you'd like to explore
+            {t("Select the type of institution you'd like to explore")}
           </Text>
 
           {/* Options */}
           <View style={modalStyles.options}>
             {INSTITUTION_OPTIONS.map((opt, i) => (
               <ModalOption
-                key={opt.label}
+                key={opt.href}
                 opt={opt}
                 colors={colors}
                 onClose={onClose}
@@ -819,11 +847,12 @@ function ModalOption({
   onClose,
   delay,
 }: {
-  opt:     (typeof INSTITUTION_OPTIONS)[0];
+  opt:     (typeof INSTITUTION_OPTIONS)[number];
   colors:  any;
   onClose: () => void;
   delay:   number;
 }) {
+  const { t } = useLanguage();
   const scale  = useRef(new Animated.Value(1)).current;
   const entrY  = useRef(new Animated.Value(10)).current;
   const entrOp = useRef(new Animated.Value(0)).current;
@@ -838,6 +867,8 @@ function ModalOption({
   return (
     <Animated.View style={{ opacity: entrOp, transform: [{ translateY: entrY }] }}>
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${t(opt.label)}. ${t(opt.desc)}. ${t(opt.count)}`}
         onPressIn={() =>
           Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, damping: 15, stiffness: 300 }).start()
         }
@@ -866,13 +897,13 @@ function ModalOption({
 
           <View style={{ flex: 1 }}>
             <Text style={[modalStyles.optLabel, { color: colors.textPrimary }]}>
-              {opt.label}
+              {t(opt.label)}
             </Text>
             <Text style={[modalStyles.optDesc, { color: colors.textSecondary }]}>
-              {opt.desc}
+              {t(opt.desc)}
             </Text>
             <Text style={{ fontSize: 10, color: opt.iconColor, fontWeight: '700', marginTop: 3, letterSpacing: 0.3 }}>
-              {opt.count.toUpperCase()}
+              {t(opt.count).toUpperCase()}
             </Text>
           </View>
 

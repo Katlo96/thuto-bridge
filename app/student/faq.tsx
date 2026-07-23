@@ -17,6 +17,7 @@ import {
   StudentMenuProvider,
   useStudentMenu,
 } from '../../components/student/StudentMenu';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 import {
   spacing,
@@ -24,6 +25,7 @@ import {
   radii,
   useTheme,
 } from '../../components/student/DashboardLayout';
+import StudentFooter from '../../components/student/StudentFooter';
 
 type Breakpoint = 'mobile' | 'tablet' | 'desktop';
 
@@ -132,6 +134,7 @@ function FaqAccordion({
   onToggle: () => void;
   index: number;
 }) {
+  const { t } = useLanguage();
   const colors = useTheme();
   const elevation = useElevation('md');
 
@@ -139,6 +142,7 @@ function FaqAccordion({
     <Pressable
       onPress={onToggle}
       accessibilityRole="button"
+      accessibilityLabel={`${t(item.question)}. ${isOpen ? t('Collapse answer') : t('Expand answer')}`}
       accessibilityState={{ expanded: isOpen }}
       style={({ pressed }) => [
         {
@@ -193,7 +197,7 @@ function FaqAccordion({
               }}
             >
               <Text style={[typography.caption, { color: colors.textMuted, fontSize: 10, fontWeight: '700' }]}>
-                {item.category.toUpperCase()}
+                {t(item.category).toUpperCase()}
               </Text>
             </View>
             <Text
@@ -202,7 +206,7 @@ function FaqAccordion({
                 { color: colors.textPrimary, fontSize: 15.5, lineHeight: 22 },
               ]}
             >
-              {item.question}
+              {t(item.question)}
             </Text>
 
             {isOpen && (
@@ -215,7 +219,7 @@ function FaqAccordion({
                 }}
               >
                 <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 23, fontSize: 14.5 }]}>
-                  {item.answer}
+                  {t(item.answer)}
                 </Text>
               </View>
             )}
@@ -249,6 +253,7 @@ function FaqAccordion({
 // Sidebar
 // ─────────────────────────────────────────────────────────────────────────────
 function SidebarPanel() {
+  const { t } = useLanguage();
   const colors = useTheme();
 
   return (
@@ -279,6 +284,8 @@ function SidebarPanel() {
             <Pressable
               key={c.label}
               onPress={() => Linking.openURL(c.url)}
+              accessibilityRole="link"
+              accessibilityLabel={`${t(c.label)}: ${c.sub}`}
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -293,7 +300,7 @@ function SidebarPanel() {
             >
               <Ionicons name={c.icon} size={18} color={c.color} />
               <View style={{ flex: 1 }}>
-                <Text style={[typography.label, { color: colors.textPrimary, fontSize: 13 }]}>{c.label}</Text>
+                <Text style={[typography.label, { color: colors.textPrimary, fontSize: 13 }]}>{t(c.label)}</Text>
                 <Text style={[typography.caption, { color: colors.textSecondary }]}>{c.sub}</Text>
               </View>
               <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
@@ -335,7 +342,7 @@ function SidebarPanel() {
         })}
       >
         <Ionicons name="help-circle-outline" size={18} color="#fff" />
-        <Text style={[typography.label, { color: '#fff' }]}>Contact Support</Text>
+        <Text style={[typography.label, { color: '#fff' }]}>{t('Contact Support')}</Text>
       </Pressable>
     </View>
   );
@@ -345,6 +352,7 @@ function SidebarPanel() {
 // Main Content
 // ─────────────────────────────────────────────────────────────────────────────
 function FaqContent() {
+  const { t } = useLanguage();
   const { width } = useWindowDimensions();
   const colors = useTheme();
   const { openMenu } = useStudentMenu();
@@ -399,7 +407,7 @@ function FaqContent() {
       <Pressable
         onPress={() => router.back()}
         accessibilityRole="button"
-        accessibilityLabel="Go back"
+        accessibilityLabel={t('Go Back')}
         style={({ pressed }) => ({
           width: 42,
           height: 42,
@@ -449,7 +457,8 @@ function FaqContent() {
 
       <Pressable
         onPress={openMenu}
-        accessibilityLabel="Open student menu"
+        accessibilityRole="button"
+       accessibilityLabel={t('Open student menu')}
         style={({ pressed }) => ({
           width: 42,
           height: 42,
@@ -569,7 +578,7 @@ function FaqContent() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search FAQs… e.g. results, bursary, applications"
+            placeholder={t('Search FAQs… e.g. results, bursary, applications')}
             placeholderTextColor={colors.textMuted}
             style={{
               flex: 1,
@@ -579,7 +588,12 @@ function FaqContent() {
             }}
           />
           {!!query && (
-            <Pressable onPress={() => setQuery('')} hitSlop={8}>
+            <Pressable
+              onPress={() => setQuery('')}
+              accessibilityRole="button"
+              accessibilityLabel={t('Clear Search')}
+              hitSlop={8}
+            >
               <Ionicons name="close-circle" size={18} color={colors.textMuted} />
             </Pressable>
           )}
@@ -599,6 +613,9 @@ function FaqContent() {
               setActiveCategory(cat);
               setOpenIndex(0);
             }}
+            accessibilityRole="button"
+            accessibilityLabel={t(cat)}
+            accessibilityState={{ selected: active }}
             style={({ pressed }) => ({
               paddingHorizontal: spacing(3.5),
               paddingVertical: spacing(2),
@@ -615,39 +632,11 @@ function FaqContent() {
                 { color: active ? '#fff' : colors.textSecondary, fontSize: 12.5 },
               ]}
             >
-              {cat}
+              {t(cat)}
             </Text>
           </Pressable>
         );
       })}
-    </View>
-  );
-
-  const Footer = (
-    <View
-      style={{
-        marginTop: spacing(10),
-        paddingTop: spacing(5),
-        borderTopWidth: 1,
-        borderTopColor: colors.divider,
-        alignItems: 'center',
-        gap: spacing(2),
-      }}
-    >
-      <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 14 }]}>Thuto-Bridge</Text>
-      <Text style={[typography.caption, { color: colors.textSecondary, textAlign: 'center', lineHeight: 18 }]}>
-        Connecting Botswana students to university opportunities.
-      </Text>
-      <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center', fontSize: 11.5 }]}>
-        Designed and developed by{' '}
-        <Text style={{ fontWeight: '700', color: colors.textSecondary }}>BrightCode Studios</Text>
-        {'\n'}© {new Date().getFullYear()} Thuto-Bridge. All rights reserved.
-      </Text>
-      <View style={{ flexDirection: 'row', gap: spacing(4), marginTop: spacing(1), flexWrap: 'wrap', justifyContent: 'center' }}>
-        <Pressable onPress={() => router.push('/student/contact-support')}><Text style={[typography.caption, { color: colors.textMuted }]}>Support</Text></Pressable>
-        <Pressable onPress={() => router.push('/student/privacy')}><Text style={[typography.caption, { color: colors.textMuted }]}>Privacy</Text></Pressable>
-        <Pressable onPress={() => router.push('/student/terms')}><Text style={[typography.caption, { color: colors.textMuted }]}>Terms</Text></Pressable>
-      </View>
     </View>
   );
 
@@ -678,9 +667,9 @@ function FaqContent() {
                 })}
               >
                 <Ionicons name="arrow-back" size={14} color={colors.primary} />
-                <Text style={[typography.label, { color: colors.primary, fontSize: 12.5 }]}>Back</Text>
+                <Text style={[typography.label, { color: colors.primary, fontSize: 12.5 }]}>{t('Go Back')}</Text>
               </Pressable>
-              <Text style={[typography.caption, { color: colors.textMuted }]}>Settings › FAQ</Text>
+              <Text style={[typography.caption, { color: colors.textMuted }]}>{t('Settings › FAQ')}</Text>
             </View>
 
             {HeroBanner}
@@ -696,13 +685,13 @@ function FaqContent() {
                 {CategoryChips}
 
                 <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '600', letterSpacing: 0.4, marginBottom: spacing(3.5) }]}>
-                  {activeCategory.toUpperCase()} · {filteredFaqs.length} QUESTION{filteredFaqs.length !== 1 ? 'S' : ''}
+                  {t(activeCategory).toUpperCase()} · {filteredFaqs.length} {filteredFaqs.length === 1 ? t('QUESTION') : t('QUESTIONS')}
                 </Text>
 
                 <View style={{ gap: spacing(3.5) }}>
                   {filteredFaqs.map((item, i) => (
                     <FaqAccordion
-                      key={item.question}
+                      key={t(item.question)}
                       item={item}
                       index={i}
                       isOpen={openIndex === i}
@@ -744,7 +733,7 @@ function FaqContent() {
                   gap: spacing(3),
                 }}
               >
-                <Text style={[typography.h2, { color: colors.textPrimary, fontSize: 16 }]}>Still need help?</Text>
+                <Text style={[typography.h2, { color: colors.textPrimary, fontSize: 16 }]}>{t('Still need help?')}</Text>
                 <Text style={[typography.body, { color: colors.textSecondary, fontSize: 13.5 }]}>
                   Chat to our Botswana student support team on WhatsApp or email.
                 </Text>
@@ -759,13 +748,16 @@ function FaqContent() {
                     onPress={() => Linking.openURL('mailto:support@thutobridge.com')}
                     style={{ paddingHorizontal: spacing(3.5), paddingVertical: spacing(2.5), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border }}
                   >
-                    <Text style={[typography.label, { color: colors.textPrimary, fontSize: 13 }]}>Email us</Text>
+                    <Text style={[typography.label, { color: colors.textPrimary, fontSize: 13 }]}>{t('Email us')}</Text>
                   </Pressable>
                 </View>
               </View>
             )}
 
-            {Footer}
+            <StudentFooter
+              topSpacing={isMobile ? spacing(8) : spacing(10)}
+              maxWidth={1200}
+            />
           </View>
         </ScrollView>
       </SafeAreaView>

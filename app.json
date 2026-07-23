@@ -3,10 +3,12 @@
     "name": "Thuto Bridge",
     "slug": "thuto-bridge",
     "version": "1.0.0",
-     "scheme": "thutobridge",
+    "scheme": "thutobridge",
     "plugins": [
       "expo-router",
-      "expo-local-authentication"
+      "expo-local-authentication",
+      "expo-secure-store",
+      "expo-font"
     ],
     "android": {
       "googleServicesFile": "./google-services.json",

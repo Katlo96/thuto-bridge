@@ -13,6 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StudentMenuProvider, useStudentMenu } from '../../components/student/StudentMenu';
+import StudentFooter from '../../components/student/StudentFooter';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 import {
   spacing,
@@ -220,6 +222,7 @@ function SupportCard({
 }) {
   const colors = useTheme();
   const elevation = useElevation('md');
+  const { t } = useLanguage();
 
   const handlePress = () => {
     if (item.actionUrl) {
@@ -230,7 +233,7 @@ function SupportCard({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${item.title}: ${item.value}`}
+      accessibilityLabel={`${t(item.title)}: ${item.value}`}
       onPress={handlePress}
       style={({ pressed }) => [
         {
@@ -281,7 +284,7 @@ function SupportCard({
                 }}
               >
                 <Text style={[typography.caption, { color: item.color, fontWeight: '700', fontSize: 10 }]}>
-                  {item.badge.toUpperCase()}
+                  {t(item.badge).toUpperCase()}
                 </Text>
               </View>
             )}
@@ -310,7 +313,7 @@ function SupportCard({
               { color: colors.textSecondary, letterSpacing: 0.35, fontSize: 10.5, marginBottom: 4 },
             ]}
           >
-            {item.title.toUpperCase()}
+            {t(item.title).toUpperCase()}
           </Text>
           <Text style={[typography.h2, { color: colors.textPrimary, fontSize: 15.5 }]} numberOfLines={1}>
             {item.value}
@@ -319,7 +322,7 @@ function SupportCard({
 
         {/* Subtitle */}
         <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 20, fontSize: 13.5 }]}>
-          {item.subtitle}
+          {t(item.subtitle)}
         </Text>
 
         {/* Action */}
@@ -332,7 +335,7 @@ function SupportCard({
           }}
         >
           <Text style={[typography.label, { color: item.color, fontSize: 13 }]}>
-            {item.actionLabel}
+            {t(item.actionLabel)}
           </Text>
           <Ionicons name="chevron-forward" size={13} color={item.color} />
         </View>
@@ -347,11 +350,12 @@ function SupportCard({
 
 function SidebarPanel({ compact }: { compact?: boolean }) {
   const colors = useTheme();
+  const { t } = useLanguage();
 
   return (
     <View style={{ width: 320, flexShrink: 0, gap: spacing(5) }}>
       {/* Support hours */}
-      <SectionCard title="Support Hours" icon="time-outline" accentColor={colors.primary} compact={compact}>
+      <SectionCard title={t('Support Hours')} icon="time-outline" accentColor={colors.primary} compact={compact}>
         <View style={{ gap: spacing(1) }}>
           {SUPPORT_HOURS.map(({ day, hours }, i) => (
             <View
@@ -367,7 +371,7 @@ function SidebarPanel({ compact }: { compact?: boolean }) {
               }}
             >
               <Text style={[typography.body, { color: colors.textSecondary, fontSize: 13, flexShrink: 1 }]}>
-                {day}
+                {t(day)}
               </Text>
               <Text style={[typography.label, { color: colors.textPrimary, fontSize: 12.5 }]}>
                 {hours}
@@ -378,7 +382,7 @@ function SidebarPanel({ compact }: { compact?: boolean }) {
       </SectionCard>
 
       {/* Response times */}
-      <SectionCard title="Avg. Response Times" icon="flash-outline" accentColor={colors.success}>
+      <SectionCard title={t('Avg. Response Times')} icon="flash-outline" accentColor={colors.success}>
         <View style={{ gap: spacing(3.5) }}>
           {RESPONSE_TIMES.map(({ channel, time, color }) => (
             <View
@@ -386,7 +390,7 @@ function SidebarPanel({ compact }: { compact?: boolean }) {
               style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
             >
               <Text style={[typography.body, { color: colors.textSecondary, fontSize: 13.5 }]}>
-                {channel}
+                {t(channel)}
               </Text>
               <View
                 style={{
@@ -418,10 +422,10 @@ function SidebarPanel({ compact }: { compact?: boolean }) {
         }}
       >
         <Text style={[typography.label, { color: colors.textPrimary, marginBottom: 4, fontSize: 13 }]}>
-          Student tip
+          {t('Student tip')}
         </Text>
         <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 20, fontSize: 13 }]}>
-          For urgent issues, call or WhatsApp us. For document reviews, bursary queries, and application appeals, email with your Thuto-Bridge Student ID.
+          {t('For urgent issues, call or WhatsApp us. For document reviews, bursary queries, and application appeals, email with your Thuto-Bridge Student ID.')}
         </Text>
       </View>
 
@@ -436,13 +440,15 @@ function SidebarPanel({ compact }: { compact?: boolean }) {
         }}
       >
         <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing(1.5) }]}>
-          NEED HELP FAST?
+          {t('NEED HELP FAST?')}
         </Text>
         <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 14, marginBottom: 6 }]}>
-          WhatsApp is usually quickest outside call hours
+          {t('WhatsApp is usually quickest outside call hours')}
         </Text>
         <Pressable
           onPress={() => Linking.openURL('https://wa.me/26775000111')}
+          accessibilityRole="button"
+          accessibilityLabel={`${t('WhatsApp Support')}: +267 75 000 111`}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
         >
           <Text style={[typography.label, { color: '#22C55E' }]}>+267 75 000 111</Text>
@@ -460,6 +466,7 @@ function SidebarPanel({ compact }: { compact?: boolean }) {
 function ContactSupportContent() {
   const { width } = useWindowDimensions();
   const colors = useTheme();
+  const { t } = useLanguage();
   const { openMenu } = useStudentMenu();
   const elevMd = useElevation('md');
   const elevLg = useElevation('lg');
@@ -500,7 +507,7 @@ function ContactSupportContent() {
       <Pressable
         onPress={() => router.back()}
         accessibilityRole="button"
-        accessibilityLabel="Go back"
+        accessibilityLabel={t('Go Back')}
         style={({ pressed }) => ({
           width: 42,
           height: 42,
@@ -521,11 +528,11 @@ function ContactSupportContent() {
           style={[typography.h2, { color: colors.textPrimary, fontSize: compact ? 16 : 17 }]}
           numberOfLines={1}
         >
-          Contact Support
+          {t('Contact Support')}
         </Text>
         {!compact && (
           <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
-            Thuto-Bridge Student Help Centre
+            {t('Thuto-Bridge Student Help Centre')}
           </Text>
         )}
       </View>
@@ -533,6 +540,8 @@ function ContactSupportContent() {
       {!isMobile && (
         <Pressable
           onPress={() => router.push('/student/settings')}
+          accessibilityRole="button"
+          accessibilityLabel={t('Settings')}
           style={({ pressed }) => ({
             flexDirection: 'row',
             alignItems: 'center',
@@ -548,14 +557,15 @@ function ContactSupportContent() {
         >
           <Ionicons name="settings-outline" size={14} color={colors.textSecondary} />
           <Text style={[typography.label, { color: colors.textSecondary, fontSize: 12.5 }]}>
-            Settings
+            {t('Settings')}
           </Text>
         </Pressable>
       )}
 
       <Pressable
         onPress={openMenu}
-        accessibilityLabel="Open student menu"
+        accessibilityRole="button"
+        accessibilityLabel={t('Open student menu')}
         style={({ pressed }) => ({
           width: 42,
           height: 42,
@@ -622,7 +632,7 @@ function ContactSupportContent() {
                   { color: colors.primary, fontWeight: '700', letterSpacing: 0.3 },
                 ]}
               >
-                THUTO-BRIDGE SUPPORT
+                {t('THUTO-BRIDGE SUPPORT')}
               </Text>
             </View>
 
@@ -636,7 +646,7 @@ function ContactSupportContent() {
                 },
               ]}
             >
-              We're here to help you succeed
+              {t("We're here to help you succeed")}
             </Text>
             <Text
               style={[
@@ -649,15 +659,14 @@ function ContactSupportContent() {
                 },
               ]}
             >
-              Questions about applications, results, bursaries, or your account? Pick the
-              channel that works best for you – our Botswana-based student team replies fast.
+              {t('Questions about applications, results, bursaries, or your account? Pick the channel that works best for you – our Botswana-based student team replies fast.')}
             </Text>
 
             {/* Quick chips */}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginTop: spacing(3.5) }}>
-              {['Applications', 'Results', 'Bursaries', 'Account help'].map((t) => (
+              {['Applications', 'Results', 'Bursaries', 'Account help'].map((topic) => (
                 <View
-                  key={t}
+                  key={topic}
                   style={{
                     paddingHorizontal: spacing(3),
                     paddingVertical: spacing(1.5),
@@ -668,7 +677,7 @@ function ContactSupportContent() {
                   }}
                 >
                   <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>
-                    {t}
+                    {t(topic)}
                   </Text>
                 </View>
               ))}
@@ -755,7 +764,7 @@ function ContactSupportContent() {
           },
         ]}
       >
-        SUPPORT CHANNELS · {SUPPORT_ITEMS.length} WAYS TO REACH US
+        {t('SUPPORT CHANNELS')} · {SUPPORT_ITEMS.length} {t('WAYS TO REACH US')}
       </Text>
       <View
         style={{
@@ -768,43 +777,6 @@ function ContactSupportContent() {
         {SUPPORT_ITEMS.map((item) => (
           <SupportCard key={item.title} item={item} cardWidth={cardWidth} compact={compact} />
         ))}
-      </View>
-    </View>
-  );
-
-  // ── Footer ───────────────────────────────────────────────────────────
-  const Footer = (
-    <View
-      style={{
-        marginTop: spacing(10),
-        paddingTop: spacing(5),
-        borderTopWidth: 1,
-        borderTopColor: colors.divider,
-        alignItems: 'center',
-        gap: spacing(2),
-      }}
-    >
-      <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 14 }]}>
-        Thuto-Bridge
-      </Text>
-      <Text style={[typography.caption, { color: colors.textSecondary, textAlign: 'center', lineHeight: 18 }]}>
-        Connecting Botswana students to university opportunities.
-      </Text>
-      <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center', fontSize: 11.5 }]}>
-        Designed and developed by{' '}
-        <Text style={{ fontWeight: '700', color: colors.textSecondary }}>BrightCode Studios</Text>
-        {'\n'}© {new Date().getFullYear()} Thuto-Bridge. All rights reserved.
-      </Text>
-      <View style={{ flexDirection: 'row', gap: spacing(4), marginTop: spacing(1) }}>
-        <Pressable onPress={() => Linking.openURL('https://www.thutobridge.com/privacy')}>
-          <Text style={[typography.caption, { color: colors.textMuted }]}>Privacy</Text>
-        </Pressable>
-        <Pressable onPress={() => Linking.openURL('https://www.thutobridge.com/terms')}>
-          <Text style={[typography.caption, { color: colors.textMuted }]}>Terms</Text>
-        </Pressable>
-        <Pressable onPress={() => Linking.openURL('mailto:support@thutobridge.com')}>
-          <Text style={[typography.caption, { color: colors.textMuted }]}>Help</Text>
-        </Pressable>
       </View>
     </View>
   );
@@ -840,6 +812,8 @@ function ContactSupportContent() {
             >
               <Pressable
                 onPress={() => router.back()}
+                accessibilityRole="button"
+                accessibilityLabel={t('Go Back')}
                 style={({ pressed }) => ({
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -854,10 +828,10 @@ function ContactSupportContent() {
                 })}
               >
                 <Ionicons name="arrow-back" size={14} color={colors.primary} />
-                <Text style={[typography.label, { color: colors.primary, fontSize: 12.5 }]}>Back</Text>
+                <Text style={[typography.label, { color: colors.primary, fontSize: 12.5 }]}>{t('Go Back')}</Text>
               </Pressable>
               <Text style={[typography.caption, { color: colors.textMuted }]} numberOfLines={1}>
-                Settings › Contact Support
+                {t('Settings › Contact Support')}
               </Text>
             </View>
 
@@ -888,11 +862,10 @@ function ContactSupportContent() {
                     }}
                   >
                     <Text style={[typography.label, { color: colors.textPrimary, marginBottom: 4 }]}>
-                      Student tip
+                      {t('Student tip')}
                     </Text>
                     <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 20, fontSize: 13.5 }]}>
-                      For urgent matters, call or WhatsApp us. For document reviews and bursary
-                      queries, email with your Thuto-Bridge Student ID for faster help.
+                      {t('For urgent matters, call or WhatsApp us. For document reviews and bursary queries, email with your Thuto-Bridge Student ID for faster help.')}
                     </Text>
                   </View>
                 )}
@@ -901,7 +874,7 @@ function ContactSupportContent() {
               {isDesktop && <SidebarPanel />}
             </View>
 
-            {Footer}
+            <StudentFooter />
           </View>
         </ScrollView>
       </SafeAreaView>

@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useLanguage } from '../../contexts/LanguageContext';
 import {
   StudentMenuProvider,
 } from '../../components/student/StudentMenu';
@@ -25,6 +26,7 @@ import DashboardLayout, {
   radii,
   useTheme,
 } from '../../components/student/DashboardLayout';
+import StudentFooter from '../../components/student/StudentFooter';
 
 import { db } from '../../constants/firebase';
 import {
@@ -164,18 +166,20 @@ async function safeCount(q: Query<DocumentData>): Promise<number | null> {
 // getFriendlyErrorMessage — turns Firestore/network failures into copy a
 // student can act on, instead of one generic catch-all string.
 // ─────────────────────────────────────────────────────────────────────────────
-function getFriendlyErrorMessage(err: unknown): string {
+type Translate = (key: string, replacements?: Record<string, string | number>) => string;
+
+function getFriendlyErrorMessage(err: unknown, t: Translate): string {
   if (err instanceof Error && err.message === 'firestore_timeout') {
-    return 'The connection is taking too long. Please check your network and try again.';
+    return t('The connection is taking too long. Please check your network and try again.');
   }
   const code = (err as { code?: string } | null | undefined)?.code;
   if (code === 'permission-denied') {
-    return "You don't have permission to view courses right now. Please sign in again.";
+    return t("You don't have permission to view courses right now. Please sign in again.");
   }
   if (code === 'unavailable') {
-    return 'The course service is temporarily unavailable. Please try again shortly.';
+    return t('The course service is temporarily unavailable. Please try again shortly.');
   }
-  return 'Could not load courses. Please check your connection and try again.';
+  return t('Could not load courses. Please check your connection and try again.');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -261,20 +265,26 @@ function mapScopedCourseDocs(
 
 // Static filter config — module scope so it isn't reallocated every render,
 // and typed up front so selecting a filter never needs an `as any` cast.
-const TYPE_FILTERS: ReadonlyArray<{ key: 'All' | InstitutionType; label: string }> = [
-  { key: 'All',        label: 'All Programs' },
-  { key: 'university', label: 'Universities' },
-  { key: 'college',    label: 'Colleges'     },
-  { key: 'brigade',    label: 'Brigades'     },
+const TYPE_FILTERS: ReadonlyArray<{ key: 'All' | InstitutionType; labelKey: string }> = [
+  { key: 'All',        labelKey: 'All Programs' },
+  { key: 'university', labelKey: 'Universities' },
+  { key: 'college',    labelKey: 'Colleges'     },
+  { key: 'brigade',    labelKey: 'Brigades'     },
 ];
 
 // Presentation metadata for the mobile "what are you looking for?" step —
 // one place that owns the label, icon, accent color, and blurb per type, so
 // the type-selection cards and the rest of the flow always agree visually.
-const TYPE_META: Record<InstitutionType, { label: string; singular: string; icon: IconName; color: string; blurb: string }> = {
-  university: { label: 'Universities', singular: 'university', icon: 'school-outline',    color: '#60A5FA', blurb: 'Degree programs at accredited universities' },
-  college:    { label: 'Colleges',     singular: 'college',    icon: 'ribbon-outline',     color: '#34D399', blurb: 'Diplomas and certificates at colleges' },
-  brigade:    { label: 'Brigades',     singular: 'brigade',    icon: 'construct-outline',  color: '#FBBF24', blurb: 'Vocational and technical skills training' },
+const TYPE_META: Record<InstitutionType, {
+  labelKey: string;
+  singularKey: string;
+  icon: IconName;
+  color: string;
+  blurbKey: string;
+}> = {
+  university: { labelKey: 'Universities', singularKey: 'university', icon: 'school-outline', color: '#60A5FA', blurbKey: 'Degree programs at accredited universities' },
+  college: { labelKey: 'Colleges', singularKey: 'college', icon: 'ribbon-outline', color: '#34D399', blurbKey: 'Diplomas and certificates at colleges' },
+  brigade: { labelKey: 'Brigades', singularKey: 'brigade', icon: 'construct-outline', color: '#FBBF24', blurbKey: 'Vocational and technical skills training' },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -433,6 +443,7 @@ function SkeletonRow() {
 function SlowConnectionBanner() {
   const [visible, setVisible] = useState(false);
   const colors = useTheme();
+  const { t } = useLanguage();
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), CONFIG.SLOW_CONNECTION_BANNER_DELAY_MS);
@@ -458,7 +469,7 @@ function SlowConnectionBanner() {
     >
       <Ionicons name="wifi-outline" size={16} color={colors.warning} />
       <Text style={[typography.caption, { color: colors.warning, flex: 1, fontWeight: '600' }]}>
-        Slow connection detected — still loading…
+        {t('Slow connection detected — still loading…')}
       </Text>
     </View>
   );
@@ -474,6 +485,7 @@ function InfiniteScrollSentinel({
   hasMore: boolean; total: number; shown: number;
 }) {
   const colors   = useTheme();
+  const { t } = useLanguage();
   const calledAt = useRef(0);
 
   const handleLayout = useCallback(() => {
@@ -491,12 +503,12 @@ function InfiniteScrollSentinel({
       {loading && hasMore ? (
         <>
           <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={[typography.caption, { color: colors.textMuted }]}>Loading more…</Text>
+          <Text style={[typography.caption, { color: colors.textMuted }]}>{t('Loading more…')}</Text>
         </>
       ) : !hasMore ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), width: '100%' }}>
           <View style={{ flex: 1, height: 1, backgroundColor: colors.divider }} />
-          <Text style={[typography.caption, { color: colors.textMuted }]}>All {total} loaded</Text>
+          <Text style={[typography.caption, { color: colors.textMuted }]}>{t('All {{total}} loaded', { total })}</Text>
           <View style={{ flex: 1, height: 1, backgroundColor: colors.divider }} />
         </View>
       ) : null}
@@ -515,13 +527,14 @@ function MobileLoadMoreFooter({
 }) {
   const colors    = useTheme();
   const elevation = useElevation('sm');
+  const { t } = useLanguage();
 
   if (!hasMore) {
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), paddingVertical: spacing(6) }}>
         <View style={{ flex: 1, height: 1, backgroundColor: colors.divider }} />
         <Text style={[typography.caption, { color: colors.textMuted }]}>
-          {total != null ? `All ${total} courses loaded` : `${shown} courses loaded`}
+          {total != null ? t('All {{total}} courses loaded', { total }) : t('{{shown}} courses loaded', { shown })}
         </Text>
         <View style={{ flex: 1, height: 1, backgroundColor: colors.divider }} />
       </View>
@@ -554,13 +567,13 @@ function MobileLoadMoreFooter({
       {loading ? (
         <>
           <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={[typography.label, { color: colors.primary }]}>Loading more…</Text>
+          <Text style={[typography.label, { color: colors.primary }]}>{t('Loading more…')}</Text>
         </>
       ) : (
         <>
           <Ionicons name="chevron-down" size={16} color={colors.primary} />
           <Text style={[typography.label, { color: colors.primary }]}>
-            Load More{total != null ? ` (${Math.max(total - shown, 0)} remaining)` : ''}
+            {t('Load More')}{total != null ? ` (${t('{{count}} remaining', { count: Math.max(total - shown, 0) })})` : ''}
           </Text>
         </>
       )}
@@ -578,6 +591,7 @@ const CourseCard = memo(function CourseCard({
   course, onPress,
 }: { course: Course; onPress: (id: string) => void }) {
   const colors    = useTheme();
+  const { t } = useLanguage();
   const elevation = useElevation('md');
   const scale     = useRef(new Animated.Value(1)).current;
 
@@ -596,7 +610,7 @@ const CourseCard = memo(function CourseCard({
         onPressIn={onPressIn}
         onPressOut={onPressOut}
         accessibilityRole="button"
-        accessibilityLabel={`View details for ${course.title}`}
+        accessibilityLabel={`${t('View details')}: ${course.title}`}
         style={[{ width: '100%', backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing(5), overflow: 'hidden' as const }, elevation]}
       >
         <View style={{ height: 3, backgroundColor: typeColor, borderRadius: 2, marginBottom: spacing(4) }} />
@@ -614,7 +628,7 @@ const CourseCard = memo(function CourseCard({
           {[
             { icon: 'school-outline'   as const, text: course.qualificationLevel },
             { icon: 'time-outline'     as const, text: course.duration           },
-            { icon: 'star-outline'     as const, text: `${course.requiredPoints} pts` },
+            { icon: 'star-outline'     as const, text: `${course.requiredPoints} ${t('pts')}` },
             { icon: 'location-outline' as const, text: course.location           },
           ].map((m, i) => (
             <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1), paddingHorizontal: spacing(2), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border }}>
@@ -624,7 +638,7 @@ const CourseCard = memo(function CourseCard({
           ))}
         </View>
         <View style={{ marginTop: spacing(4), paddingTop: spacing(3), borderTopWidth: 1, borderTopColor: colors.divider, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={[typography.label, { color: colors.primary }]}>View details</Text>
+          <Text style={[typography.label, { color: colors.primary }]}>{t('View details')}</Text>
           <Ionicons name="arrow-forward" size={15} color={colors.primary} />
         </View>
       </Pressable>
@@ -637,6 +651,7 @@ const CourseCard = memo(function CourseCard({
 // ─────────────────────────────────────────────────────────────────────────────
 function FacultyChip({ name, isActive, onPress }: { name: string; isActive: boolean; onPress: () => void }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   return (
     <Pressable
       onPress={onPress}
@@ -661,7 +676,9 @@ function StatPill({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap
         <Ionicons name={icon} size={16} color={colors.primary} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={[typography.caption, { color: colors.textSecondary }]}>{label}</Text>
+        <Text style={[typography.caption, { color: colors.textSecondary }]}>
+  {label}
+</Text>
         <Text style={[typography.bodyStrong, { color: colors.textPrimary, marginTop: 2 }]}>{value}</Text>
       </View>
     </View>
@@ -679,16 +696,17 @@ function StepHeader({
   crumbs: string[];
 }) {
   const colors = useTheme();
+  const { t } = useLanguage();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
       <Pressable
         onPress={onBack}
         accessibilityRole="button"
-        accessibilityLabel="Go back"
+        accessibilityLabel={t('Go Back')}
         style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}
       >
         <Ionicons name="arrow-back" size={15} color={colors.primary} />
-        <Text style={[typography.label, { color: colors.primary, fontSize: 12 }]}>Back</Text>
+        <Text style={[typography.label, { color: colors.primary, fontSize: 12 }]}>{t('Back')}</Text>
       </Pressable>
       <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11, flex: 1 }]} numberOfLines={1}>
         {crumbs.join(' › ')}
@@ -700,13 +718,14 @@ function StepHeader({
 /** Generic error card reused across every step of the mobile flow. */
 function InlineErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
   const colors    = useTheme();
+  const { t } = useLanguage();
   const elevation = useElevation('sm');
   return (
     <View style={[{ alignItems: 'center', padding: spacing(8), backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: `${colors.danger}33` }, elevation]}>
       <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: `${colors.danger}18`, borderWidth: 1, borderColor: `${colors.danger}33`, alignItems: 'center', justifyContent: 'center', marginBottom: spacing(4) }}>
         <Ionicons name="cloud-offline-outline" size={24} color={colors.danger} />
       </View>
-      <Text style={[typography.h2, { color: colors.textPrimary, textAlign: 'center', fontSize: 16 }]}>Something went wrong</Text>
+      <Text style={[typography.h2, { color: colors.textPrimary, textAlign: 'center', fontSize: 16 }]}>{t('Something went wrong')}</Text>
       <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2), textAlign: 'center', fontSize: 13, lineHeight: 19 }]}>
         {message}
       </Text>
@@ -716,7 +735,7 @@ function InlineErrorState({ message, onRetry }: { message: string; onRetry: () =
         style={({ pressed }) => ({ marginTop: spacing(5), flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(5), paddingVertical: spacing(3), borderRadius: radii.lg, backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 })}
       >
         <Ionicons name="refresh-outline" size={15} color="#fff" />
-        <Text style={[typography.label, { color: '#fff' }]}>Try Again</Text>
+        <Text style={[typography.label, { color: '#fff' }]}>{t('Try Again')}</Text>
       </Pressable>
     </View>
   );
@@ -737,6 +756,7 @@ type MobileStep = 'type' | 'institutions' | 'faculties' | 'courses';
 
 function MobileCoursesView() {
   const colors    = useTheme();
+  const { t } = useLanguage();
   const elevation = useElevation('md');
 
   const [step, setStep] = useState<MobileStep>('type');
@@ -755,10 +775,10 @@ function MobileCoursesView() {
       setInstStatus('success');
     } catch (err: unknown) {
       console.error('[MobileCourses] institutions fetch failed:', err);
-      setInstErrorMsg(getFriendlyErrorMessage(err));
+      setInstErrorMsg(getFriendlyErrorMessage(err, t));
       setInstStatus('error');
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { loadInstitutions(); }, [loadInstitutions]);
 
@@ -806,7 +826,7 @@ function MobileCoursesView() {
       setFacStatus('success');
     } catch (err: unknown) {
       console.error('[MobileCourses] faculties fetch failed:', err);
-      setFacErrorMsg(getFriendlyErrorMessage(err));
+      setFacErrorMsg(getFriendlyErrorMessage(err, t));
       setFacStatus('error');
     }
   }, []);
@@ -855,10 +875,10 @@ function MobileCoursesView() {
       setCourseTotal(total);
     } catch (err: unknown) {
       console.error('[MobileCourses] course page fetch failed:', err);
-      setCourseErrorMsg(getFriendlyErrorMessage(err));
+      setCourseErrorMsg(getFriendlyErrorMessage(err, t));
       setCourseStatus('error');
     }
-  }, [buildCourseConstraints]);
+  }, [buildCourseConstraints, t]);
 
   const loadMoreCourses = useCallback(async () => {
     if (!selectedInstitution || !courseHasMore || courseLoadingMore || !courseCursor) return;
@@ -878,11 +898,11 @@ function MobileCoursesView() {
       console.error('[MobileCourses] load more courses failed:', err);
       // Non-fatal: the list the user already has keeps working. Surface a
       // one-line notice without wiping existing results.
-      setCourseErrorMsg('Could not load more courses. Please try again.');
+      setCourseErrorMsg(t('Could not load more courses. Please try again.'));
     } finally {
       setCourseLoadingMore(false);
     }
-  }, [selectedInstitution, selectedFaculty, courseCursor, courseHasMore, courseLoadingMore, buildCourseConstraints]);
+  }, [selectedInstitution, selectedFaculty, courseCursor, courseHasMore, courseLoadingMore, buildCourseConstraints, t]);
 
   const visibleCourses = useMemo(() => {
     const q = courseSearch.trim().toLowerCase();
@@ -934,14 +954,14 @@ function MobileCoursesView() {
   }, []);
 
   const subtitle =
-    step === 'type'         ? 'Choose where you’d like to look' :
-    step === 'institutions' ? `Browsing ${selectedType ? TYPE_META[selectedType].label.toLowerCase() : ''}` :
-    step === 'faculties'    ? selectedInstitution?.name ?? 'Choose a faculty' :
-    selectedFaculty === 'ALL' ? `All courses at ${selectedInstitution?.name ?? ''}` :
-    selectedFaculty ? `${selectedFaculty.name} at ${selectedInstitution?.name ?? ''}` : 'Courses';
+    step === 'type'         ? t('Choose where you’d like to look') :
+    step === 'institutions' ? `${t('Browsing')} ${selectedType ? t(TYPE_META[selectedType].labelKey).toLowerCase() : ''}` :
+    step === 'faculties'    ? selectedInstitution?.name ?? t('Choose a faculty') :
+    selectedFaculty === 'ALL' ? `${t('All courses at')} ${selectedInstitution?.name ?? ''}` :
+    selectedFaculty ? `${selectedFaculty.name} ${t('at')} ${selectedInstitution?.name ?? ''}` : t('Courses');
 
   return (
-    <DashboardLayout title="Courses" subtitle={subtitle} showPointsCard={false}>
+    <DashboardLayout title={t('Courses')} subtitle={subtitle} showPointsCard={false}>
 
       {/* ══ STEP 1 — What are you looking for? ══ */}
       {step === 'type' && (
@@ -953,17 +973,17 @@ function MobileCoursesView() {
               style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}
             >
               <Ionicons name="arrow-back" size={15} color={colors.primary} />
-              <Text style={[typography.label, { color: colors.primary, fontSize: 12 }]}>Back</Text>
+              <Text style={[typography.label, { color: colors.primary, fontSize: 12 }]}>{t('Back')}</Text>
             </Pressable>
-            <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>Dashboard › Courses</Text>
+            <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>{t('Dashboard › Courses')}</Text>
           </View>
 
           {/* Hero */}
           <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing(5), marginBottom: spacing(6), overflow: 'hidden' }, elevation]}>
             <View style={{ height: 3, backgroundColor: colors.primary, borderRadius: 2, marginBottom: spacing(4) }} />
-            <Text style={[typography.hero, { color: colors.textPrimary, fontSize: 22 }]}>Find Your Program</Text>
+            <Text style={[typography.hero, { color: colors.textPrimary, fontSize: 22 }]}>{t('Find Your Program')}</Text>
             <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2), fontSize: 13.5, lineHeight: 20 }]}>
-              Let's narrow things down. Start by choosing the type of institution you're interested in.
+              {t("Let's narrow things down. Start by choosing the type of institution you're interested in.")}
             </Text>
           </View>
 
@@ -980,7 +1000,7 @@ function MobileCoursesView() {
                     onPress={() => handleSelectType(type)}
                     disabled={instStatus === 'loading'}
                     accessibilityRole="button"
-                    accessibilityLabel={`Browse ${meta.label}`}
+                    accessibilityLabel={`${t('Browse')} ${t(meta.labelKey)}`}
                     style={({ pressed }) => ([
                       {
                         flexDirection: 'row' as const,
@@ -1000,9 +1020,9 @@ function MobileCoursesView() {
                       <Ionicons name={meta.icon} size={24} color={meta.color} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[typography.h2, { color: colors.textPrimary, fontSize: 16 }]}>{meta.label}</Text>
+                      <Text style={[typography.h2, { color: colors.textPrimary, fontSize: 16 }]}>{t(meta.labelKey)}</Text>
                       <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2, fontSize: 12, lineHeight: 16 }]} numberOfLines={2}>
-                        {meta.blurb}
+                        {t(meta.blurbKey)}
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(1), marginTop: spacing(2) }}>
                         {instStatus === 'loading' ? (
@@ -1010,7 +1030,7 @@ function MobileCoursesView() {
                         ) : (
                           <View style={{ paddingHorizontal: spacing(2), paddingVertical: 2, borderRadius: radii.pill, backgroundColor: `${meta.color}18`, borderWidth: 1, borderColor: `${meta.color}33` }}>
                             <Text style={[typography.caption, { color: meta.color, fontWeight: '700', fontSize: 10.5 }]}>
-                              {count} {count === 1 ? meta.singular : meta.label.toLowerCase()}
+                              {count} {count === 1 ? t(meta.singularKey) : t(meta.labelKey).toLowerCase()}
                             </Text>
                           </View>
                         )}
@@ -1028,33 +1048,33 @@ function MobileCoursesView() {
       {/* ══ STEP 2 — Institutions of the selected type ══ */}
       {step === 'institutions' && selectedType && (
         <View>
-          <StepHeader onBack={goBackAStep} crumbs={['Courses', TYPE_META[selectedType].label]} />
+          <StepHeader onBack={goBackAStep} crumbs={[t('Courses'), t(TYPE_META[selectedType].labelKey)]} />
 
           <View style={[{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing(4), minHeight: 48, marginBottom: spacing(5) }, elevation]}>
             <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
             <TextInput
               value={instSearch}
               onChangeText={setInstSearch}
-              placeholder={`Search ${TYPE_META[selectedType].label.toLowerCase()}…`}
+              placeholder={`${t('Search')} ${t(TYPE_META[selectedType].labelKey).toLowerCase()}…`}
               placeholderTextColor={colors.textMuted}
               style={[typography.body, { flex: 1, marginLeft: spacing(3), paddingVertical: spacing(3), color: colors.textPrimary, fontSize: 14 }]}
               returnKeyType="search"
             />
             {instSearch.length > 0 && (
-              <Pressable onPress={() => setInstSearch('')} accessibilityRole="button" accessibilityLabel="Clear search" style={{ padding: spacing(2) }}>
+              <Pressable onPress={() => setInstSearch('')} accessibilityRole="button" accessibilityLabel={t('Clear Search')} style={{ padding: spacing(2) }}>
                 <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
               </Pressable>
             )}
           </View>
 
           <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(4), fontSize: 10.5 }]}>
-            {institutionsForType.length} {institutionsForType.length === 1 ? 'RESULT' : 'RESULTS'}
+            {institutionsForType.length} {institutionsForType.length === 1 ? t('RESULT') : t('RESULTS')}
           </Text>
 
           {institutionsForType.length === 0 ? (
             <View style={[{ alignItems: 'center', padding: spacing(8), backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border }, elevation]}>
               <Ionicons name="business-outline" size={26} color={colors.textMuted} />
-              <Text style={[typography.h2, { color: colors.textPrimary, marginTop: spacing(3), fontSize: 15, textAlign: 'center' }]}>No matches</Text>
+              <Text style={[typography.h2, { color: colors.textPrimary, marginTop: spacing(3), fontSize: 15, textAlign: 'center' }]}>{t('No matches')}</Text>
               <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing(1), textAlign: 'center' }]}>
                 Try a different search term.
               </Text>
@@ -1065,7 +1085,7 @@ function MobileCoursesView() {
                 key={inst.id}
                 onPress={() => handleSelectInstitution(inst)}
                 accessibilityRole="button"
-                accessibilityLabel={`View faculties at ${inst.name}`}
+                accessibilityLabel={`${t('View faculties at')} ${inst.name}`}
                 style={({ pressed }) => ([
                   {
                     flexDirection: 'row' as const,
@@ -1102,7 +1122,7 @@ function MobileCoursesView() {
       {/* ══ STEP 3 — Faculties of the selected institution ══ */}
       {step === 'faculties' && selectedType && selectedInstitution && (
         <View>
-          <StepHeader onBack={goBackAStep} crumbs={['Courses', TYPE_META[selectedType].label, selectedInstitution.name]} />
+          <StepHeader onBack={goBackAStep} crumbs={[t('Courses'), t(TYPE_META[selectedType].labelKey), selectedInstitution.name]} />
 
           <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing(5), marginBottom: spacing(6), flexDirection: 'row', alignItems: 'center', gap: spacing(4) }, elevation]}>
             <View style={{ width: 48, height: 48, borderRadius: radii.lg, backgroundColor: `${colors.primary}18`, borderWidth: 1, borderColor: `${colors.primary}33`, alignItems: 'center', justifyContent: 'center' }}>
@@ -1145,8 +1165,8 @@ function MobileCoursesView() {
                   <Ionicons name="apps-outline" size={19} color={colors.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[typography.bodyStrong, { color: colors.primary, fontSize: 14 }]}>All Faculties</Text>
-                  <Text style={[typography.caption, { color: colors.textSecondary, fontSize: 11, marginTop: 1 }]}>Browse every course at this institution</Text>
+                  <Text style={[typography.bodyStrong, { color: colors.primary, fontSize: 14 }]}>{t('All Faculties')}</Text>
+                  <Text style={[typography.caption, { color: colors.textSecondary, fontSize: 11, marginTop: 1 }]}>{t('Browse every course at this institution')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={17} color={colors.primary} />
               </Pressable>
@@ -1155,7 +1175,7 @@ function MobileCoursesView() {
                 <View style={[{ alignItems: 'center', padding: spacing(6), backgroundColor: colors.surfaceAlt, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, marginTop: spacing(2) }]}>
                   <Ionicons name="library-outline" size={22} color={colors.textMuted} />
                   <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing(2), textAlign: 'center', fontSize: 12 }]}>
-                    No individual faculties listed yet for this institution — tap "All Faculties" above to see its courses.
+                    {t('No individual faculties listed yet for this institution — tap "All Faculties" above to see its courses.')}
                   </Text>
                 </View>
               ) : (
@@ -1188,9 +1208,9 @@ function MobileCoursesView() {
           <StepHeader
             onBack={goBackAStep}
             crumbs={[
-              TYPE_META[selectedType].label,
+              t(TYPE_META[selectedType].labelKey),
               selectedInstitution.name,
-              selectedFaculty === 'ALL' ? 'All Faculties' : selectedFaculty?.name ?? '',
+              selectedFaculty === 'ALL' ? t('All Faculties') : selectedFaculty?.name ?? '',
             ]}
           />
 
@@ -1200,13 +1220,13 @@ function MobileCoursesView() {
             <TextInput
               value={courseSearch}
               onChangeText={setCourseSearch}
-              placeholder="Search loaded courses…"
+              placeholder={t('Search loaded courses…')}
               placeholderTextColor={colors.textMuted}
               style={[typography.body, { flex: 1, marginLeft: spacing(3), paddingVertical: spacing(3), color: colors.textPrimary, fontSize: 14 }]}
               returnKeyType="search"
             />
             {courseSearch.length > 0 && (
-              <Pressable onPress={() => setCourseSearch('')} accessibilityRole="button" accessibilityLabel="Clear search" style={{ padding: spacing(2) }}>
+              <Pressable onPress={() => setCourseSearch('')} accessibilityRole="button" accessibilityLabel={t('Clear Search')} style={{ padding: spacing(2) }}>
                 <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
               </Pressable>
             )}
@@ -1214,7 +1234,7 @@ function MobileCoursesView() {
 
           {courseStatus === 'loading' && (
             <View>
-              <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(4), fontSize: 10.5 }]}>LOADING COURSES…</Text>
+              <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(4), fontSize: 10.5 }]}>{t('LOADING COURSES…')}</Text>
               <SkeletonGrid count={4} numCols={1} cardGap={spacing(4)} />
             </View>
           )}
@@ -1271,6 +1291,12 @@ function MobileCoursesView() {
           )}
         </View>
       )}
+
+      {/* Shared responsive student footer */}
+      <StudentFooter
+        topSpacing={spacing(8)}
+        maxWidth={1280}
+      />
     </DashboardLayout>
   );
 }
@@ -1284,6 +1310,7 @@ function MobileCoursesView() {
 // ─────────────────────────────────────────────────────────────────────────────
 function DesktopCoursesView() {
   const { width } = useWindowDimensions();
+  const { t } = useLanguage();
   const colors    = useTheme();
   const elevation = useElevation('md');
 
@@ -1399,7 +1426,7 @@ function DesktopCoursesView() {
     } catch (err: unknown) {
       if (!mountedRef.current) return;
       console.error('[Courses] loadData failed:', err);
-      setErrorMsg(getFriendlyErrorMessage(err));
+      setErrorMsg(getFriendlyErrorMessage(err, t));
       setStatus('error');
     }
   }, [hydrateRemainingCourses]);
@@ -1474,7 +1501,7 @@ function DesktopCoursesView() {
   const cardGap          = spacing(4);
 
   return (
-    <DashboardLayout title="Courses" subtitle="Explore programs across Botswana" showPointsCard={false}>
+    <DashboardLayout title={t('Courses')} subtitle={t('Explore programs across Botswana')} showPointsCard={false}>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
         <Pressable
@@ -1483,9 +1510,9 @@ function DesktopCoursesView() {
           style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(4), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}
         >
           <Ionicons name="arrow-back" size={17} color={colors.primary} />
-          <Text style={[typography.label, { color: colors.primary }]}>Back</Text>
+          <Text style={[typography.label, { color: colors.primary }]}>{t('Back')}</Text>
         </Pressable>
-        <Text style={[typography.caption, { color: colors.textMuted }]}>Dashboard › Courses</Text>
+        <Text style={[typography.caption, { color: colors.textMuted }]}>{t('Dashboard › Courses')}</Text>
       </View>
 
       {(status === 'idle' || status === 'loading') && (
@@ -1519,7 +1546,7 @@ function DesktopCoursesView() {
           <View style={{ width: 68, height: 68, borderRadius: 34, backgroundColor: `${colors.danger}18`, borderWidth: 1, borderColor: `${colors.danger}33`, alignItems: 'center', justifyContent: 'center', marginBottom: spacing(5) }}>
             <Ionicons name="cloud-offline-outline" size={30} color={colors.danger} />
           </View>
-          <Text style={[typography.h2, { color: colors.textPrimary, textAlign: 'center' }]}>Connection problem</Text>
+          <Text style={[typography.h2, { color: colors.textPrimary, textAlign: 'center' }]}>{t('Connection problem')}</Text>
           <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2), textAlign: 'center', maxWidth: 320, lineHeight: 22 }]}>
             {errorMsg}
           </Text>
@@ -1529,7 +1556,7 @@ function DesktopCoursesView() {
             style={({ pressed }) => ({ marginTop: spacing(6), flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(6), paddingVertical: spacing(4), borderRadius: radii.lg, backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 })}
           >
             <Ionicons name="refresh-outline" size={17} color="#fff" />
-            <Text style={[typography.label, { color: '#fff', letterSpacing: 0.4 }]}>TRY AGAIN</Text>
+            <Text style={[typography.label, { color: '#fff', letterSpacing: 0.4 }]}>{t('TRY AGAIN')}</Text>
           </Pressable>
         </View>
       )}
@@ -1541,15 +1568,15 @@ function DesktopCoursesView() {
 
             <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: isMobile ? spacing(5) : spacing(7), marginBottom: spacing(6), overflow: 'hidden' }, elevation]}>
               <View style={{ height: 3, backgroundColor: colors.primary, borderRadius: 2, marginBottom: spacing(4) }} />
-              <Text style={[typography.hero, { color: colors.textPrimary }]}>Find Your Program</Text>
+              <Text style={[typography.hero, { color: colors.textPrimary }]}>{t('Find Your Program')}</Text>
               <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2) }]}>
-                Filter by type, institution, and faculty to find the right course.
+                {t('Filter by type, institution, and faculty to find the right course.')}
               </Text>
               <View style={{ flexDirection: 'row', gap: spacing(3), marginTop: spacing(4), flexWrap: 'wrap' }}>
                 {[
-                  { label: `${allCourses.length} total`,         color: colors.primary },
-                  { label: `${institutions.length} institutions`, color: colors.success },
-                  { label: `${filteredCourses.length} matching`,  color: colors.warning },
+                  { label: `${allCourses.length} ${t('total')}`,         color: colors.primary },
+                  { label: `${institutions.length} ${t('institutions')}`, color: colors.success },
+                  { label: `${filteredCourses.length} ${t('matching')}`,  color: colors.warning },
                 ].map((chip) => (
                   <View key={chip.label} style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: `${chip.color}18`, borderWidth: 1, borderColor: `${chip.color}33` }}>
                     <Text style={[typography.caption, { color: chip.color, fontWeight: '700' }]}>{chip.label}</Text>
@@ -1558,7 +1585,7 @@ function DesktopCoursesView() {
                 {hydrating && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: `${colors.textMuted}18`, borderWidth: 1, borderColor: `${colors.textMuted}33` }}>
                     <ActivityIndicator size="small" color={colors.textMuted} />
-                    <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '700' }]}>Syncing full catalogue…</Text>
+                    <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '700' }]}>{t('Syncing full catalogue…')}</Text>
                   </View>
                 )}
                 {!hydrating && hydrationIncomplete && (
@@ -1568,7 +1595,7 @@ function DesktopCoursesView() {
                     style={({ pressed }) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(3), paddingVertical: spacing(1), borderRadius: radii.pill, backgroundColor: `${colors.danger}18`, borderWidth: 1, borderColor: `${colors.danger}33`, opacity: pressed ? 0.85 : 1 })}
                   >
                     <Ionicons name="alert-circle-outline" size={13} color={colors.danger} />
-                    <Text style={[typography.caption, { color: colors.danger, fontWeight: '700' }]}>Some courses may be missing — tap to retry</Text>
+                    <Text style={[typography.caption, { color: colors.danger, fontWeight: '700' }]}>{t('Some courses may be missing — tap to retry')}</Text>
                   </Pressable>
                 )}
               </View>
@@ -1589,7 +1616,7 @@ function DesktopCoursesView() {
             )}
 
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginBottom: spacing(5) }}>
-              {TYPE_FILTERS.map(({ key, label }) => {
+              {TYPE_FILTERS.map(({ key, labelKey }) => {
                 const active = typeFilter === key;
                 return (
                   <Pressable
@@ -1599,7 +1626,7 @@ function DesktopCoursesView() {
                     onPress={() => { setTypeFilter(key); setSelectedInstId(null); setSelectedFacultyId(null); }}
                     style={({ pressed }) => ({ paddingHorizontal: spacing(4), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: active ? colors.primary : colors.surfaceAlt, borderWidth: 1, borderColor: active ? colors.primary : colors.border, opacity: pressed ? 0.9 : 1 })}
                   >
-                    <Text style={[typography.label, { color: active ? '#fff' : colors.textPrimary }]}>{label}</Text>
+                    <Text style={[typography.label, { color: active ? '#fff' : colors.textPrimary }]}>{t(labelKey)}</Text>
                   </Pressable>
                 );
               })}
@@ -1607,7 +1634,7 @@ function DesktopCoursesView() {
 
             {typeFilter !== 'All' && filteredInstitutions.length > 0 && (
               <View style={{ marginBottom: spacing(6) }}>
-                <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>SELECT INSTITUTION</Text>
+                <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>{t('SELECT INSTITUTION')}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={{ flexDirection: 'row', gap: spacing(2) }}>
                     {filteredInstitutions.map((inst) => (
@@ -1628,10 +1655,10 @@ function DesktopCoursesView() {
 
             {selectedInstId && faculties.length > 0 && (
               <View style={{ marginBottom: spacing(6) }}>
-                <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>BROWSE BY FACULTY</Text>
+                <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>{t('BROWSE BY FACULTY')}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={{ flexDirection: 'row', gap: spacing(2) }}>
-                    <FacultyChip name="All Faculties" isActive={selectedFacultyId === null} onPress={() => setSelectedFacultyId(null)} />
+                    <FacultyChip name={t('All Faculties')} isActive={selectedFacultyId === null} onPress={() => setSelectedFacultyId(null)} />
                     {faculties.map((fac) => <FacultyChip key={fac.id} name={fac.name} isActive={selectedFacultyId === fac.id} onPress={() => setSelectedFacultyId(fac.id)} />)}
                   </View>
                 </ScrollView>
@@ -1639,28 +1666,28 @@ function DesktopCoursesView() {
             )}
 
             <View style={{ marginBottom: spacing(6) }}>
-              <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(2) }]}>SEARCH</Text>
+              <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(2) }]}>{t('SEARCH')}</Text>
               <View style={[{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing(4), minHeight: 52 }, elevation]}>
                 <Ionicons name="search-outline" size={20} color={colors.textSecondary} />
                 <TextInput
                   value={search}
                   onChangeText={setSearch}
-                  placeholder="Search course title or faculty…"
+                  placeholder={t('Search course title or faculty…')}
                   placeholderTextColor={colors.textMuted}
-                  accessibilityLabel="Search courses by title, institution, or faculty"
+                  accessibilityLabel={t('Search courses by title, institution, or faculty')}
                   style={[typography.body, { flex: 1, marginLeft: spacing(3), paddingVertical: spacing(3), color: colors.textPrimary }]}
                   returnKeyType="search"
                 />
                 {isSearchPending && <ActivityIndicator size="small" color={colors.textMuted} />}
                 {!isSearchPending && search.length > 0 && (
-                  <Pressable onPress={() => setSearch('')} accessibilityRole="button" accessibilityLabel="Clear search" style={{ padding: spacing(2) }}>
+                  <Pressable onPress={() => setSearch('')} accessibilityRole="button" accessibilityLabel={t('Clear Search')} style={{ padding: spacing(2) }}>
                     <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
                   </Pressable>
                 )}
               </View>
               {hydrating && debouncedSearch.trim().length > 0 && (
                 <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(2) }]}>
-                  Still syncing the full catalogue — results may grow as more courses come in.
+                  {t('Still syncing the full catalogue — results may grow as more courses come in.')}
                 </Text>
               )}
             </View>
@@ -1670,17 +1697,17 @@ function DesktopCoursesView() {
                 <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: `${colors.primary}18`, alignItems: 'center', justifyContent: 'center', marginBottom: spacing(5) }}>
                   <Ionicons name="book-outline" size={28} color={colors.primary} />
                 </View>
-                <Text style={[typography.h2, { color: colors.textPrimary, textAlign: 'center' }]}>No courses found</Text>
-                <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2), textAlign: 'center' }]}>Try adjusting your filters or search terms.</Text>
+                <Text style={[typography.h2, { color: colors.textPrimary, textAlign: 'center' }]}>{t('No courses found')}</Text>
+                <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(2), textAlign: 'center' }]}>{t('Try adjusting your filters or search terms.')}</Text>
                 <Pressable onPress={clearFilters} accessibilityRole="button" style={({ pressed }) => ({ marginTop: spacing(6), flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing(2), paddingHorizontal: spacing(6), paddingVertical: spacing(4), borderRadius: radii.lg, backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 })}>
                   <Ionicons name="refresh-outline" size={16} color="#fff" />
-                  <Text style={[typography.label, { color: '#fff' }]}>CLEAR ALL FILTERS</Text>
+                  <Text style={[typography.label, { color: '#fff' }]}>{t('CLEAR ALL FILTERS')}</Text>
                 </Pressable>
               </View>
             ) : (
               <View>
                 <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(4) }]}>
-                  SHOWING {paginatedCourses.length} OF {filteredCourses.length} COURSES
+                  {t('SHOWING {{shown}} OF {{total}} COURSES', { shown: paginatedCourses.length, total: filteredCourses.length })}
                 </Text>
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginRight: numCols > 1 ? -cardGap : 0 }}>
@@ -1707,7 +1734,7 @@ function DesktopCoursesView() {
                   >
                     <Ionicons name="chevron-down" size={16} color={colors.primary} />
                     <Text style={[typography.label, { color: colors.primary }]}>
-                      LOAD MORE ({filteredCourses.length - paginatedCourses.length} remaining)
+                      {t('LOAD MORE ({{count}} remaining)', { count: filteredCourses.length - paginatedCourses.length })}
                     </Text>
                   </Pressable>
                 )}
@@ -1719,17 +1746,17 @@ function DesktopCoursesView() {
             <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
               <View style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing(6), overflow: 'hidden' }, elevation]}>
                 <View style={{ height: 3, backgroundColor: colors.primary, marginBottom: spacing(5) }} />
-                <Text style={[typography.h2, { color: colors.textPrimary }]}>Overview</Text>
-                <StatPill icon="book-outline"   label="Total Programs" value={`${allCourses.length}`}       />
-                <StatPill icon="search-outline" label="Filtered"       value={`${filteredCourses.length}`}  />
-                <StatPill icon="eye-outline"    label="Showing"        value={`${paginatedCourses.length}`} />
+                <Text style={[typography.h2, { color: colors.textPrimary }]}>{t('Overview')}</Text>
+                <StatPill icon="book-outline"   label={t('Total Programs')} value={`${allCourses.length}`}       />
+                <StatPill icon="search-outline" label={t('Filtered')}       value={`${filteredCourses.length}`}  />
+                <StatPill icon="eye-outline"    label={t('Showing')}        value={`${paginatedCourses.length}`} />
                 <View style={{ height: 1, backgroundColor: colors.divider, marginVertical: spacing(5) }} />
                 <Pressable onPress={clearFilters} accessibilityRole="button" style={({ pressed }) => ({ padding: spacing(4), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, alignItems: 'center' as const, opacity: pressed ? 0.85 : 1 })}>
-                  <Text style={[typography.label, { color: colors.primary }]}>Clear All Filters</Text>
+                  <Text style={[typography.label, { color: colors.primary }]}>{t('Clear All Filters')}</Text>
                 </Pressable>
                 <Pressable onPress={loadData} accessibilityRole="button" style={({ pressed }) => ({ marginTop: spacing(3), padding: spacing(4), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, alignItems: 'center' as const, flexDirection: 'row' as const, justifyContent: 'center' as const, gap: spacing(2), opacity: pressed ? 0.85 : 1 })}>
                   <Ionicons name="refresh-outline" size={15} color={colors.textSecondary} />
-                  <Text style={[typography.label, { color: colors.textPrimary }]}>Reload Data</Text>
+                  <Text style={[typography.label, { color: colors.textPrimary }]}>{t('Reload Data')}</Text>
                 </Pressable>
                 <View style={{ marginTop: spacing(5), padding: spacing(4), backgroundColor: `${colors.primary}14`, borderRadius: radii.lg, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
                   <Text style={[typography.caption, { color: colors.textSecondary, lineHeight: 18 }]}>
@@ -1741,6 +1768,12 @@ function DesktopCoursesView() {
           )}
         </View>
       )}
+
+      {/* Shared responsive student footer */}
+      <StudentFooter
+        topSpacing={spacing(10)}
+        maxWidth={1280}
+      />
     </DashboardLayout>
   );
 }

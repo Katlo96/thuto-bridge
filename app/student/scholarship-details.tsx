@@ -19,6 +19,7 @@ import {
   saveItem,
 } from "../../services/savedItemsService";
 import { StudentMenuProvider } from "../../components/student/StudentMenu";
+import { useLanguage } from "../../contexts/LanguageContext";
 import ApplyRedirectModal from "../../components/student/ApplyRedirectModal";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,6 +31,7 @@ import DashboardLayout, {
   radii,
   useTheme,
 } from "../../components/student/DashboardLayout";
+import StudentFooter from "../../components/student/StudentFooter";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -52,6 +54,8 @@ type ScholarshipDetails = {
   eligibility: string[];
   howToApply: string[];
   documents: string[];
+  usesDefaultHowToApply: boolean;
+  usesDefaultDocuments: boolean;
 };
 
 // Fallback steps/documents used only when Firestore doesn't provide them
@@ -237,6 +241,7 @@ function SectionHeader({
   icon?: IconName;
   label?: string;
 }) {
+  const { t } = useLanguage();
   const colors = useTheme();
   return (
     <View style={{ marginBottom: spacing(5) }}>
@@ -251,7 +256,7 @@ function SectionHeader({
             },
           ]}
         >
-          {label.toUpperCase()}
+          {t(label).toUpperCase()}
         </Text>
       )}
       <View
@@ -272,7 +277,7 @@ function SectionHeader({
           </View>
         )}
         <Text style={[typography.h2, { color: colors.textPrimary, flex: 1 }]}>
-          {title}
+          {t(title)}
         </Text>
       </View>
     </View>
@@ -282,7 +287,16 @@ function SectionHeader({
 // ─────────────────────────────────────────────────────────────────────────────
 // BulletList
 // ─────────────────────────────────────────────────────────────────────────────
-function BulletList({ items, color }: { items: string[]; color?: string }) {
+function BulletList({
+  items,
+  color,
+  translateItems = false,
+}: {
+  items: string[];
+  color?: string;
+  translateItems?: boolean;
+}) {
+  const { t } = useLanguage();
   const colors = useTheme();
   const c = color ?? colors.primary;
   return (
@@ -312,7 +326,7 @@ function BulletList({ items, color }: { items: string[]; color?: string }) {
               { color: colors.textSecondary, flex: 1, lineHeight: 22 },
             ]}
           >
-            {item}
+            {translateItems ? t(item) : item}
           </Text>
         </View>
       ))}
@@ -323,7 +337,14 @@ function BulletList({ items, color }: { items: string[]; color?: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // NumberedList
 // ─────────────────────────────────────────────────────────────────────────────
-function NumberedList({ items }: { items: string[] }) {
+function NumberedList({
+  items,
+  translateItems = false,
+}: {
+  items: string[];
+  translateItems?: boolean;
+}) {
+  const { t } = useLanguage();
   const colors = useTheme();
   return (
     <View style={{ gap: spacing(4) }}>
@@ -365,7 +386,7 @@ function NumberedList({ items }: { items: string[] }) {
               { color: colors.textSecondary, flex: 1, lineHeight: 22 },
             ]}
           >
-            {item}
+            {translateItems ? t(item) : item}
           </Text>
         </View>
       ))}
@@ -376,7 +397,14 @@ function NumberedList({ items }: { items: string[] }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // DocumentChecklist
 // ─────────────────────────────────────────────────────────────────────────────
-function DocumentChecklist({ items }: { items: string[] }) {
+function DocumentChecklist({
+  items,
+  translateItems = false,
+}: {
+  items: string[];
+  translateItems?: boolean;
+}) {
+  const { t } = useLanguage();
   const colors = useTheme();
   const [checked, setChecked] = useState<boolean[]>(
     Array(items.length).fill(false),
@@ -405,6 +433,7 @@ function DocumentChecklist({ items }: { items: string[] }) {
           key={i}
           onPress={() => toggle(i)}
           accessibilityRole="checkbox"
+          accessibilityLabel={translateItems ? t(item) : item}
           accessibilityState={{ checked: checked[i] }}
           style={({ pressed }) => ({
             flexDirection: "row" as const,
@@ -444,7 +473,7 @@ function DocumentChecklist({ items }: { items: string[] }) {
               },
             ]}
           >
-            {item}
+            {translateItems ? t(item) : item}
           </Text>
         </Pressable>
       ))}
@@ -500,6 +529,7 @@ function DesktopSidebar({
   onApply: () => void;
   onToggleSave: () => void;
 }) {
+  const { t } = useLanguage();
   const colors = useTheme();
   const elevation = useElevation("md");
   const vc = useVariantColors(data.statusVariant);
@@ -541,7 +571,7 @@ function DesktopSidebar({
             })}
           >
             <Ionicons name="rocket-outline" size={18} color="#fff" />
-            <Text style={[typography.label, { color: "#fff" }]}>Apply Now</Text>
+            <Text style={[typography.label, { color: "#fff" }]}>{t('Apply Now')}</Text>
           </Pressable>
 
           <Pressable
@@ -566,7 +596,7 @@ function DesktopSidebar({
               color={colors.primary}
             />
             <Text style={[typography.label, { color: colors.primary }]}>
-              {saving ? "Saving…" : saved ? "Saved" : "Save for Later"}
+              {saving ? t("Saving…") : saved ? t("Saved") : t("Save for Later")}
             </Text>
           </Pressable>
         </View>
@@ -593,25 +623,25 @@ function DesktopSidebar({
         {[
           {
             icon: "cash-outline" as const,
-            label: "Award Amount",
+            label: t("Award Amount"),
             value: data.amount,
           },
           {
             icon: "calendar-outline" as const,
-            label: "Deadline",
+            label: t("Deadline"),
             value: data.deadline,
           },
           {
             icon: "time-outline" as const,
-            label: "Days Remaining",
-            value: data.daysLeft <= 0 ? "Closed" : `${data.daysLeft} days`,
+            label: t("Days Remaining"),
+            value: data.daysLeft <= 0 ? t("Closed") : `${data.daysLeft} ${t("days")}`,
           },
           {
             icon:
               data.category === "Local"
                 ? ("location-outline" as const)
                 : ("globe-outline" as const),
-            label: "Category",
+            label: t("Category"),
             value: data.category,
           },
         ].map(({ icon, label, value }, idx, arr) => {
@@ -743,6 +773,7 @@ function StateScreen({
   onAction?: () => void;
   spinning?: boolean;
 }) {
+  const { t } = useLanguage();
   const colors = useTheme();
   const elevation = useElevation("sm");
   return (
@@ -780,7 +811,7 @@ function StateScreen({
           { color: colors.textPrimary, textAlign: "center" },
         ]}
       >
-        {title}
+        {t(title)}
       </Text>
       <Text
         style={[
@@ -793,7 +824,7 @@ function StateScreen({
           },
         ]}
       >
-        {message}
+        {t(message)}
       </Text>
       {actionLabel && onAction && (
         <Pressable
@@ -812,7 +843,7 @@ function StateScreen({
         >
           {actionIcon && <Ionicons name={actionIcon} size={17} color="#fff" />}
           <Text style={[typography.label, { color: "#fff" }]}>
-            {actionLabel}
+            {t(actionLabel)}
           </Text>
         </Pressable>
       )}
@@ -824,6 +855,7 @@ function StateScreen({
 // Main content
 // ─────────────────────────────────────────────────────────────────────────────
 function ScholarshipDetailsContent() {
+  const { t } = useLanguage();
   const { width } = useWindowDimensions();
   const colors = useTheme();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -895,6 +927,8 @@ function ScholarshipDetailsContent() {
           documents: toStringArray(raw.documents).length
             ? toStringArray(raw.documents)
             : DEFAULT_DOCUMENTS,
+          usesDefaultHowToApply: toStringArray(raw.howToApply).length === 0,
+          usesDefaultDocuments: toStringArray(raw.documents).length === 0,
         };
 
         if (!cancelled) setData(mapped);
@@ -903,8 +937,8 @@ function ScholarshipDetailsContent() {
         if (!cancelled) {
           setErrorMessage(
             error?.code === "permission-denied"
-              ? "You don't have permission to view this scholarship. Please make sure you're signed in."
-              : "Something went wrong while loading this scholarship. Please check your connection and try again.",
+              ? t("You don't have permission to view this scholarship. Please make sure you're signed in.")
+              : t("Something went wrong while loading this scholarship. Please check your connection and try again."),
           );
         }
       } finally {
@@ -916,7 +950,7 @@ function ScholarshipDetailsContent() {
     return () => {
       cancelled = true;
     };
-  }, [scholarshipId, refreshKey]);
+  }, [scholarshipId, refreshKey, t]);
 
   const breakpoint = useMemo<Breakpoint>(() => {
     if (width < 768) return "mobile";
@@ -966,8 +1000,8 @@ function ScholarshipDetailsContent() {
 
     if (!auth.currentUser) {
       Alert.alert(
-        "Sign in required",
-        "Please sign in before saving a scholarship so it can sync across your devices.",
+        t("Sign in required"),
+        t("Please sign in before saving a scholarship so it can sync across your devices."),
       );
       return;
     }
@@ -978,14 +1012,14 @@ function ScholarshipDetailsContent() {
       if (await isItemSaved("scholarship", data.id)) {
         setSaved(true);
         Alert.alert(
-          "Already saved",
-          `${data.title} is already available in your Saved Scholarships.`,
+          t("Already saved"),
+          `${data.title} ${t("is already available in your Saved Scholarships.")}`,
           [
             {
-              text: "View Saved",
+              text: t("View Saved"),
               onPress: () => router.push("/student/saved"),
             },
-            { text: "OK" },
+            { text: t("OK") },
           ],
         );
         return;
@@ -1005,23 +1039,23 @@ function ScholarshipDetailsContent() {
 
       setSaved(true);
       Alert.alert(
-        "Scholarship saved",
-        `${data.title} has been saved to your account and will be available on your other devices.`,
+        t("Scholarship saved"),
+        `${data.title} ${t("has been saved to your account and will be available on your other devices.")}`,
         [
-          { text: "View Saved", onPress: () => router.push("/student/saved") },
-          { text: "Done" },
+          { text: t("View Saved"), onPress: () => router.push("/student/saved") },
+          { text: t("Done") },
         ],
       );
     } catch (error) {
       console.error("Failed to save scholarship:", error);
       Alert.alert(
-        "Could not save scholarship",
+        t("Could not save scholarship"),
         getSavedItemsErrorMessage(error),
       );
     } finally {
       setSaving(false);
     }
-  }, [data, saving]);
+  }, [data, saving, t]);
 
   const handleRetry = useCallback(() => setRefreshKey((k) => k + 1), []);
 
@@ -1029,8 +1063,8 @@ function ScholarshipDetailsContent() {
   if (loading) {
     return (
       <DashboardLayout
-        title="Scholarship Details"
-        subtitle="Loading..."
+        title={t("Scholarship Details")}
+        subtitle={t("Loading...")}
         showPointsCard={false}
       >
         <View style={{ alignItems: "center", paddingVertical: spacing(14) }}>
@@ -1046,8 +1080,8 @@ function ScholarshipDetailsContent() {
   if (errorMessage) {
     return (
       <DashboardLayout
-        title="Scholarship Details"
-        subtitle="Something went wrong"
+        title={t("Scholarship Details")}
+        subtitle={t("Something went wrong")}
         showPointsCard={false}
       >
         <StateScreen
@@ -1068,8 +1102,8 @@ function ScholarshipDetailsContent() {
   if (notFound || !data) {
     return (
       <DashboardLayout
-        title="Scholarship Details"
-        subtitle="Not found"
+        title={t("Scholarship Details")}
+        subtitle={t("Not found")}
         showPointsCard={false}
       >
         <StateScreen
@@ -1264,23 +1298,23 @@ function ScholarshipDetailsContent() {
           {[
             {
               icon: "cash-outline" as const,
-              label: "Award Amount",
+              label: t("Award Amount"),
               value: data.amount,
             },
             {
               icon: "calendar-outline" as const,
-              label: "Deadline",
+              label: t("Deadline"),
               value: data.deadline,
             },
             {
               icon: "time-outline" as const,
-              label: "Days Remaining",
+              label: t("Days Remaining"),
               value:
                 data.daysLeft <= 0
-                  ? "Closed"
+                  ? t("Closed")
                   : data.daysLeft >= 9999
-                    ? "TBA"
-                    : `${data.daysLeft} days`,
+                    ? t("TBA")
+                    : `${data.daysLeft} ${t("days")}`,
             },
           ].map(({ icon, label, value }) => (
             <View
@@ -1389,7 +1423,7 @@ function ScholarshipDetailsContent() {
                 color={colors.primary}
               />
               <Text style={[typography.label, { color: colors.primary }]}>
-                {saving ? "Saving…" : saved ? "Saved" : "Save"}
+                {saving ? t("Saving…") : saved ? t("Saved") : t("Save")}
               </Text>
             </Pressable>
           </View>
@@ -1421,7 +1455,7 @@ function ScholarshipDetailsContent() {
           icon="list-outline"
           label="Application Steps"
         />
-        <NumberedList items={data.howToApply} />
+        <NumberedList items={data.howToApply} translateItems={data.usesDefaultHowToApply} />
       </View>
     </Card>
   );
@@ -1448,7 +1482,7 @@ function ScholarshipDetailsContent() {
           Tap each document below to check it off as you prepare your
           application.
         </Text>
-        <DocumentChecklist items={data.documents} />
+        <DocumentChecklist items={data.documents} translateItems={data.usesDefaultDocuments} />
       </View>
     </Card>
   );
@@ -1482,7 +1516,7 @@ function ScholarshipDetailsContent() {
             },
           ].map(({ icon, text }) => (
             <View
-              key={text}
+              key={t(text)}
               style={{
                 flexDirection: "row",
                 alignItems: "flex-start",
@@ -1540,7 +1574,7 @@ function ScholarshipDetailsContent() {
       <Pressable
         onPress={handleToggleSave}
         accessibilityRole="button"
-        accessibilityLabel={saved ? "Remove from saved" : "Save for later"}
+        accessibilityLabel={saved ? t('Remove from saved') : t('Save for Later')}
         style={({ pressed }) => ({
           flex: 1,
           height: 52,
@@ -1561,13 +1595,13 @@ function ScholarshipDetailsContent() {
           color={colors.primary}
         />
         <Text style={[typography.label, { color: colors.primary }]}>
-          {saving ? "Saving…" : saved ? "Saved" : "Save"}
+          {saving ? t("Saving…") : saved ? t("Saved") : t("Save")}
         </Text>
       </Pressable>
       <Pressable
         onPress={handleApply}
         accessibilityRole="button"
-        accessibilityLabel="Apply now"
+        accessibilityLabel={t('Apply Now')}
         style={({ pressed }) => ({
           flex: 2,
           height: 52,
@@ -1592,7 +1626,7 @@ function ScholarshipDetailsContent() {
   return (
     <>
       <DashboardLayout
-        title="Scholarship Details"
+        title={t("Scholarship Details")}
         subtitle={data.title}
         showPointsCard={false}
       >
@@ -1608,7 +1642,7 @@ function ScholarshipDetailsContent() {
           <Pressable
             onPress={() => router.back()}
             accessibilityRole="button"
-            accessibilityLabel="Go back"
+            accessibilityLabel={t('Go Back')}
             style={({ pressed }) => ({
               flexDirection: "row" as const,
               alignItems: "center" as const,
@@ -1633,7 +1667,7 @@ function ScholarshipDetailsContent() {
                 { color: colors.primary, fontSize: isMobile ? 12 : undefined },
               ]}
             >
-              Back
+              {t('Go Back')}
             </Text>
           </Pressable>
           <Text
@@ -1680,6 +1714,13 @@ function ScholarshipDetailsContent() {
             />
           )}
         </View>
+
+        <StudentFooter
+          topSpacing={isMobile ? spacing(8) : spacing(10)}
+          maxWidth={1280}
+        />
+
+        {isMobile && <View style={{ height: spacing(20) }} />}
       </DashboardLayout>
 
       {/* Overlays outside layout scroll */}

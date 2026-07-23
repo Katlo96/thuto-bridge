@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
 import { getAuth, signOut } from 'firebase/auth';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 const BASE_SPACING = 4;
 const spacing = (n: number) => n * BASE_SPACING;
@@ -35,6 +36,7 @@ type StudentMenuContextValue = {
 const StudentMenuContext = createContext<StudentMenuContextValue | null>(null);
 
 export function StudentMenuProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -91,34 +93,34 @@ export function StudentMenuProvider({ children }: { children: React.ReactNode })
     if (action === 'notifications') router.push(notificationsHref);
 
     if (action === 'logout') {
-  setIsOpen(false);
-  setLogoutConfirmOpen(true);
-  return;
-}
+      setIsOpen(false);
+      setLogoutConfirmOpen(true);
+      return;
+    }
   }
 
- async function handleLogout() {
-  try {
-    setIsLoggingOut(true);
+  async function handleLogout() {
+    try {
+      setIsLoggingOut(true);
 
-    const auth = getAuth();
-    await signOut(auth);
+      const auth = getAuth();
+      await signOut(auth);
 
-    setLogoutConfirmOpen(false);
+      setLogoutConfirmOpen(false);
 
-    router.replace('/login');
-  } catch (err) {
-    console.error('Logout failed:', err);
-  } finally {
-    setIsLoggingOut(false);
+      router.replace('/login');
+    } catch (err) {
+      console.error('Logout failed:', err);
+    } finally {
+      setIsLoggingOut(false);
+    }
   }
-}
 
   const cardWidth = isMobile
     ? Math.min(width - spacing(8), 380)
     : isTablet
-    ? 380
-    : 400;
+      ? 380
+      : 400;
 
   return (
     <StudentMenuContext.Provider value={value}>
@@ -130,6 +132,8 @@ export function StudentMenuProvider({ children }: { children: React.ReactNode })
           <Pressable
             style={[styles.backdrop, { backgroundColor: colors.overlay }]}
             onPress={() => setIsOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel={t('Close')}
           />
 
           <View style={styles.centerLayer} pointerEvents="box-none">
@@ -147,25 +151,30 @@ export function StudentMenuProvider({ children }: { children: React.ReactNode })
             >
               <View style={styles.headerRow}>
                 <View style={{ width: 34 }} />
-                <Text style={[styles.title, { color: colors.text }]}>Menu</Text>
+                <Text style={[styles.title, { color: colors.text }]}>{t('Menu')}</Text>
 
-                <Pressable onPress={() => setIsOpen(false)} style={styles.closeBtn}>
+                <Pressable
+                  onPress={() => setIsOpen(false)}
+                  style={styles.closeBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('Close')}
+                >
                   <Ionicons name="close" size={18} color={colors.text} />
                 </Pressable>
               </View>
 
-              <MenuItem label="Home" onPress={() => runAction('home')} />
-              <MenuItem label="Profile" onPress={() => runAction('profile')} />
-              <MenuItem label="Settings" onPress={() => runAction('settings')} />
-              <MenuItem label="Notifications" onPress={() => runAction('notifications')} />
+              <MenuItem label={t('Home')} onPress={() => runAction('home')} />
+              <MenuItem label={t('Profile')} onPress={() => runAction('profile')} />
+              <MenuItem label={t('Settings')} onPress={() => runAction('settings')} />
+              <MenuItem label={t('Notifications')} onPress={() => runAction('notifications')} />
 
               <View style={[styles.dividerSoft, { backgroundColor: colors.dividerSoft }]} />
 
-            <MenuItem
-  label="Logout"
-  danger
-  onPress={() => runAction('logout')}
-/>
+              <MenuItem
+                label={t('Logout')}
+                danger
+                onPress={() => runAction('logout')}
+              />
             </View>
           </View>
         </View>
@@ -182,33 +191,49 @@ export function StudentMenuProvider({ children }: { children: React.ReactNode })
           <Pressable
             style={[styles.backdrop, { backgroundColor: colors.overlay }]}
             onPress={() => setLogoutConfirmOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel={t('Cancel')}
           />
 
           <View style={styles.centerLayer}>
-            <View style={[styles.confirmCard]}>
-              <Text style={styles.confirmTitle}>Confirm Logout</Text>
-              <Text style={styles.confirmText}>
-                Are you sure you want to log out of your account?
+            <View
+              style={[
+                styles.confirmCard,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: colors.cardBorder,
+                },
+              ]}
+            >
+              <Text style={[styles.confirmTitle, { color: colors.text }]}>{t('Confirm Logout')}</Text>
+              <Text style={[styles.confirmText, { color: colors.muted }]}>
+                {t('Are you sure you want to log out of your account?')}
               </Text>
 
               <View style={styles.confirmActions}>
                 <Pressable
                   style={[styles.cancelBtn]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('Cancel')}
                   onPress={() => setLogoutConfirmOpen(false)}
                   disabled={isLoggingOut}
+                  accessibilityState={{ disabled: isLoggingOut }}
                 >
-                  <Text style={styles.cancelText}>Cancel</Text>
+                  <Text style={[styles.cancelText, { color: colors.text }]}>{t('Cancel')}</Text>
                 </Pressable>
 
                 <Pressable
                   style={[styles.logoutBtn]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('Logout')}
                   onPress={handleLogout}
                   disabled={isLoggingOut}
+                  accessibilityState={{ disabled: isLoggingOut }}
                 >
                   {isLoggingOut ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.logoutText}>Logout</Text>
+                    <Text style={styles.logoutText}>{t('Logout')}</Text>
                   )}
                 </Pressable>
               </View>
@@ -238,7 +263,12 @@ function MenuItem({
   danger?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.item}>
+    <Pressable
+      onPress={onPress}
+      style={styles.item}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
       <Text style={[styles.itemText, danger && { color: '#B22222' }]}>
         {label}
       </Text>
