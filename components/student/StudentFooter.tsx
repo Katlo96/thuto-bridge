@@ -21,6 +21,7 @@ import {
 type StudentFooterProps = {
   /** Adds extra space above the footer when it follows page content. */
   topSpacing?: number;
+
   /** Limits footer width on large web displays. */
   maxWidth?: number;
 };
@@ -33,18 +34,18 @@ type FooterLink = {
 
 const FOOTER_LINKS: FooterLink[] = [
   {
-    label: 'Privacy',
-    url: 'https://www.thutobridge.com/privacy',
+    label: 'Privacy Policy',
+    url: 'https://thuto-bridge-web.web.app/privacy-policy/',
     icon: 'shield-checkmark-outline',
   },
   {
-    label: 'Terms',
-    url: 'https://www.thutobridge.com/terms',
+    label: 'Terms of Use',
+    url: 'https://thuto-bridge-web.web.app/terms-of-use/',
     icon: 'document-text-outline',
   },
   {
     label: 'Help',
-    url: 'mailto:support@thutobridge.com',
+    url: 'https://thuto-bridge-web.web.app/support/',
     icon: 'help-circle-outline',
   },
 ];
@@ -54,16 +55,22 @@ function getWebShadow(): ViewStyle {
     Platform.select({
       ios: {
         shadowColor: '#0f172a',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: {
+          width: 0,
+          height: 4,
+        },
         shadowOpacity: 0.08,
         shadowRadius: 14,
       },
+
       android: {
         elevation: 2,
       },
+
       web: {
         boxShadow: '0 8px 24px rgba(15, 23, 42, 0.06)',
       } as ViewStyle,
+
       default: {},
     }) ?? {}
   ) as ViewStyle;
@@ -76,10 +83,12 @@ export default function StudentFooter({
   const { width } = useWindowDimensions();
   const colors = useTheme();
   const { t } = useLanguage();
+
   const shadow = useMemo(getWebShadow, []);
 
   const isMobile = width < 600;
   const isTablet = width >= 600 && width < 960;
+
   const horizontalPadding = isMobile
     ? spacing(4)
     : isTablet
@@ -89,11 +98,15 @@ export default function StudentFooter({
   const openLink = useCallback(async (url: string) => {
     try {
       const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
+
+      if (!supported) {
+        console.warn(`Unable to open footer URL: ${url}`);
+        return;
       }
-    } catch {
-      // Keep footer interactions silent if the target platform cannot open a URL.
+
+      await Linking.openURL(url);
+    } catch (error) {
+      console.warn('Failed to open footer URL:', error);
     }
   }, []);
 
@@ -168,7 +181,11 @@ export default function StudentFooter({
                   borderColor: `${colors.primary}28`,
                 }}
               >
-                <Ionicons name="school-outline" size={18} color={colors.primary} />
+                <Ionicons
+                  name="school-outline"
+                  size={18}
+                  color={colors.primary}
+                />
               </View>
 
               <Text
@@ -195,7 +212,9 @@ export default function StudentFooter({
                 },
               ]}
             >
-              {t('Connecting Botswana students to university opportunities.')}
+              {t(
+                'Connecting Botswana students to university opportunities.',
+              )}
             </Text>
           </View>
 
@@ -214,7 +233,10 @@ export default function StudentFooter({
                 key={item.label}
                 accessibilityRole="link"
                 accessibilityLabel={t(item.label)}
-                onPress={() => openLink(item.url)}
+                accessibilityHint={t(`Opens the ${item.label} page`)}
+                onPress={() => {
+                  void openLink(item.url);
+                }}
                 style={({ pressed }) => ({
                   minHeight: 40,
                   flexDirection: 'row',
@@ -237,8 +259,12 @@ export default function StudentFooter({
                 <Ionicons
                   name={item.icon}
                   size={14}
-                  color={pressedColor(colors.primary, colors.textMuted)}
+                  color={pressedColor(
+                    colors.primary,
+                    colors.textMuted,
+                  )}
                 />
+
                 <Text
                   style={[
                     typography.label,
@@ -278,7 +304,8 @@ export default function StudentFooter({
               },
             ]}
           >
-            © {new Date().getFullYear()} Thuto-Bridge. {t('All rights reserved.')}
+            © {new Date().getFullYear()} Thuto-Bridge.{' '}
+            {t('All rights reserved.')}
           </Text>
 
           <Text
@@ -293,7 +320,12 @@ export default function StudentFooter({
             ]}
           >
             {t('Designed and developed by')}{' '}
-            <Text style={{ fontWeight: '700', color: colors.textSecondary }}>
+            <Text
+              style={{
+                fontWeight: '700',
+                color: colors.textSecondary,
+              }}
+            >
               BrightCode Studios
             </Text>
           </Text>

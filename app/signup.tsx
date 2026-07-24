@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import {
   View, Text, Image, TextInput, Pressable, Animated, StyleSheet,
   useWindowDimensions, Platform, KeyboardAvoidingView, ScrollView,
-  ActivityIndicator, useColorScheme, Modal,
+  ActivityIndicator, useColorScheme, Modal, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -11,8 +11,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { signUpWithEmail, sendPhoneOTP, parseFirebaseError } from '../services/authService';
 import { useLanguage } from '../contexts/LanguageContext';
 import StudentFooter from '../components/student/StudentFooter';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LOGO = require('../assets/images/splash-illustration.png');
+const PRIVACY_POLICY_URL = 'https://thuto-bridge-web.web.app/privacy-policy/';
+const TERMS_OF_USE_URL = 'https://thuto-bridge-web.web.app/terms-of-use/';
+const SUPPORT_URL = 'https://thuto-bridge-web.web.app/support/';
+const CONSENT_STORAGE_KEY = 'thuto_bridge_signup_consent_v1';
 const sp = (n: number) => n * 4;
 const typo = {
   hero:     { fontSize: 38, lineHeight: 44, fontWeight: '900' as const },
@@ -215,6 +220,57 @@ style={({ pressed }) => ({ marginTop: sp(3), opacity: pressed ? 0.7 : 1 })}>
   );
 }
 
+type ConsentColors = {
+  primary: string;
+  textPrimary: string;
+  textSecondary: string;
+  textMuted: string;
+  border: string;
+  surfaceAlt2: string;
+};
+
+function ConsentRow({ checked, onToggle, label, detail, linkLabel, onOpenLink, colors }: {
+  checked: boolean;
+  onToggle: () => void;
+  label: string;
+  detail?: string;
+  linkLabel?: string;
+  onOpenLink?: () => void;
+  colors: ConsentColors;
+}) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sp(3), paddingVertical: sp(2) }}>
+      <Pressable
+        onPress={onToggle}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked }}
+        accessibilityLabel={label}
+        hitSlop={8}
+        style={({ pressed }) => ({
+          width: 26, height: 26, borderRadius: 8, borderWidth: 1.5,
+          borderColor: checked ? colors.primary : colors.border,
+          backgroundColor: checked ? colors.primary : colors.surfaceAlt2,
+          alignItems: 'center', justifyContent: 'center',
+          opacity: pressed ? 0.75 : 1, flexShrink: 0,
+        })}
+      >
+        {checked && <Ionicons name="checkmark" size={18} color="#FFFFFF" />}
+      </Pressable>
+      <View style={{ flex: 1 }}>
+        <Pressable onPress={onToggle} accessibilityRole="checkbox" accessibilityState={{ checked }}>
+          <Text style={[typo.body, { color: colors.textPrimary, lineHeight: 20 }]}>{label}</Text>
+        </Pressable>
+        {detail ? <Text style={[typo.caption, { color: colors.textMuted, marginTop: 3, lineHeight: 16 }]}>{detail}</Text> : null}
+        {linkLabel && onOpenLink ? (
+          <Pressable onPress={onOpenLink} accessibilityRole="link" hitSlop={6} style={({ pressed }) => ({ marginTop: 4, alignSelf: 'flex-start', opacity: pressed ? 0.7 : 1 })}>
+            <Text style={[typo.caption, { color: colors.primary, fontWeight: '700', textDecorationLine: 'underline' }]}>{linkLabel}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Signup screen
 // ─────────────────────────────────────────────────────────────────────────────
@@ -252,6 +308,10 @@ export default function Signup() {
   const [focused,         setFocused]         = useState<string | null>(null);
   const [isSubmitting,    setIsSubmitting]    = useState(false);
   const [error,           setError]           = useState<string | null>(null);
+  const [acceptedTerms,   setAcceptedTerms]   = useState(false);
+  const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
+  const [acceptedCookies, setAcceptedCookies] = useState(false);
+  const [consentModalVisible, setConsentModalVisible] = useState(false);
 
   // Modal state
   const [modalVisible,     setModalVisible]     = useState(false);
@@ -279,6 +339,16 @@ export default function Signup() {
 
   const tabLeft = tabSlide.interpolate({ inputRange: [0, 1], outputRange: ['2%', '51%'] });
   const matchState = !confirmPassword ? 'idle' : password === confirmPassword ? 'match' : 'mismatch';
+  const allConsentAccepted = acceptedTerms && acceptedPrivacy && acceptedCookies;
+
+  const openExternalLink = useCallback(async (url: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) await Linking.openURL(url);
+    } catch {
+      setError(t('Unable to open this page right now. Please try again.'));
+    }
+  }, [t]);
 
   const validate = useCallback(() => {
     if (!fullName.trim() || fullName.trim().length < 2)   return t('Please enter your full name.');
@@ -289,16 +359,36 @@ export default function Signup() {
     }
     if (!password.trim() || password.length < 8)          return t('Password must be at least 8 characters.');
     if (password !== confirmPassword)                      return t('Passwords do not match.');
+    if (!acceptedTerms)                                     return t('Please accept the Terms of Use.');
+    if (!acceptedPrivacy)                                   return t('Please acknowledge the Privacy Policy.');
+    if (!acceptedCookies)                                   return t('Please allow essential cookies and secure local storage.');
     return null;
-  }, [fullName, inputMode, identifier, password, confirmPassword, t]);
+  }, [fullName, inputMode, identifier, password, confirmPassword, acceptedTerms, acceptedPrivacy, acceptedCookies, t]);
 
   // ── Submit ─────────────────────────────────────────────────────────────────
   const handleSignup = useCallback(async () => {
+    if (!allConsentAccepted) {
+      setConsentModalVisible(true);
+      setError(t('Please review and accept the required permissions before creating your account.'));
+      return;
+    }
+
     const err = validate();
     if (err) { setError(err); return; }
     setIsSubmitting(true); setError(null);
 
     try {
+      await AsyncStorage.setItem(
+        CONSENT_STORAGE_KEY,
+        JSON.stringify({
+          termsAccepted: true,
+          privacyAccepted: true,
+          essentialStorageAccepted: true,
+          acceptedAt: new Date().toISOString(),
+          termsUrl: TERMS_OF_USE_URL,
+          privacyUrl: PRIVACY_POLICY_URL,
+        }),
+      );
       if (inputMode === 'email') {
         // Create account + send verification email
         await signUpWithEmail(identifier.trim(), password, fullName.trim());
@@ -318,7 +408,7 @@ export default function Signup() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [validate, inputMode, identifier, password, fullName]);
+  }, [allConsentAccepted, validate, inputMode, identifier, password, fullName, t]);
 
   // ── Modal primary action ───────────────────────────────────────────────────
   const handleModalPrimary = useCallback(() => {
@@ -487,13 +577,50 @@ accessibilityState={{ selected: inputMode === m }}
                   </View>
                 )}
 
-                {/* Terms */}
-                <Text style={[typo.caption, { color: colors.textMuted, textAlign: 'center', marginTop: sp(4), lineHeight: 17, paddingHorizontal: sp(2) }]}>
-                  By signing up you agree to our{' '}
-                  <Text style={{ color: colors.primary, fontWeight: '700' }}>{t('Terms of Service')}</Text>
-                  {' '}and{' '}
-                  <Text style={{ color: colors.primary, fontWeight: '700' }}>{t('Privacy Policy')}</Text>
-                </Text>
+                {/* Required consent */}
+                <View style={[s.consentCard, { backgroundColor: colors.surfaceAlt, borderColor: allConsentAccepted ? `${colors.primary}55` : colors.border }]}>
+                  <View style={s.consentHeader}>
+                    <View style={[s.consentIcon, { backgroundColor: `${colors.primary}16` }]}>
+                      <Ionicons name="shield-checkmark-outline" size={20} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[typo.label, { color: colors.textPrimary }]}>{t('Privacy and permissions')}</Text>
+                      <Text style={[typo.caption, { color: colors.textMuted, marginTop: 2, lineHeight: 17 }]}>
+                        {t('Review each item before creating your account.')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <ConsentRow
+                    checked={acceptedTerms}
+                    onToggle={() => { setAcceptedTerms(v => !v); setError(null); }}
+                    label={t('I accept the Terms of Use')}
+                    linkLabel={t('Read terms')}
+                    onOpenLink={() => void openExternalLink(TERMS_OF_USE_URL)}
+                    colors={colors}
+                  />
+                  <ConsentRow
+                    checked={acceptedPrivacy}
+                    onToggle={() => { setAcceptedPrivacy(v => !v); setError(null); }}
+                    label={t('I acknowledge the Privacy Policy')}
+                    linkLabel={t('Read policy')}
+                    onOpenLink={() => void openExternalLink(PRIVACY_POLICY_URL)}
+                    colors={colors}
+                  />
+                  <ConsentRow
+                    checked={acceptedCookies}
+                    onToggle={() => { setAcceptedCookies(v => !v); setError(null); }}
+                    label={t('Allow essential cookies and secure local storage')}
+                    detail={t('Required to keep you signed in, protect your session, and remember security preferences.')}
+                    colors={colors}
+                  />
+
+                  <Pressable onPress={() => setConsentModalVisible(true)} accessibilityRole="button" style={({ pressed }) => ({ marginTop: sp(2), opacity: pressed ? 0.7 : 1 })}>
+                    <Text style={[typo.caption, { color: colors.primary, fontWeight: '700', textAlign: 'center' }]}>
+                      {t('Why are these permissions required?')}
+                    </Text>
+                  </Pressable>
+                </View>
 
                 {/* Submit */}
                 <Pressable onPress={handleSignup} disabled={isSubmitting}
@@ -525,6 +652,52 @@ accessibilityState={{ selected: inputMode === m }}
         </KeyboardAvoidingView>
       </SafeAreaView>
 
+      <Modal
+        visible={consentModalVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setConsentModalVisible(false)}
+      >
+        <View style={ms.overlay}>
+          <View style={[ms.card, { backgroundColor: scheme === 'light' ? '#FFFFFF' : '#1A232E' }]}>
+            <View style={{ height: 4, backgroundColor: colors.primary }} />
+            <ScrollView contentContainerStyle={{ padding: sp(6) }} showsVerticalScrollIndicator={false}>
+              <View style={{ alignItems: 'center', marginBottom: sp(4) }}>
+                <View style={{ width: 68, height: 68, borderRadius: 34, alignItems: 'center', justifyContent: 'center', backgroundColor: `${colors.primary}16` }}>
+                  <Ionicons name="shield-checkmark-outline" size={32} color={colors.primary} />
+                </View>
+              </View>
+              <Text style={[typo.title, { color: colors.textPrimary, textAlign: 'center', fontSize: 22 }]}>{t('Your privacy choices')}</Text>
+              <Text style={[typo.body, { color: colors.textSecondary, textAlign: 'center', marginTop: sp(2), marginBottom: sp(5), lineHeight: 22 }]}>
+                {t('Thuto Bridge needs your agreement to its legal terms and permission to use essential device storage for secure sign-in. Biometrics are separate and can be enabled later on the login screen.')}
+              </Text>
+
+              <ConsentRow checked={acceptedTerms} onToggle={() => setAcceptedTerms(v => !v)} label={t('I accept the Terms of Use')} linkLabel={t('Open')} onOpenLink={() => void openExternalLink(TERMS_OF_USE_URL)} colors={colors} />
+              <ConsentRow checked={acceptedPrivacy} onToggle={() => setAcceptedPrivacy(v => !v)} label={t('I acknowledge the Privacy Policy')} linkLabel={t('Open')} onOpenLink={() => void openExternalLink(PRIVACY_POLICY_URL)} colors={colors} />
+              <ConsentRow checked={acceptedCookies} onToggle={() => setAcceptedCookies(v => !v)} label={t('Allow essential cookies and secure local storage')} detail={t('This is used only for authentication sessions, fraud prevention, and saved security preferences.')} colors={colors} />
+
+              <Pressable
+                onPress={() => {
+                  if (!allConsentAccepted) {
+                    setError(t('Please accept all three required items.'));
+                    return;
+                  }
+                  setError(null);
+                  setConsentModalVisible(false);
+                }}
+                style={({ pressed }) => [s.btn, { backgroundColor: colors.primary, marginTop: sp(5) }, pressed && { opacity: 0.88 }]}
+              >
+                <Text style={[typo.body, { color: '#fff', fontWeight: '700' }]}>{t('Save and continue')}</Text>
+              </Pressable>
+              <Pressable onPress={() => void openExternalLink(SUPPORT_URL)} style={({ pressed }) => ({ marginTop: sp(3), opacity: pressed ? 0.7 : 1 })}>
+                <Text style={[typo.caption, { color: colors.textMuted, textAlign: 'center' }]}>{t('Need help understanding these choices?')}</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Confirmation Modal ── */}
       <ConfirmModal
         visible={modalVisible}
@@ -555,6 +728,9 @@ const s = StyleSheet.create({
   errorBox:{ flexDirection: 'row', alignItems: 'flex-start', padding: 12, borderRadius: 12, borderWidth: 1 },
   btn:     { padding: 16, alignItems: 'center', borderRadius: 12, minHeight: 52, justifyContent: 'center' },
   footer:  { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  consentCard: { marginTop: 16, padding: 14, borderWidth: 1, borderRadius: 16, gap: 10 },
+  consentHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 2 },
+  consentIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 });
 
 const ms = StyleSheet.create({

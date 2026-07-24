@@ -143,6 +143,8 @@ export default function Login() {
   const [savedBiometricEmail, setSavedBiometricEmail] = useState<string | null>(
     null,
   );
+  const [enableBiometricAfterLogin, setEnableBiometricAfterLogin] =
+    useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateAnim = useRef(new Animated.Value(24)).current;
@@ -197,6 +199,7 @@ export default function Login() {
             const valid = Boolean(saved.email && saved.password && saved.uid);
             setBiometricLoginReady(valid);
             setSavedBiometricEmail(valid ? saved.email : null);
+            setEnableBiometricAfterLogin(valid);
           } catch {
             await SecureStore.deleteItemAsync(BIOMETRIC_CREDENTIALS_KEY);
             setBiometricLoginReady(false);
@@ -281,7 +284,12 @@ export default function Login() {
           );
         }
 
-        if (Platform.OS !== "web" && biometricAvailable && biometricEnrolled) {
+        if (
+          Platform.OS !== "web" &&
+          biometricAvailable &&
+          biometricEnrolled &&
+          enableBiometricAfterLogin
+        ) {
           const credentials: StoredBiometricCredentials = {
             email,
             password,
@@ -322,6 +330,7 @@ export default function Login() {
     password,
     biometricAvailable,
     biometricEnrolled,
+    enableBiometricAfterLogin,
   ]);
 
   const handleIdentifierSubmit = useCallback(() => {
@@ -984,6 +993,88 @@ export default function Login() {
                       {t("Resend verification email")}
                     </Text>
                   </Pressable>
+                )}
+
+                {showBiometric && inputMode === "email" && (
+                  <View
+                    style={{
+                      marginTop: sp(3),
+                      padding: sp(3.5),
+                      borderRadius: radii.lg,
+                      borderWidth: 1,
+                      borderColor: enableBiometricAfterLogin
+                        ? `${colors.primary}55`
+                        : colors.border,
+                      backgroundColor: colors.surfaceAlt,
+                    }}
+                  >
+                    <Pressable
+                      onPress={() =>
+                        setEnableBiometricAfterLogin((current) => !current)
+                      }
+                      accessibilityRole="checkbox"
+                      accessibilityState={{
+                        checked: enableBiometricAfterLogin,
+                      }}
+                      accessibilityLabel={`${t("Enable")} ${bioLabel.label} ${t("on this device")}`}
+                      style={({ pressed }) => ({
+                        flexDirection: "row",
+                        alignItems: "flex-start",
+                        gap: sp(3),
+                        opacity: pressed ? 0.78 : 1,
+                      })}
+                    >
+                      <View
+                        style={{
+                          width: 26,
+                          height: 26,
+                          borderRadius: 8,
+                          borderWidth: 1.5,
+                          borderColor: enableBiometricAfterLogin
+                            ? colors.primary
+                            : colors.border,
+                          backgroundColor: enableBiometricAfterLogin
+                            ? colors.primary
+                            : colors.surfaceAlt2,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {enableBiometricAfterLogin && (
+                          <Ionicons name="checkmark" size={18} color="#fff" />
+                        )}
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[
+                            typo.label,
+                            { color: colors.textPrimary, lineHeight: 19 },
+                          ]}
+                        >
+                          {biometricLoginReady
+                            ? `${bioLabel.label} ${t("sign-in is enabled")}`
+                            : `${t("Enable")} ${bioLabel.label} ${t("after this sign-in")}`}
+                        </Text>
+                        <Text
+                          style={[
+                            typo.caption,
+                            {
+                              color: colors.textMuted,
+                              marginTop: 3,
+                              lineHeight: 16,
+                              fontSize: 11,
+                            },
+                          ]}
+                        >
+                          {t(
+                            "Your encrypted sign-in details stay in this device's secure storage. Thuto Bridge never receives your fingerprint or facial data.",
+                          )}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  </View>
                 )}
 
                 <Pressable
