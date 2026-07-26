@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "50104690307",
+    "project_id": "thuto-bridge-d4d15",
+    "storage_bucket": "thuto-bridge-d4d15.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:50104690307:android:e6fae0742c916b71d71db6",
+        "android_client_info": {
+          "package_name": "com.katlo96.thutobridge"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCv6CmTRgM9EmsSXw6l-9ThfrfSDdNysn0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

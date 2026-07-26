@@ -4,9 +4,7 @@
     "slug": "thuto-bridge",
     "version": "1.0.0",
     "scheme": "thutobridge",
-
-     "icon": "./assets/splash-icon.png",
-
+    "icon": "./assets/splash-icon.png",
     "plugins": [
       "expo-router",
       "expo-local-authentication",
@@ -17,11 +15,21 @@
     ],
     "android": {
       "googleServicesFile": "./google-services.json",
-      "package": "com.katlo96.thutobridge"
+      "package": "com.katlo96.thutobridge",
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "ios": {
       "googleServicesFile": "./GoogleService-Info.plist",
       "bundleIdentifier": "com.katlo96.thutobridge"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "cdb7d82f-dadc-4605-b016-2a621572cd8e"
+      }
     }
   }
 }
