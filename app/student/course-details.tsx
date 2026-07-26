@@ -29,8 +29,11 @@ import StudentFooter from "../../components/student/StudentFooter";
 // ─────────────────────────────────────────────────────────────────────────────
 // Firebase
 // ─────────────────────────────────────────────────────────────────────────────
-import { auth, db } from "../../constants/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { db } from "../../constants/firebase";
+import {
+  getCurrentUser,
+  subscribeToAuthState,
+} from "../../services/authService";
 import {
   getSavedItemsErrorMessage,
   isItemSaved,
@@ -296,7 +299,7 @@ function CourseDetailsContent() {
   useEffect(() => {
     let active = true;
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = subscribeToAuthState(async (user) => {
       if (!active) return;
 
       if (!user || !courseId) {
@@ -402,7 +405,7 @@ function CourseDetailsContent() {
   const handleSave = async () => {
     if (!course) return;
 
-    if (!auth.currentUser) {
+    if (!getCurrentUser()) {
       Alert.alert(
         t("Sign in required"),
         t("Please sign in before saving a course so it can sync across your devices."),

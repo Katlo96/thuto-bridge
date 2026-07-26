@@ -11,8 +11,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../../constants/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { db } from "../../constants/firebase";
+import {
+  getCurrentUser,
+  subscribeToAuthState,
+} from "../../services/authService";
 import {
   getSavedItemsErrorMessage,
   isItemSaved,
@@ -973,7 +976,7 @@ function ScholarshipDetailsContent() {
   useEffect(() => {
     let active = true;
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = subscribeToAuthState(async (user) => {
       if (!active) return;
 
       if (!user || !data?.id) {
@@ -998,7 +1001,7 @@ function ScholarshipDetailsContent() {
   const handleToggleSave = useCallback(async () => {
     if (!data || saving) return;
 
-    if (!auth.currentUser) {
+    if (!getCurrentUser()) {
       Alert.alert(
         t("Sign in required"),
         t("Please sign in before saving a scholarship so it can sync across your devices."),

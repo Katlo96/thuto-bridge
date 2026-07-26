@@ -26,46 +26,84 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
-import { onAuthStateChanged, type User } from "firebase/auth";
 import {
   loginWithEmail,
-  sendPhoneOTP,
+  loginWithPhonePassword,
   resendVerificationEmail,
   parseFirebaseError,
+  waitForAuthenticatedUser,
 } from "../services/authService";
 import { useLanguage } from "../contexts/LanguageContext";
-import { auth } from "../constants/firebase";
 import StudentFooter from "../components/student/StudentFooter";
 
 const LOGO = require("../assets/images/splash-illustration.png");
 
 const BIOMETRIC_CREDENTIALS_KEY = "thuto_bridge_biometric_credentials_v1";
 
+type BiometricLoginMode = "email" | "phone";
+
 type StoredBiometricCredentials = {
-  email: string;
+  version: 2;
+  mode: BiometricLoginMode;
+  identifier: string;
   password: string;
   uid: string;
 };
 
-function waitForFirebaseUser(timeoutMs = 5000): Promise<User | null> {
-  if (auth.currentUser) return Promise.resolve(auth.currentUser);
+type LegacyStoredBiometricCredentials = {
+  email?: string;
+  password?: string;
+  uid?: string;
+};
 
-  return new Promise((resolve) => {
-    let settled = false;
-    let unsubscribe = () => {};
-    let timeout: ReturnType<typeof setTimeout> | undefined;
+function parseStoredBiometricCredentials(
+  rawValue: string,
+): StoredBiometricCredentials | null {
+  let parsed: unknown;
 
-    const finish = (user: User | null) => {
-      if (settled) return;
-      settled = true;
-      if (timeout) clearTimeout(timeout);
-      unsubscribe();
-      resolve(user);
+  try {
+    parsed = JSON.parse(rawValue);
+  } catch {
+    return null;
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
+
+  const record = parsed as Record<string, unknown>;
+
+  if (
+    record.version === 2 &&
+    (record.mode === "email" || record.mode === "phone") &&
+    typeof record.identifier === "string" &&
+    typeof record.password === "string" &&
+    typeof record.uid === "string"
+  ) {
+    return {
+      version: 2,
+      mode: record.mode,
+      identifier: record.identifier,
+      password: record.password,
+      uid: record.uid,
     };
+  }
 
-    unsubscribe = onAuthStateChanged(auth, (user) => finish(user));
-    timeout = setTimeout(() => finish(auth.currentUser), timeoutMs);
-  });
+  if (
+    typeof record.email === "string" &&
+    typeof record.password === "string" &&
+    typeof record.uid === "string"
+  ) {
+    return {
+      version: 2,
+      mode: "email",
+      identifier: record.email.trim().toLowerCase(),
+      password: record.password,
+      uid: record.uid,
+    };
+  }
+
+  return null;
 }
 
 function getBiometricLabel(types: LocalAuthentication.AuthenticationType[]): {
@@ -140,9 +178,9 @@ export default function Login() {
   const [biometricEnrolled, setBiometricEnrolled] = useState(false);
   const [biometricLoading, setBiometricLoading] = useState(false);
   const [biometricLoginReady, setBiometricLoginReady] = useState(false);
-  const [savedBiometricEmail, setSavedBiometricEmail] = useState<string | null>(
-    null,
-  );
+  const [savedBiometricIdentifier, setSavedBiometricIdentifier] = useState<
+    string | null
+  >(null);
   const [enableBiometricAfterLogin, setEnableBiometricAfterLogin] =
     useState(false);
 
@@ -193,17 +231,27 @@ export default function Login() {
 
         if (storedCredentials) {
           try {
-            const saved = JSON.parse(
-              storedCredentials,
-            ) as StoredBiometricCredentials;
-            const valid = Boolean(saved.email && saved.password && saved.uid);
+            const saved = parseStoredBiometricCredentials(storedCredentials);
+            const valid = saved !== null;
+
+            if (saved) {
+              await SecureStore.setItemAsync(
+                BIOMETRIC_CREDENTIALS_KEY,
+                JSON.stringify(saved),
+                {
+                  keychainAccessible:
+                    SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+                },
+              );
+            }
+
             setBiometricLoginReady(valid);
-            setSavedBiometricEmail(valid ? saved.email : null);
+            setSavedBiometricIdentifier(saved?.identifier ?? null);
             setEnableBiometricAfterLogin(valid);
           } catch {
             await SecureStore.deleteItemAsync(BIOMETRIC_CREDENTIALS_KEY);
             setBiometricLoginReady(false);
-            setSavedBiometricEmail(null);
+            setSavedBiometricIdentifier(null);
           }
         }
       } catch {
@@ -250,6 +298,8 @@ export default function Login() {
     } else {
       if (identifier.replace(/\D/g, "").length < 7)
         return t("Please enter a valid phone number.");
+      if (!password.trim() || password.length < 8)
+        return t("Password must be at least 8 characters.");
     }
     return null;
   }, [inputMode, identifier, password, t]);
@@ -266,56 +316,61 @@ export default function Login() {
     setShowResend(false);
 
     try {
+      const normalizedIdentifier =
+        inputMode === "email"
+          ? identifier.trim().toLowerCase()
+          : identifier.trim();
+
       if (inputMode === "email") {
-        const email = identifier.trim().toLowerCase();
-
-        await loginWithEmail(email, password);
-
-        const firebaseUser = await waitForFirebaseUser();
-        if (!firebaseUser) {
-          throw new Error(
-            "Firebase did not create a valid authenticated session.",
-          );
-        }
-
-        if (firebaseUser.email && firebaseUser.email.toLowerCase() !== email) {
-          throw new Error(
-            "The Firebase account does not match the email used to sign in.",
-          );
-        }
-
-        if (
-          Platform.OS !== "web" &&
-          biometricAvailable &&
-          biometricEnrolled &&
-          enableBiometricAfterLogin
-        ) {
-          const credentials: StoredBiometricCredentials = {
-            email,
-            password,
-            uid: firebaseUser.uid,
-          };
-
-          await SecureStore.setItemAsync(
-            BIOMETRIC_CREDENTIALS_KEY,
-            JSON.stringify(credentials),
-            {
-              keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-            },
-          );
-
-          setBiometricLoginReady(true);
-          setSavedBiometricEmail(email);
-        }
-
-        router.replace("/student/dashboard");
+        await loginWithEmail(normalizedIdentifier, password);
       } else {
-        await sendPhoneOTP(identifier.trim());
-        router.push({
-          pathname: "/verify-code",
-          params: { phone: identifier.trim(), mode: "login" },
-        });
+        await loginWithPhonePassword(normalizedIdentifier, password);
       }
+
+      const firebaseUser = await waitForAuthenticatedUser();
+      if (!firebaseUser) {
+        throw new Error(
+          "Firebase did not create a valid authenticated session.",
+        );
+      }
+
+      if (
+        inputMode === "email" &&
+        firebaseUser.email &&
+        firebaseUser.email.toLowerCase() !== normalizedIdentifier
+      ) {
+        throw new Error(
+          "The Firebase account does not match the email used to sign in.",
+        );
+      }
+
+      if (
+        Platform.OS !== "web" &&
+        biometricAvailable &&
+        biometricEnrolled &&
+        enableBiometricAfterLogin
+      ) {
+        const credentials: StoredBiometricCredentials = {
+          version: 2,
+          mode: inputMode,
+          identifier: normalizedIdentifier,
+          password,
+          uid: firebaseUser.uid,
+        };
+
+        await SecureStore.setItemAsync(
+          BIOMETRIC_CREDENTIALS_KEY,
+          JSON.stringify(credentials),
+          {
+            keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+          },
+        );
+
+        setBiometricLoginReady(true);
+        setSavedBiometricIdentifier(normalizedIdentifier);
+      }
+
+      router.replace("/student/dashboard");
     } catch (e: any) {
       const msg = parseFirebaseError(e);
       setErrorMessage(msg);
@@ -334,12 +389,8 @@ export default function Login() {
   ]);
 
   const handleIdentifierSubmit = useCallback(() => {
-    if (inputMode === "email") {
-      passwordInputRef.current?.focus();
-    } else {
-      void handleLogin();
-    }
-  }, [inputMode, handleLogin]);
+    passwordInputRef.current?.focus();
+  }, []);
 
   const handlePasswordSubmit = useCallback(() => {
     void handleLogin();
@@ -386,7 +437,7 @@ export default function Login() {
       Alert.alert(
         t("Sign In Required"),
         t(
-          "Sign in once with your email and password on this device to enable biometric sign-in.",
+          "Sign in once with your email or phone number and password on this device to enable biometric sign-in.",
         ),
       );
       return;
@@ -424,7 +475,7 @@ export default function Login() {
 
       if (!storedValue) {
         setBiometricLoginReady(false);
-        setSavedBiometricEmail(null);
+        setSavedBiometricIdentifier(null);
         setErrorMessage(
           t(
             "Biometric sign-in has expired. Please sign in with your password again.",
@@ -436,11 +487,18 @@ export default function Login() {
       let saved: StoredBiometricCredentials;
 
       try {
-        saved = JSON.parse(storedValue) as StoredBiometricCredentials;
+        const parsedCredentials =
+          parseStoredBiometricCredentials(storedValue);
+
+        if (!parsedCredentials) {
+          throw new Error("invalid_biometric_credentials");
+        }
+
+        saved = parsedCredentials;
       } catch {
         await SecureStore.deleteItemAsync(BIOMETRIC_CREDENTIALS_KEY);
         setBiometricLoginReady(false);
-        setSavedBiometricEmail(null);
+        setSavedBiometricIdentifier(null);
         setErrorMessage(
           t(
             "Saved biometric sign-in data is invalid. Please sign in with your password again.",
@@ -449,10 +507,15 @@ export default function Login() {
         return;
       }
 
-      if (!saved.email || !saved.password || !saved.uid) {
+      if (
+        !saved.identifier ||
+        !saved.password ||
+        !saved.uid ||
+        (saved.mode !== "email" && saved.mode !== "phone")
+      ) {
         await SecureStore.deleteItemAsync(BIOMETRIC_CREDENTIALS_KEY);
         setBiometricLoginReady(false);
-        setSavedBiometricEmail(null);
+        setSavedBiometricIdentifier(null);
         setErrorMessage(
           t(
             "Biometric sign-in has expired. Please sign in with your password again.",
@@ -461,9 +524,13 @@ export default function Login() {
         return;
       }
 
-      await loginWithEmail(saved.email, saved.password);
+      if (saved.mode === "email") {
+        await loginWithEmail(saved.identifier, saved.password);
+      } else {
+        await loginWithPhonePassword(saved.identifier, saved.password);
+      }
 
-      const firebaseUser = await waitForFirebaseUser();
+      const firebaseUser = await waitForAuthenticatedUser();
       if (!firebaseUser) {
         throw new Error("Firebase did not restore the authenticated user.");
       }
@@ -471,7 +538,7 @@ export default function Login() {
       if (firebaseUser.uid !== saved.uid) {
         await SecureStore.deleteItemAsync(BIOMETRIC_CREDENTIALS_KEY);
         setBiometricLoginReady(false);
-        setSavedBiometricEmail(null);
+        setSavedBiometricIdentifier(null);
         throw new Error(
           "The saved biometric account no longer matches the Firebase user.",
         );
@@ -490,10 +557,10 @@ export default function Login() {
       ) {
         await SecureStore.deleteItemAsync(BIOMETRIC_CREDENTIALS_KEY);
         setBiometricLoginReady(false);
-        setSavedBiometricEmail(null);
+        setSavedBiometricIdentifier(null);
         setErrorMessage(
           t(
-            "Your saved login is no longer valid. Please sign in with your email and password again.",
+            "Your saved login is no longer valid. Please sign in with your email or phone number and password again.",
           ),
         );
       } else {
@@ -514,6 +581,9 @@ export default function Login() {
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
+      {Platform.OS === "web" ? (
+        <View nativeID="recaptcha-container" style={s.recaptchaContainer} />
+      ) : null}
       <SafeAreaView style={s.fill} edges={["top"]}>
         <KeyboardAvoidingView
           style={s.fill}
@@ -784,9 +854,9 @@ export default function Login() {
                     }
                     autoCapitalize="none"
                     autoCorrect={false}
-                    returnKeyType={inputMode === "email" ? "next" : "go"}
+                    returnKeyType="next"
                     onSubmitEditing={handleIdentifierSubmit}
-                    blurOnSubmit={inputMode !== "email"}
+                    blurOnSubmit={false}
                     style={[typo.body, { flex: 1, color: colors.textPrimary }]}
                   />
 
@@ -806,7 +876,7 @@ export default function Login() {
                   )}
                 </View>
 
-                {inputMode === "email" && (
+                {(
                   <View
                     style={[
                       s.input,
@@ -995,7 +1065,7 @@ export default function Login() {
                   </Pressable>
                 )}
 
-                {showBiometric && inputMode === "email" && (
+                {showBiometric && (
                   <View
                     style={{
                       marginTop: sp(3),
@@ -1057,6 +1127,21 @@ export default function Login() {
                             ? `${bioLabel.label} ${t("sign-in is enabled")}`
                             : `${t("Enable")} ${bioLabel.label} ${t("after this sign-in")}`}
                         </Text>
+                        {biometricLoginReady && savedBiometricIdentifier ? (
+                          <Text
+                            numberOfLines={1}
+                            style={[
+                              typo.caption,
+                              {
+                                color: colors.primary,
+                                marginTop: 2,
+                                fontSize: 11,
+                              },
+                            ]}
+                          >
+                            {savedBiometricIdentifier}
+                          </Text>
+                        ) : null}
                         <Text
                           style={[
                             typo.caption,
@@ -1090,9 +1175,7 @@ export default function Login() {
                     isSubmitting && { opacity: 0.7 },
                   ]}
                   accessibilityRole="button"
-                  accessibilityLabel={
-                    inputMode === "phone" ? t("Send OTP Code") : t("Sign In")
-                  }
+                  accessibilityLabel={t("Sign In")}
                 >
                   {isSubmitting ? (
                     <ActivityIndicator color="#fff" />
@@ -1100,9 +1183,7 @@ export default function Login() {
                     <Text
                       style={[typo.body, { color: "#fff", fontWeight: "700" }]}
                     >
-                      {inputMode === "phone"
-                        ? t("Send OTP Code")
-                        : t("Sign In")}
+{t("Sign In")}
                     </Text>
                   )}
                 </Pressable>
@@ -1213,8 +1294,8 @@ export default function Login() {
                           },
                         ]}
                       >
-                        {biometricLoginReady && savedBiometricEmail
-                          ? `${t("Saved account")}: ${savedBiometricEmail}. ${bioLabel.label} ${t("unlocks the saved sign-in securely. No biometric data is sent to Thuto Bridge.")}`
+                        {biometricLoginReady && savedBiometricIdentifier
+                          ? `${t("Saved account")}: ${savedBiometricIdentifier}. ${bioLabel.label} ${t("unlocks the saved sign-in securely. No biometric data is sent to Thuto Bridge.")}`
                           : `${t("Sign in once with your email and password to enable")} ${bioLabel.label}. ${t("No biometric data is sent to Thuto Bridge.")}`}
                       </Text>
                     </View>
@@ -1261,6 +1342,7 @@ export default function Login() {
 }
 
 const s = StyleSheet.create({
+  recaptchaContainer: { position: "absolute", width: 1, height: 1, opacity: 0 },
   fill: { flex: 1 },
   container: { flex: 1 },
   scroll: {

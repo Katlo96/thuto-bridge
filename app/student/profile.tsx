@@ -30,10 +30,16 @@ import {
 } from '../../components/student/DashboardLayout';
 import StudentFooter from '../../components/student/StudentFooter';
 
-import { db, auth, storage } from '../../constants/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { onAuthStateChanged, type User } from 'firebase/auth';
+import {
+  fetchProfile,
+  saveProfile,
+  saveProfilePhotoURL,
+  uploadProfilePhoto,
+} from '../../services/profileService';
+import {
+  subscribeToAuthState,
+  type AuthUser,
+} from '../../services/authService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -50,45 +56,6 @@ type UserProfile = {
 };
 
 const EMPTY_PROFILE: UserProfile = { name: '', phone: '', school: '', yearForm: '', bio: '', photoURL: '' };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Firestore helpers
-// ─────────────────────────────────────────────────────────────────────────────
-const USERS_COLLECTION = 'users';
-
-async function fetchProfile(uid: string): Promise<Partial<UserProfile>> {
-  try {
-    const snap = await getDoc(doc(db, USERS_COLLECTION, uid));
-    if (snap.exists()) return snap.data() as Partial<UserProfile>;
-  } catch (err) {
-    console.error('[Profile] fetchProfile error:', err);
-  }
-  return {};
-}
-
-async function saveProfile(uid: string, data: UserProfile): Promise<void> {
-  await setDoc(
-    doc(db, USERS_COLLECTION, uid),
-    {
-      ...data,
-      updatedAt: new Date().toISOString(),
-    },
-    { merge: true },
-  );
-}
-
-async function uploadProfilePhoto(uid: string, imageUri: string): Promise<string> {
-  const response = await fetch(imageUri);
-  const blob = await response.blob();
-
-  const imageRef = ref(storage, `users/${uid}/profile/profile-photo.jpg`);
-
-  await uploadBytes(imageRef, blob, {
-    contentType: blob.type || 'image/jpeg',
-  });
-
-  return getDownloadURL(imageRef);
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Navigation links — single source of truth for both sidebar and mobile section
@@ -1010,7 +977,7 @@ function StudentProfileContent() {
   const padX      = compact ? spacing(4) : spacing(7);
   const formColumns: 1 | 2 = isMobile ? 1 : 2;
 
-  const [currentUser,    setCurrentUser]    = useState<User | null>(null);
+  const [currentUser,    setCurrentUser]    = useState<AuthUser | null>(null);
   const [loadingAuth,    setLoadingAuth]    = useState(true);
   const [loadingProfile, setLoadingProfile] = useState(false);
 
@@ -1046,7 +1013,7 @@ function StudentProfileContent() {
   );
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
+    const unsub = subscribeToAuthState(async (user) => {
       setCurrentUser(user);
       setLoadingAuth(false);
       if (!user) return;
@@ -1139,14 +1106,7 @@ function StudentProfileContent() {
 
       const downloadURL = await uploadProfilePhoto(currentUser.uid, localUri);
 
-      await setDoc(
-        doc(db, USERS_COLLECTION, currentUser.uid),
-        {
-          photoURL: downloadURL,
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true },
-      );
+      await saveProfilePhotoURL(currentUser.uid, downloadURL);
 
       setPhotoURL(downloadURL);
       setSavedProfile((prev) => ({ ...prev, photoURL: downloadURL }));
@@ -1206,7 +1166,7 @@ function StudentProfileContent() {
         </View>
         <Text style={[typography.h2, { color: colors.textPrimary, textAlign: 'center' }]}>{t('Not signed in')}</Text>
         <Text style={[typography.body, { color: colors.textMuted, textAlign: 'center' }]}>{t('Please log in to view and edit your profile.')}</Text>
-        <Pressable onPress={() => router.replace('/auth/login')} accessibilityRole="button" accessibilityLabel={t('Go to Login')} style={{ paddingHorizontal: spacing(6), paddingVertical: spacing(3), backgroundColor: colors.primary, borderRadius: radii.lg }}>
+        <Pressable onPress={() => router.replace('/login')} accessibilityRole="button" accessibilityLabel={t('Go to Login')} style={{ paddingHorizontal: spacing(6), paddingVertical: spacing(3), backgroundColor: colors.primary, borderRadius: radii.lg }}>
           <Text style={[typography.label, { color: '#fff' }]}>{t('Go to Login')}</Text>
         </Pressable>
       </View>

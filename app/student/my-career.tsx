@@ -34,8 +34,11 @@ import {
   type QuerySnapshot,
 } from 'firebase/firestore';
 
-import { auth, db } from '../../constants/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { db } from '../../constants/firebase';
+import {
+  getCurrentUser,
+  subscribeToAuthState,
+} from '../../services/authService';
 import {
   getSavedItems,
   getSavedItemsErrorMessage,
@@ -2976,7 +2979,7 @@ function CareerContent() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = subscribeToAuthState(async (user) => {
       if (!user) {
         setSavedCareerIds(new Set());
         return;
@@ -3410,7 +3413,7 @@ function CareerContent() {
   ]);
 
   const saveCareer = useCallback(async (field: Field, role: Role) => {
-    if (!auth.currentUser) {
+    if (!getCurrentUser()) {
       Alert.alert(
         'Sign in required',
         t('Please sign in before saving a career so it can sync across your devices.'),

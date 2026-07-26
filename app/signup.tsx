@@ -8,7 +8,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { signUpWithEmail, sendPhoneOTP, parseFirebaseError } from '../services/authService';
+import { signUpWithEmail, signUpWithPhonePassword, parseFirebaseError } from '../services/authService';
 import { useLanguage } from '../contexts/LanguageContext';
 import StudentFooter from '../components/student/StudentFooter';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -396,10 +396,15 @@ export default function Signup() {
         setModalType('email');
         setModalVisible(true);
       } else {
-        // Send OTP for phone signup
-        const result = await sendPhoneOTP(identifier.trim());
-        setPendingPhone(identifier.trim());
-        setPendingVerifId((result as any).verificationId ?? '');
+        // Create a password account for the phone number, then send one OTP
+        // to verify ownership. Future logins use phone number + password only.
+        const result = await signUpWithPhonePassword(
+          identifier.trim(),
+          password,
+          fullName.trim(),
+        );
+        setPendingPhone(result.phone);
+        setPendingVerifId('');
         setModalType('phone');
         setModalVisible(true);
       }
@@ -626,10 +631,10 @@ accessibilityState={{ selected: inputMode === m }}
                 <Pressable onPress={handleSignup} disabled={isSubmitting}
                   style={({ pressed }) => [s.btn, { backgroundColor: colors.primary, marginTop: sp(4) }, pressed && { transform: [{ scale: 0.97 }], opacity: 0.92 }, isSubmitting && { opacity: 0.7 }]}
                   accessibilityRole="button"
-                  accessibilityLabel={inputMode === 'phone' ? t('Send OTP Code') : t('Create Account')}>
+                  accessibilityLabel={t('Create Account')}>
                   {isSubmitting ? <ActivityIndicator color="#fff" /> : (
                     <Text style={[typo.body, { color: '#fff', fontWeight: '700' }]}>
-                      {inputMode === 'phone' ? t('Send OTP Code') : t('Create Account')}
+                      {t('Create Account')}
                     </Text>
                   )}
                 </Pressable>

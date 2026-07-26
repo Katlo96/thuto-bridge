@@ -14,8 +14,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 
-import { auth } from '../../constants/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import {
+  getCurrentUser,
+  subscribeToAuthState,
+} from '../../services/authService';
 import {
   getSavedItems,
   getSavedItemsErrorMessage,
@@ -578,7 +580,7 @@ function SavedContent() {
       setLoading(true);
       setError('');
 
-      if (!auth.currentUser) {
+      if (!getCurrentUser()) {
         setSavedCourses([]);
         setSavedCareers([]);
         setSavedScholarships([]);
@@ -678,7 +680,7 @@ function SavedContent() {
 
   useFocusEffect(
     useCallback(() => {
-      const unsubscribe = onAuthStateChanged(auth, () => {
+      const unsubscribe = subscribeToAuthState(() => {
         void loadSavedItems();
       });
 

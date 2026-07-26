@@ -1,16 +1,15 @@
-// services/savedItemsService.ts
+// services/savedItemsService.native.ts
 import {
   collection,
   deleteDoc,
   doc,
   getDoc,
   getDocs,
+  getFirestore,
   serverTimestamp,
   setDoc,
-  type DocumentData,
-} from 'firebase/firestore';
+} from '@react-native-firebase/firestore';
 
-import { db } from '../constants/firebase';
 import { getCurrentUser } from './authService';
 
 export type SavedItemType = 'course' | 'career' | 'scholarship';
@@ -28,6 +27,8 @@ export type SavedItemInput = {
   title: string;
   [key: string]: unknown;
 };
+
+const db = getFirestore();
 
 function requireUserId(): string {
   const user = getCurrentUser();
@@ -91,7 +92,7 @@ export async function getSavedItems(): Promise<SavedItemRecord[]> {
 
   return snapshot.docs
     .map((item) => {
-      const data = item.data() as DocumentData;
+      const data = item.data() as Record<string, unknown>;
       return {
         ...data,
         id: String(data.id ?? ''),

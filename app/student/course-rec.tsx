@@ -14,8 +14,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { collection, getDocs } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth, db } from '../../constants/firebase';
+import { db } from '../../constants/firebase';
+import {
+  getCurrentUser,
+  subscribeToAuthState,
+} from '../../services/authService';
 import {
   getSavedItems,
   getSavedItemsErrorMessage,
@@ -803,7 +806,7 @@ function CourseRecContent() {
     let active = true;
 
     const loadSavedCourses = async () => {
-      if (!auth.currentUser) {
+      if (!getCurrentUser()) {
         if (active) setSavedCourses(new Set());
         return;
       }
@@ -825,7 +828,7 @@ function CourseRecContent() {
       }
     };
 
-    const unsubscribe = onAuthStateChanged(auth, () => {
+    const unsubscribe = subscribeToAuthState(() => {
       void loadSavedCourses();
     });
 
@@ -1042,7 +1045,7 @@ useEffect(() => {
   const toggleSave = async (course: Course) => {
     if (savingCourseIds.has(course.id)) return;
 
-    if (!auth.currentUser) {
+    if (!getCurrentUser()) {
       setErrorMessage(t('Please sign in to save courses to your account.'));
       return;
     }

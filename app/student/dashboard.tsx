@@ -26,9 +26,11 @@ import DashboardLayout, {
   useTheme,
   radii,
 } from '../../components/student/DashboardLayout';
-import { db, auth } from '../../constants/firebase';
-import { doc, getDoc } from 'firebase/firestore';
-import { onAuthStateChanged, type User } from 'firebase/auth';
+import {
+  subscribeToAuthState,
+  type AuthUser,
+} from '../../services/authService';
+import { getDashboardProfile } from '../../services/dashboardProfileService';
 import { useLanguage } from '../../contexts/LanguageContext';
 import StudentFooter from '../../components/student/StudentFooter';
 
@@ -114,17 +116,19 @@ type DashboardProfileData = {
   pointsTotal?: number;
   pointsEligible?: boolean;
   pointsCalculatedAt?: string; // ISO date string
+  photoURL?: string;
 };
 
 // Mirrors the completeness weighting used on the profile screen.
 function computeCompleteness(data: DashboardProfileData): number {
-  let s = 0;
-  if (data.name?.trim())     s += 25;
-  if (data.phone?.trim())    s += 15;
-  if (data.school?.trim())   s += 20;
-  if (data.yearForm?.trim()) s += 15;
-  if (data.bio?.trim())      s += 25;
-  return s;
+  let score = 0;
+  if (data.photoURL?.trim()) score += 10;
+  if (data.name?.trim()) score += 20;
+  if (data.phone?.trim()) score += 15;
+  if (data.school?.trim()) score += 20;
+  if (data.yearForm?.trim()) score += 15;
+  if (data.bio?.trim()) score += 20;
+  return Math.min(score, 100);
 }
 
 function formatCalculatedDate(
@@ -219,27 +223,32 @@ function DashboardContent() {
   const closeInstitutionModal = useCallback(() => setShowInstitutionModal(false), []);
 
   // ── Firestore-backed profile/points state ──────────────────────────────
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [profileData, setProfileData] = useState<DashboardProfileData>({});
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
+    const unsub = subscribeToAuthState((user) => {
       setCurrentUser(user);
+      setProfileLoaded(false);
+
       if (!user) {
         setProfileData({});
         setProfileLoaded(true);
         return;
       }
-      try {
-        const snap = await getDoc(doc(db, 'users', user.uid));
-        setProfileData(snap.exists() ? (snap.data() as DashboardProfileData) : {});
-      } catch (err) {
-        console.error('[Dashboard] failed to load profile/points:', err);
-        setProfileData({});
-      } finally {
-        setProfileLoaded(true);
-      }
+
+      void (async () => {
+        try {
+          const data = await getDashboardProfile(user.uid);
+          setProfileData(data);
+        } catch (err) {
+          console.error('[Dashboard] failed to load profile/points:', err);
+          setProfileData({});
+        } finally {
+          setProfileLoaded(true);
+        }
+      })();
     });
     return unsub;
   }, []);

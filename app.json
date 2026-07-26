@@ -4,11 +4,16 @@
     "slug": "thuto-bridge",
     "version": "1.0.0",
     "scheme": "thutobridge",
+
+     "icon": "./assets/splash-icon.png",
+
     "plugins": [
       "expo-router",
       "expo-local-authentication",
       "expo-secure-store",
-      "expo-font"
+      "expo-font",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth"
     ],
     "android": {
       "googleServicesFile": "./google-services.json",

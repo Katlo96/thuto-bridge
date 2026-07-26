@@ -8,7 +8,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { verifyPhoneOTP, sendPhoneOTP, getStoredConfirmation, parseFirebaseError } from '../services/authService';
+import { completePhonePasswordSignup, resendPhoneSignupOTP, getStoredVerificationId, parseFirebaseError } from '../services/authService';
 import { useLanguage } from '../contexts/LanguageContext';
 import StudentFooter from '../components/student/StudentFooter';
 
@@ -42,7 +42,7 @@ export default function VerifyCode() {
 
   const isMobile  = width <= 479;
   const phone     = params.phone    ?? '';
-  const mode      = params.mode     ?? 'login';
+  const mode      = params.mode     ?? 'signup';
   const fullName  = params.fullName ?? '';
 
   const [code,         setCode]         = useState<string[]>(Array(DIGITS).fill(''));
@@ -91,15 +91,15 @@ export default function VerifyCode() {
     const otpCode = codeStr ?? code.join('');
     if (otpCode.length !== DIGITS) { setError(`${t('Please enter the full')} ${DIGITS}-${t('digit code.')}`); return; }
 
-    // Make sure we still have a confirmation result in the module store
-    if (!getStoredConfirmation()) {
+    // Make sure the password-based phone signup still has an OTP session.
+    if (!getStoredVerificationId()) {
       setError(t('Session expired. Please go back and request a new code.'));
       return;
     }
 
     setIsSubmitting(true); setError(null);
     try {
-      await verifyPhoneOTP(otpCode, mode === 'signup' ? fullName : undefined);
+      await completePhonePasswordSignup(otpCode, fullName);
       router.replace('/student/dashboard');
     } catch (e: any) {
       setError(parseFirebaseError(e));
@@ -115,7 +115,7 @@ export default function VerifyCode() {
     setIsResending(true); setError(null);
     setCode(Array(DIGITS).fill(''));
     try {
-      await sendPhoneOTP(phone);
+      await resendPhoneSignupOTP(phone);
       setCountdown(60);
       setCanResend(false);
       setTimeout(() => inputRefs.current[0]?.focus(), 100);
