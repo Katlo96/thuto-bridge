@@ -44,58 +44,56 @@ const SUPPORT_ITEMS: SupportItem[] = [
   {
     icon: 'call-outline',
     title: 'Support Phone',
-    value: '+267 71 234 567',
-    subtitle: 'Mon – Fri, 8 AM – 5 PM CAT. Talk to a real person.',
-    actionLabel: 'Call now',
-    actionUrl: 'tel:+26771234567',
+    value: '+267 71658728',
+    subtitle:
+      'Call us for assistance with admissions, applications, scholarships, technical issues and general enquiries.',
+    actionLabel: 'Call Now',
+    actionUrl: 'tel:+26771658728',
     color: '#3B82F6',
-    badge: 'Fastest',
+    badge: 'Available',
   },
   {
     icon: 'logo-whatsapp',
     title: 'WhatsApp Support',
-    value: '+267 75 000 111',
-    subtitle: 'Quick help for application status and simple questions.',
-    actionLabel: 'Message us',
-    actionUrl: 'https://wa.me/26775000111',
+    value: '+267 71658728',
+    subtitle:
+      'Chat with us directly on WhatsApp for quick assistance and support.',
+    actionLabel: 'Chat on WhatsApp',
+    actionUrl: 'https://wa.me/26771658728',
     color: '#22C55E',
-    badge: 'Popular',
+    badge: 'Fast Reply',
   },
   {
     icon: 'mail-outline',
-    title: 'Support Email',
-    value: 'support@thutobridge.com',
-    subtitle: 'Best for document reviews, appeals, and detailed queries.',
-    actionLabel: 'Email us',
-    actionUrl: 'mailto:support@thutobridge.com',
+    title: 'General Support',
+    value: 'katlomonang@gmail.com',
+    subtitle:
+      'For admissions, account assistance, scholarships and general enquiries.',
+    actionLabel: 'Send Email',
+    actionUrl: 'mailto:katlomonang@gmail.com',
     color: '#14B8A6',
   },
   {
-    icon: 'logo-instagram',
-    title: 'Instagram',
-    value: '@thutobridge',
-    subtitle: 'Deadlines, tips, bursary alerts, and student stories.',
-    actionLabel: 'Follow',
-    actionUrl: 'https://instagram.com/thutobridge',
-    color: '#EC4899',
-  },
-  {
-    icon: 'logo-facebook',
-    title: 'Facebook',
-    value: 'Thuto-Bridge',
-    subtitle: 'Community Q&A, live info sessions and updates.',
-    actionLabel: 'Visit page',
-    actionUrl: 'https://facebook.com/thutobridge',
-    color: '#6366F1',
+    icon: 'construct-outline',
+    title: 'Technical Support',
+    value: 'bigbrainsreggie@gmail.com',
+    subtitle:
+      'Report bugs, login problems, technical issues or suggest improvements.',
+    actionLabel: 'Contact Developer',
+    actionUrl: 'mailto:bigbrainsreggie@gmail.com',
+    color: '#8B5CF6',
+    badge: 'Developer',
   },
   {
     icon: 'globe-outline',
-    title: 'Website',
-    value: 'www.thutobridge.com',
-    subtitle: 'Help centre, FAQs, and application guides.',
-    actionLabel: 'Open site',
-    actionUrl: 'https://www.thutobridge.com',
+    title: 'Official Website',
+    value: 'thuto-bridge-web.web.app',
+    subtitle:
+      'Visit the Thuto-Bridge website for the latest updates and information.',
+    actionLabel: 'Visit Website',
+    actionUrl: 'https://thuto-bridge-web.web.app',
     color: '#F59E0B',
+    badge: 'Official',
   },
 ];
 
@@ -446,9 +444,9 @@ function SidebarPanel({ compact }: { compact?: boolean }) {
           {t('WhatsApp is usually quickest outside call hours')}
         </Text>
         <Pressable
-          onPress={() => Linking.openURL('https://wa.me/26775000111')}
+          onPress={() => Linking.openURL('https://wa.me/26775618725')}
           accessibilityRole="button"
-          accessibilityLabel={`${t('WhatsApp Support')}: +267 75 000 111`}
+          accessibilityLabel={`${t('WhatsApp Support')}: +267 75 618 725`}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
         >
           <Text style={[typography.label, { color: '#22C55E' }]}>+267 75 000 111</Text>
