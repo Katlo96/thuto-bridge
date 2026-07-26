@@ -15,6 +15,7 @@ import { router, type Href } from 'expo-router';
 import { getAuth, signOut } from 'firebase/auth';
 import { useLanguage } from '../../contexts/LanguageContext';
 
+
 const BASE_SPACING = 4;
 const spacing = (n: number) => n * BASE_SPACING;
 
@@ -36,6 +37,8 @@ type StudentMenuContextValue = {
 const StudentMenuContext = createContext<StudentMenuContextValue | null>(null);
 
 export function StudentMenuProvider({ children }: { children: React.ReactNode }) {
+
+ 
   const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);

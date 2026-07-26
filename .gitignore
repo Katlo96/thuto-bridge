@@ -40,5 +40,6 @@ yarn-error.*
 /ios
 /android
 GoogleService-Info.plist
-google-services.json
+
 thuto-bridge-d4d15-firebase-adminsdk-fbsvc-b06e51d1d4.json
+.firebase/
