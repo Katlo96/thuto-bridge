@@ -35,48 +35,30 @@ import DashboardLayout, {
 import StudentFooter from '../../components/student/StudentFooter';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Firebase
-// ─────────────────────────────────────────────────────────────────────────────
-import { db, auth } from '../../constants/firebase';
-import {
-  doc,
-  getDoc,
-  setDoc,
-  deleteDoc,
-  collection,
-  query,
-  getDocs,
-  addDoc,
-  serverTimestamp,
-} from 'firebase/firestore';
+
 import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from "../../constants/firebase";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
-type System = 'BGCSE' | 'IGCSE';
-type BGCSETrack = 'Pure' | 'Double' | 'Single';
-type IGCSETrack = 'Advanced' | 'Ordinary';
-type Track = BGCSETrack | IGCSETrack;
-type BGCSEForm = 'Form 4' | 'Form 5';
-type IGCSEForm = 'Form 4' | 'Form 5' | 'Form 6 (A-Level)';
-type Form = BGCSEForm | IGCSEForm;
-type ExamType = 'End of Month Test' | 'End of Term Exam' | 'End of Year Exam';
+import {
+  getStudentProfile,
+  saveStudentProfile,
+  getStudentMarks,
+  addStudentMark,
+  resetStudentProgress,
+} from "../../services/progressService";
 
-type MarkRecord = {
-  id: string;
-  subject: string;
-  score: number;
-  examType: ExamType;
-  date: string;
-};
-
-type StudentProfile = {
-  system: System;
-  track: Track;
-  form: Form;
-  subjects: string[];
-};
+import type {
+  StudentProfile,
+  MarkRecord,
+  ExamType,
+  System,
+  Track,
+  Form,
+  BGCSETrack,
+  IGCSETrack,
+  BGCSEForm,
+  IGCSEForm,
+} from "../../services/progressService";
 
 type WizardStep = 'system' | 'track' | 'form' | 'subjects' | 'done';
 
@@ -1216,24 +1198,38 @@ export default function Progress() {
   const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    try {
       if (user) {
         setUserId(user.uid);
-        const profileDoc = await getDoc(doc(db, 'students', user.uid, 'profile', 'main'));
-        if (profileDoc.exists()) setProfile(profileDoc.data() as StudentProfile);
-        const marksSnap = await getDocs(collection(db, 'students', user.uid, 'marks'));
-        setMarks(marksSnap.docs.map(d => ({ id: d.id, ...d.data() } as MarkRecord)));
+
+        const loadedProfile = await getStudentProfile(user.uid);
+
+        if (loadedProfile) {
+          setProfile(loadedProfile);
+        }
+
+        const loadedMarks = await getStudentMarks(user.uid);
+        setMarks(loadedMarks);
       }
+    } catch (err) {
+      console.error(err);
+      Alert.alert(
+        t("Error"),
+        t("Failed to load your progress data.")
+      );
+    } finally {
       setLoading(false);
-    });
-    return unsubscribe;
-  }, []);
+    }
+  });
+
+  return unsubscribe;
+}, []);
 
   const handleProfileComplete = async (newProfile: StudentProfile) => {
     if (!userId) return;
     try {
-      await setDoc(doc(db, 'students', userId, 'profile', 'main'), newProfile);
-      setProfile(newProfile);
+      await saveStudentProfile(userId, newProfile);
     } catch (err) {
       console.error(err);
       Alert.alert(t('Error'), t('Failed to save profile. Check Firestore rules.'));
@@ -1241,29 +1237,44 @@ export default function Progress() {
   };
 
   const handleAddRecord = async (record: MarkRecord) => {
-    if (!userId) return;
-    try {
-      await addDoc(collection(db, 'students', userId, 'marks'), record);
-      setMarks(prev => [...prev, record]);
-    } catch (err) {
-      console.error(err);
-      Alert.alert(t('Error'), t('Failed to save record. Check Firestore rules.'));
-    }
-  };
+  if (!userId) return;
+
+  try {
+    const savedRecord = await addStudentMark(userId, record);
+
+    setMarks((prev) => [
+      ...prev,
+      savedRecord,
+    ]);
+  } catch (err) {
+    console.error(err);
+    Alert.alert(
+      t("Error"),
+      t("Failed to save record. Check Firestore rules.")
+    );
+  }
+};
 
   const handleReset = async () => {
-    if (!userId || !confirm(t('Delete ALL progress data? This cannot be undone.'))) return;
-    try {
-      await deleteDoc(doc(db, 'students', userId, 'profile', 'main'));
-      const marksSnap = await getDocs(collection(db, 'students', userId, 'marks'));
-      marksSnap.docs.forEach(d => deleteDoc(d.ref));
-      setProfile(null);
-      setMarks([]);
-    } catch (err) {
-      console.error(err);
-      Alert.alert(t('Error'), t('Failed to reset data.'));
-    }
-  };
+  if (!userId) return;
+
+  if (!confirm(t("Delete ALL progress data? This cannot be undone."))) {
+    return;
+  }
+
+  try {
+    await resetStudentProgress(userId);
+
+    setProfile(null);
+    setMarks([]);
+  } catch (err) {
+    console.error(err);
+    Alert.alert(
+      t("Error"),
+      t("Failed to reset data.")
+    );
+  }
+};
 
   if (loading) {
     return (

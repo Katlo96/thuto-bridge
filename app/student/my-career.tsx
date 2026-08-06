@@ -74,9 +74,16 @@ const SLOW_LOAD_BANNER_DELAY_MS = 4_000;
 // results in and yielding to the UI thread between pages.
 // ─────────────────────────────────────────────────────────────────────────────
 const IS_NATIVE_MOBILE = Platform.OS !== 'web';
+// Web on phones is still Platform.OS === 'web', but it has the same slow
+ // network + small localStorage profile as native. Treat narrow viewports
+ // the same way as native so careers actually appear on mobile browsers.
 const CAREER_INITIAL_COURSE_BATCH = IS_NATIVE_MOBILE ? 24 : 40;
 const CAREER_BACKGROUND_COURSE_BATCH = IS_NATIVE_MOBILE ? 24 : 100;
 const CAREER_BATCH_YIELD_MS = 50;
+// Full career trees exceed mobile-browser localStorage quotas (see
+// QuotaExceededError on '@thuto-bridge/career-explorer/v2'). Caching is
+// web-only and best-effort — never block or fail the screen because of it.
+const CAREER_CACHE_ENABLED = false; // ✅ Disable cache for ALL web to avoid quota issues
 
 // ─────────────────────────────────────────────────────────────────────────────
 // safeDocs — 20s timeout, one retry after 1.5s.
@@ -1054,8 +1061,16 @@ function SkeletonBlock({
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.4, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.4,
+          duration: 700,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
       ]),
     );
     anim.start();
@@ -1178,33 +1193,41 @@ function InstModal({
       transparent
       animationType={isMobile ? 'slide' : 'fade'}
       onRequestClose={onClose}
+      accessibilityViewIsModal={true}  // ✅ NEW: TypeScript-compatible 
     >
       <Pressable
-        style={{
-          flex: 1,
+       style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           backgroundColor: 'rgba(0,0,0,0.72)',
-          justifyContent: isMobile ? 'flex-end' : 'center',
-          alignItems: 'center',
-          padding: isMobile ? 0 : spacing(5),
         }}
         onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close modal"
       >
         <Pressable
-          style={{
-            width: isMobile ? '100%' : '92%',
-            maxWidth: 560,
-            maxHeight: isMobile ? '92%' : '90%',
-            backgroundColor: colors.surface,
-            borderTopLeftRadius: radii.xxl,
-            borderTopRightRadius: radii.xxl,
-            borderBottomLeftRadius: isMobile ? 0 : radii.xxl,
-            borderBottomRightRadius: isMobile ? 0 : radii.xxl,
-            borderWidth: 1,
-            borderColor: colors.border,
-            overflow: 'hidden',
-            paddingBottom: isMobile ? spacing(8) : 0,
-          }}
-          onPress={(event) => event.stopPropagation()}
+         style={{
+          width: isMobile ? '100%' : '92%',
+          maxWidth: 560,
+          maxHeight: isMobile ? '92%' : '90%',
+          backgroundColor: colors.surface,
+          borderTopLeftRadius: radii.xxl,
+          borderTopRightRadius: radii.xxl,
+          borderBottomLeftRadius: isMobile ? 0 : radii.xxl,
+          borderBottomRightRadius: isMobile ? 0 : radii.xxl,
+          borderWidth: 1,
+          borderColor: colors.border,
+          overflow: 'hidden',
+          paddingBottom: isMobile ? spacing(8) : 0,
+          position: 'absolute',               // ✅ NEW
+          bottom: isMobile ? 0 : undefined,    // ✅ NEW
+          alignSelf: 'center',                // ✅ NEW
+          justifyContent: isMobile ? 'flex-end' : 'center', // ✅ NEW
+        }}
+        onPress={(event) => event.stopPropagation()}
         >
           <View style={{ height: 3, backgroundColor: colors.primary }} />
 
@@ -2648,7 +2671,7 @@ function FieldsView({
               },
             ]}
           >
-            No course-linked careers found for “{query}”
+            No course-linked careers found for "{query}"
           </Text>
 
           <Pressable
@@ -3051,7 +3074,16 @@ function CareerContent() {
       mobileInstitutionLookupRef.current = institutionLookup;
       mobileFacultyLookupRef.current = facultyLookup;
 
-      if (IS_NATIVE_MOBILE) {
+      // Mobile browser (web + narrow viewport) has the same constraints as
+      // native: slow network and tiny localStorage. Use first-page + explicit
+      // "Load More" instead of downloading the whole courses collection.
+      // Desktop web still auto-hydrates in the background.
+      const isMobileWebViewport =
+        !IS_NATIVE_MOBILE &&
+        typeof window !== 'undefined' &&
+        window.innerWidth < 768;
+
+      if (IS_NATIVE_MOBILE || isMobileWebViewport) {
         const firstSnap = await safeDocs(
           firestoreQuery(
             collection(db, 'courses'),
@@ -3090,126 +3122,108 @@ function CareerContent() {
         return;
       }
 
-      if (showBlockingLoader) {
-        // ── WEB COLD START: paginate courses and hydrate in background ──
-        const firstSnap = await safeDocs(
-          firestoreQuery(collection(db, 'courses'), firestoreLimit(CAREER_INITIAL_COURSE_BATCH)),
-        );
-        if (!mountedRef.current || bgTokenRef.current !== myToken) return;
+      // ── DESKTOP WEB: first page paints immediately, rest hydrates in background ──
+      // Never fetch the entire courses collection in one shot on web — that is
+      // what hangs mobile browsers and can still stall on slower desktop links.
+      const firstSnap = await safeDocs(
+        firestoreQuery(
+          collection(db, 'courses'),
+          firestoreLimit(CAREER_INITIAL_COURSE_BATCH),
+        ),
+      );
+      if (!mountedRef.current || bgTokenRef.current !== myToken) return;
 
-        const collected: CourseRecord[] = firstSnap.docs
-          .map((document) => parseCourseDocument(document, institutionLookup, facultyLookup))
-          .filter((course): course is CourseRecord => course !== null);
+      const collected: CourseRecord[] = firstSnap.docs
+        .map((document) =>
+          parseCourseDocument(document, institutionLookup, facultyLookup),
+        )
+        .filter((course): course is CourseRecord => course !== null);
 
-        // Yield to the UI thread once before the CPU-heavy pass below, so
-        // any in-flight navigation animation has settled before the
-        // synchronous keyword-matching work runs.
-        await new Promise<void>((resolve) => {
-          InteractionManager.runAfterInteractions(() => resolve());
-        });
+      await new Promise<void>((resolve) => {
+        InteractionManager.runAfterInteractions(() => resolve());
+      });
 
-        let generatedFields = buildCareerFields(collected);
-        if (!mountedRef.current || bgTokenRef.current !== myToken) return;
+      let generatedFields = buildCareerFields(collected);
+      if (!mountedRef.current || bgTokenRef.current !== myToken) return;
 
-        setFields(generatedFields);
-        setLoading(false);
-        setViewState('fields');
-        setActiveField(null);
-        setActiveRole(null);
+      setFields(generatedFields);
+      setLoading(false);
+      setViewState('fields');
+      setActiveField(null);
+      setActiveRole(null);
 
-        let cursor = firstSnap.docs[firstSnap.docs.length - 1];
-        let hasMore = firstSnap.docs.length === CAREER_INITIAL_COURSE_BATCH;
+      let cursor = firstSnap.docs[firstSnap.docs.length - 1];
+      let hasMore = firstSnap.docs.length === CAREER_INITIAL_COURSE_BATCH;
 
-        if (hasMore) {
-          setHydrating(true);
+      if (hasMore) {
+        setHydrating(true);
+        try {
+          while (hasMore && mountedRef.current && bgTokenRef.current === myToken) {
+            await new Promise((resolve) => setTimeout(resolve, CAREER_BATCH_YIELD_MS));
+
+            const nextSnap = await safeDocs(
+              firestoreQuery(
+                collection(db, 'courses'),
+                firestoreStartAfter(cursor),
+                firestoreLimit(CAREER_BACKGROUND_COURSE_BATCH),
+              ),
+            );
+            if (!mountedRef.current || bgTokenRef.current !== myToken) return;
+
+            if (nextSnap.docs.length === 0) {
+              hasMore = false;
+              break;
+            }
+
+            const nextCourses = nextSnap.docs
+              .map((document) =>
+                parseCourseDocument(document, institutionLookup, facultyLookup),
+              )
+              .filter((course): course is CourseRecord => course !== null);
+
+            collected.push(...nextCourses);
+            cursor = nextSnap.docs[nextSnap.docs.length - 1];
+            hasMore = nextSnap.docs.length === CAREER_BACKGROUND_COURSE_BATCH;
+
+            await new Promise<void>((resolve) => {
+              InteractionManager.runAfterInteractions(() => resolve());
+            });
+
+            generatedFields = buildCareerFields(collected);
+            if (!mountedRef.current || bgTokenRef.current !== myToken) return;
+            setFields(generatedFields);
+          }
+        } catch (hydrationError) {
+          console.warn('Career explorer background sync incomplete:', hydrationError);
+          if (mountedRef.current && bgTokenRef.current === myToken) {
+            setHydrationIncomplete(true);
+          }
+        } finally {
+          if (mountedRef.current && bgTokenRef.current === myToken) {
+            setHydrating(false);
+          }
+        }
+      }
+
+      // Caching is best-effort and disabled when the payload would blow the
+      // mobile-browser localStorage quota (QuotaExceededError).
+      if (CAREER_CACHE_ENABLED) {
+        try {
+          const cachePayload: CareerCachePayload = {
+            savedAt: Date.now(),
+            fields: generatedFields,
+          };
+          await AsyncStorage.setItem(
+            CAREER_CACHE_KEY,
+            JSON.stringify(cachePayload),
+          );
+        } catch (cacheWriteError) {
+          console.warn('Career cache could not be saved:', cacheWriteError);
           try {
-            while (hasMore && mountedRef.current && bgTokenRef.current === myToken) {
-              // Small pause between pages so the batch loop doesn't
-              // monopolize Hermes on lower-end phones.
-              await new Promise((resolve) => setTimeout(resolve, CAREER_BATCH_YIELD_MS));
-
-              const nextSnap = await safeDocs(
-                firestoreQuery(
-                  collection(db, 'courses'),
-                  firestoreStartAfter(cursor),
-                  firestoreLimit(CAREER_BACKGROUND_COURSE_BATCH),
-                ),
-              );
-              if (!mountedRef.current || bgTokenRef.current !== myToken) return;
-
-              if (nextSnap.docs.length === 0) {
-                hasMore = false;
-                break;
-              }
-
-              const nextCourses = nextSnap.docs
-                .map((document) => parseCourseDocument(document, institutionLookup, facultyLookup))
-                .filter((course): course is CourseRecord => course !== null);
-
-              collected.push(...nextCourses);
-              cursor = nextSnap.docs[nextSnap.docs.length - 1];
-              hasMore = nextSnap.docs.length === CAREER_BACKGROUND_COURSE_BATCH;
-
-              await new Promise<void>((resolve) => {
-                InteractionManager.runAfterInteractions(() => resolve());
-              });
-
-              generatedFields = buildCareerFields(collected);
-              if (!mountedRef.current || bgTokenRef.current !== myToken) return;
-              setFields(generatedFields);
-            }
-          } catch (hydrationError) {
-            console.warn('Career explorer background sync incomplete:', hydrationError);
-            if (mountedRef.current && bgTokenRef.current === myToken) {
-              setHydrationIncomplete(true);
-            }
-          } finally {
-            if (mountedRef.current && bgTokenRef.current === myToken) {
-              setHydrating(false);
-            }
+            await AsyncStorage.removeItem(CAREER_CACHE_KEY);
+          } catch {
+            // ignore
           }
-        }
-
-        // Caching is best-effort. A failure here should never surface as a
-        // load error — the user already has working, correct data on screen.
-        try {
-          const cachePayload: CareerCachePayload = {
-            savedAt: Date.now(),
-            fields: generatedFields,
-          };
-          if (!IS_NATIVE_MOBILE) {
-            await AsyncStorage.setItem(CAREER_CACHE_KEY, JSON.stringify(cachePayload));
-          }
-        } catch (cacheWriteError) {
-          console.warn('Career cache could not be saved:', cacheWriteError);
-        }
-      } else {
-        // ── WARM REFRESH: cache already on screen, swap in one shot ──
-        const courseSnapshot = await safeDocs(collection(db, 'courses'));
-        if (!mountedRef.current || bgTokenRef.current !== myToken) return;
-
-        const courses = courseSnapshot.docs
-          .map((document) => parseCourseDocument(document, institutionLookup, facultyLookup))
-          .filter((course): course is CourseRecord => course !== null);
-
-        await new Promise<void>((resolve) => {
-          InteractionManager.runAfterInteractions(() => resolve());
-        });
-
-        const generatedFields = buildCareerFields(courses);
-        if (!mountedRef.current || bgTokenRef.current !== myToken) return;
-        setFields(generatedFields);
-
-        try {
-          const cachePayload: CareerCachePayload = {
-            savedAt: Date.now(),
-            fields: generatedFields,
-          };
-          if (!IS_NATIVE_MOBILE) {
-            await AsyncStorage.setItem(CAREER_CACHE_KEY, JSON.stringify(cachePayload));
-          }
-        } catch (cacheWriteError) {
-          console.warn('Career cache could not be saved:', cacheWriteError);
         }
       }
     } catch (error) {
@@ -3245,28 +3259,46 @@ function CareerContent() {
         return;
       }
 
+      // Web: oversized career trees blow mobile-browser localStorage
+      // (QuotaExceededError). Prefer a fresh progressive load every visit.
+      // Desktop can still use a short-lived cache if one already exists and
+      // is small enough to read without error.
       let cacheIsUsable = false;
 
-      try {
-        const cachedValue = await AsyncStorage.getItem(CAREER_CACHE_KEY);
+      if (CAREER_CACHE_ENABLED) {
+        try {
+          const cachedValue = await AsyncStorage.getItem(CAREER_CACHE_KEY);
 
-        if (cachedValue && active) {
-          const cached = JSON.parse(cachedValue) as CareerCachePayload;
-          cacheIsUsable =
-            Array.isArray(cached.fields) &&
-            cached.fields.length > 0 &&
-            Date.now() - cached.savedAt <= CAREER_CACHE_MAX_AGE_MS;
+          if (cachedValue && active) {
+            // Reject caches that are already huge — they caused the quota
+            // error and will only fail again on the next write.
+            if (cachedValue.length > 1_500_000) {
+              await AsyncStorage.removeItem(CAREER_CACHE_KEY);
+            } else {
+              const cached = JSON.parse(cachedValue) as CareerCachePayload;
+              cacheIsUsable =
+                Array.isArray(cached.fields) &&
+                cached.fields.length > 0 &&
+                Date.now() - cached.savedAt <= CAREER_CACHE_MAX_AGE_MS;
 
-          if (cacheIsUsable) {
-            setFields(cached.fields);
-            setLoading(false);
+              if (cacheIsUsable) {
+                setFields(cached.fields);
+                setLoading(false);
+              }
+            }
+          }
+        } catch (cacheError) {
+          console.warn('Career cache could not be read:', cacheError);
+          try {
+            await AsyncStorage.removeItem(CAREER_CACHE_KEY);
+          } catch {
+            // ignore
           }
         }
-      } catch (cacheError) {
-        console.warn('Career cache could not be read:', cacheError);
       }
 
       if (active) {
+        // Always progressive on web now (no full-collection warm path).
         void loadCareerData(!cacheIsUsable);
       }
     };
@@ -3279,8 +3311,8 @@ function CareerContent() {
   }, [loadCareerData]);
 
   const loadMoreMobileCareers = useCallback(async () => {
+    // Used by native AND mobile-web (narrow viewport) progressive path.
     if (
-      !IS_NATIVE_MOBILE ||
       loadingMoreMobile ||
       !mobileHasMore ||
       !mobileCursorRef.current
@@ -3564,11 +3596,10 @@ function CareerContent() {
         {!loading && (
           <Pressable
             onPress={() => {
-              if (IS_NATIVE_MOBILE) {
-                mobileCoursesRef.current = [];
-                mobileCursorRef.current = null;
-                setMobileHasMore(false);
-              }
+              // Reset progressive cursors for native + mobile-web paths.
+              mobileCoursesRef.current = [];
+              mobileCursorRef.current = null;
+              setMobileHasMore(false);
               void loadCareerData(true);
             }}
             accessibilityRole="button"
@@ -3603,7 +3634,7 @@ function CareerContent() {
       />
 
       {!loading &&
-        IS_NATIVE_MOBILE &&
+        (IS_NATIVE_MOBILE || isMobile) &&
         viewState === 'fields' &&
         mobileHasMore && (
           <Pressable
