@@ -43,11 +43,51 @@ export interface StudentProfile {
   subjects: string[];
 }
 
+/*
+ * Even with the Firestore transport fixed (forced long polling on native),
+ * a write/read can still legitimately stall on a bad connection. Without a
+ * timeout, that hangs the calling UI forever with no feedback — the same
+ * symptom as the original Android bug, just from a different cause. This
+ * wrapper guarantees every Firestore call in this file either resolves or
+ * rejects within a bounded time, so callers' try/catch blocks always fire.
+ */
+const DEFAULT_TIMEOUT_MS = 12000;
+
+class FirestoreTimeoutError extends Error {
+  constructor(operation: string, ms: number) {
+    super(`${operation} timed out after ${ms}ms`);
+    this.name = "FirestoreTimeoutError";
+  }
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  operation: string,
+  ms: number = DEFAULT_TIMEOUT_MS
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new FirestoreTimeoutError(operation, ms));
+    }, ms);
+
+    promise
+      .then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
 export async function getStudentProfile(
   userId: string
 ): Promise<StudentProfile | null> {
-  const snapshot = await getDoc(
-    doc(db, "students", userId, "profile", "main")
+  const snapshot = await withTimeout(
+    getDoc(doc(db, "students", userId, "profile", "main")),
+    "getStudentProfile"
   );
 
   if (!snapshot.exists()) {
@@ -61,17 +101,18 @@ export async function saveStudentProfile(
   userId: string,
   profile: StudentProfile
 ) {
-  await setDoc(
-    doc(db, "students", userId, "profile", "main"),
-    profile
+  await withTimeout(
+    setDoc(doc(db, "students", userId, "profile", "main"), profile),
+    "saveStudentProfile"
   );
 }
 
 export async function getStudentMarks(
   userId: string
 ): Promise<MarkRecord[]> {
-  const snapshot = await getDocs(
-    collection(db, "students", userId, "marks")
+  const snapshot = await withTimeout(
+    getDocs(collection(db, "students", userId, "marks")),
+    "getStudentMarks"
   );
 
   return snapshot.docs.map((docItem) => ({
@@ -86,9 +127,9 @@ export async function addStudentMark(
 ): Promise<MarkRecord> {
   const { id, ...data } = record;
 
-  const ref = await addDoc(
-    collection(db, "students", userId, "marks"),
-    data
+  const ref = await withTimeout(
+    addDoc(collection(db, "students", userId, "marks"), data),
+    "addStudentMark"
   );
 
   return {
@@ -98,15 +139,18 @@ export async function addStudentMark(
 }
 
 export async function resetStudentProgress(userId: string) {
-  await deleteDoc(
-    doc(db, "students", userId, "profile", "main")
+  await withTimeout(
+    deleteDoc(doc(db, "students", userId, "profile", "main")),
+    "resetStudentProgress:deleteProfile"
   );
 
-  const snapshot = await getDocs(
-    collection(db, "students", userId, "marks")
+  const snapshot = await withTimeout(
+    getDocs(collection(db, "students", userId, "marks")),
+    "resetStudentProgress:getMarks"
   );
 
-  await Promise.all(
-    snapshot.docs.map((docItem) => deleteDoc(docItem.ref))
+  await withTimeout(
+    Promise.all(snapshot.docs.map((docItem) => deleteDoc(docItem.ref))),
+    "resetStudentProgress:deleteMarks"
   );
 }

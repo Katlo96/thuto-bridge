@@ -36,8 +36,22 @@ import StudentFooter from '../../components/student/StudentFooter';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from "../../constants/firebase";
+/*
+ * IMPORTANT: We deliberately do NOT import `firebase/auth` / `constants/firebase`
+ * here. Doing so pinned this screen to the JS SDK's auth session, which is
+ * separate from the @react-native-firebase session that Android login
+ * actually creates (via authService.native.ts). That mismatch is why an
+ * existing profile never loaded on Android and Save silently did nothing.
+ *
+ * `subscribeToAuthState` is exported by BOTH authService.ts (JS SDK, used
+ * on web) and authService.native.ts (@react-native-firebase, used on
+ * Android/iOS). Metro resolves whichever one matches the current platform
+ * automatically — the same mechanism that already works correctly for
+ * login. Importing through authService instead of constants/firebase
+ * makes Progress follow login's session on every platform, with no
+ * platform-detection code needed in this file.
+ */
+import { subscribeToAuthState } from "../../services/authService";
 
 import {
   getStudentProfile,
@@ -322,6 +336,7 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
   const [track, setTrack] = useState<Track | null>(null);
   const [form, setForm] = useState<Form | null>(null);
   const [extraInputs, setExtraInputs] = useState<string[]>(Array(ADDITIONAL_SUBJECTS).fill(''));
+  const [isSaving, setIsSaving] = useState(false);
 
   const defaults = useMemo<string[]>(() => {
     if (!system || !track) return [];
@@ -329,7 +344,7 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
     return IGCSE_DEFAULTS[track as IGCSETrack] ?? [];
   }, [system, track]);
 
-  const goNext = useCallback(() => {
+  const goNext = useCallback(async () => {
     if (step === 'system' && system) setStep('track');
     else if (step === 'track' && track) setStep('form');
     else if (step === 'form' && form) setStep('subjects');
@@ -340,7 +355,12 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
         return;
       }
       const allSubjects = [...defaults, ...filled];
-      onComplete({ system: system!, track: track!, form: form!, subjects: allSubjects });
+      setIsSaving(true);
+      try {
+        await onComplete({ system: system!, track: track!, form: form!, subjects: allSubjects });
+      } finally {
+        setIsSaving(false);
+      }
     }
   }, [step, system, track, form, defaults, extraInputs, onComplete]);
 
@@ -501,6 +521,7 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
         {step !== 'system' && (
           <Pressable
             onPress={goBack}
+            disabled={isSaving}
             style={({ pressed }) => ({
               flex: 1,
               height: 52,
@@ -521,7 +542,7 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
         )}
 
         <Pressable
-          onPress={canNext ? goNext : undefined}
+          onPress={canNext && !isSaving ? goNext : undefined}
           style={({ pressed }) => ({
             flex: step === 'system' ? 1 : 2,
             height: 52,
@@ -531,15 +552,21 @@ function SetupWizard({ onComplete }: { onComplete: (profile: StudentProfile) => 
             justifyContent: 'center',
             flexDirection: 'row',
             gap: spacing(2),
-            opacity: canNext ? (pressed ? 0.88 : 1) : 0.45,
+            opacity: canNext ? (pressed || isSaving ? 0.88 : 1) : 0.45,
             ...(Platform.OS === 'web' && canNext && { boxShadow: `0 4px 18px ${colors.primary}55` } as any),
           })}
         >
-          <Text style={[typography.label, { color: canNext ? '#fff' : colors.textMuted, fontSize: 15, fontWeight: '700' }]}>
-            {step === 'subjects' ? t('Save Profile') : t('Continue')}
-          </Text>
-          {step !== 'subjects' && canNext && <Ionicons name="arrow-forward" size={16} color="#fff" />}
-          {step === 'subjects' && canNext && <Ionicons name="checkmark" size={16} color="#fff" />}
+          {isSaving ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Text style={[typography.label, { color: canNext ? '#fff' : colors.textMuted, fontSize: 15, fontWeight: '700' }]}>
+                {step === 'subjects' ? t('Save Profile') : t('Continue')}
+              </Text>
+              {step !== 'subjects' && canNext && <Ionicons name="arrow-forward" size={16} color="#fff" />}
+              {step === 'subjects' && canNext && <Ionicons name="checkmark" size={16} color="#fff" />}
+            </>
+          )}
         </Pressable>
       </View>
     </AnimatedCard>
@@ -645,7 +672,7 @@ function AddRecordModal({
 }: {
   visible: boolean;
   subjects: string[];
-  onSave: (record: MarkRecord) => void;
+  onSave: (record: MarkRecord) => void | Promise<void>;
   onClose: () => void;
 }) {
   const colors = useTheme();
@@ -657,19 +684,25 @@ function AddRecordModal({
   const [score, setScore] = useState(65);
   const [examType, setExamType] = useState<ExamType>('End of Term Exam');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [isSaving, setIsSaving] = useState(false);
 
-  const canSave = !!subject && !!examType && !!date;
+  const canSave = !!subject && !!examType && !!date && !isSaving;
   const grade = getGrade(score);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!canSave) return;
-    onSave({ id: Date.now().toString(), subject, score, examType, date });
-    // reset
-    setSubject('');
-    setScore(65);
-    setExamType('End of Term Exam');
-    setDate(new Date().toISOString().slice(0, 10));
-    onClose();
+    setIsSaving(true);
+    try {
+      await onSave({ id: Date.now().toString(), subject, score, examType, date });
+      // reset
+      setSubject('');
+      setScore(65);
+      setExamType('End of Term Exam');
+      setDate(new Date().toISOString().slice(0, 10));
+      onClose();
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -781,6 +814,7 @@ function AddRecordModal({
             {/* Save */}
             <Pressable
               onPress={handleSave}
+              disabled={!canSave}
               style={({ pressed }) => ({
                 height: 56,
                 backgroundColor: canSave ? colors.primary : colors.surfaceAlt,
@@ -793,8 +827,270 @@ function AddRecordModal({
                 ...(Platform.OS === 'web' && canSave && { boxShadow: `0 4px 18px ${colors.primary}55` } as any),
               })}
             >
-              <Ionicons name="checkmark-circle" size={20} color={canSave ? '#fff' : colors.textMuted} />
-              <Text style={[typography.label, { color: canSave ? '#fff' : colors.textMuted, fontSize: 15, fontWeight: '700' }]}>{t('SAVE RESULT')}</Text>
+              {isSaving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={20} color={canSave ? '#fff' : colors.textMuted} />
+                  <Text style={[typography.label, { color: canSave ? '#fff' : colors.textMuted, fontSize: 15, fontWeight: '700' }]}>{t('SAVE RESULT')}</Text>
+                </>
+              )}
+            </Pressable>
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EditSubjectsModal — lets the student edit every subject on their profile
+// (rename existing ones, remove ones no longer taken, add new ones) without
+// having to go through Setup again.
+// ─────────────────────────────────────────────────────────────────────────────
+function EditSubjectsModal({
+  visible,
+  subjects,
+  onSave,
+  onClose,
+}: {
+  visible: boolean;
+  subjects: string[];
+  onSave: (subjects: string[]) => Promise<boolean> | boolean;
+  onClose: () => void;
+}) {
+  const colors = useTheme();
+  const { t } = useLanguage();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const modalElevation = useElevation('lg');
+  const [localSubjects, setLocalSubjects] = useState<string[]>(subjects.length ? subjects : ['']);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Re-sync the editable list to whatever is currently saved every time the
+  // modal is (re)opened, so a previous unsaved edit never leaks into a new
+  // session, and newly-saved data from elsewhere is always reflected.
+  useEffect(() => {
+    if (visible) {
+      setLocalSubjects(subjects.length ? [...subjects] : ['']);
+    }
+  }, [visible, subjects]);
+
+  const updateSubjectAt = (index: number, value: string) => {
+    setLocalSubjects((prev) => prev.map((s, i) => (i === index ? value : s)));
+  };
+
+  const removeSubjectAt = (index: number) => {
+    setLocalSubjects((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const addBlankSubject = () => {
+    setLocalSubjects((prev) => [...prev, '']);
+  };
+
+  const trimmedSubjects = localSubjects.map((s) => s.trim());
+  const nonEmptySubjects = trimmedSubjects.filter(Boolean);
+  const hasEmptyRow = trimmedSubjects.length !== nonEmptySubjects.length;
+  const hasDuplicates = new Set(nonEmptySubjects.map((s) => s.toLowerCase())).size !== nonEmptySubjects.length;
+  const canSave = nonEmptySubjects.length > 0 && !hasEmptyRow && !hasDuplicates && !isSaving;
+
+  const closeIfIdle = () => {
+    if (isSaving) return;
+    onClose();
+  };
+
+  const handleSavePress = async () => {
+    if (!canSave) return;
+    setIsSaving(true);
+    try {
+      const succeeded = await onSave(nonEmptySubjects);
+      if (succeeded) {
+        onClose();
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={closeIfIdle}>
+      <Pressable
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: spacing(4) }}
+        onPress={closeIfIdle}
+      >
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          style={[{ width: '100%', maxWidth: 560, backgroundColor: colors.surface, borderRadius: radii.xxl, overflow: 'hidden' }, modalElevation]}
+        >
+          {/* Header */}
+          <View style={{ height: 5, backgroundColor: colors.primary }} />
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', padding: spacing(6), paddingBottom: spacing(4) }}>
+            <View style={{ flex: 1, paddingRight: spacing(3) }}>
+              <Text style={[typography.h2, { color: colors.textPrimary }]}>{t('Edit Subjects')}</Text>
+              <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(1) }]}>
+                {t('Rename, remove, or add subjects on your profile.')}
+              </Text>
+            </View>
+            <Pressable
+              onPress={closeIfIdle}
+              accessibilityRole="button"
+              accessibilityLabel={t('Close')}
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Ionicons name="close" size={18} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            style={{ maxHeight: isMobile ? 460 : 560 }}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ padding: spacing(6), paddingTop: 0, gap: spacing(5) }}
+          >
+            {/* Informational note about existing results */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                gap: spacing(2),
+                padding: spacing(3),
+                borderRadius: radii.md,
+                backgroundColor: `${colors.primary}0D`,
+                borderWidth: 1,
+                borderColor: `${colors.primary}26`,
+              }}
+            >
+              <Ionicons name="information-circle-outline" size={16} color={colors.primary} style={{ marginTop: 1 }} />
+              <Text style={[typography.caption, { color: colors.textSecondary, flex: 1, lineHeight: 17 }]}>
+                {t('Renaming a subject will not relabel results already saved under its old name.')}
+              </Text>
+            </View>
+
+            {/* Editable subject rows */}
+            <View style={{ gap: spacing(3) }}>
+              {localSubjects.map((val, i) => {
+                const trimmedVal = val.trim();
+                const isDuplicate =
+                  !!trimmedVal &&
+                  localSubjects.filter((s) => s.trim().toLowerCase() === trimmedVal.toLowerCase()).length > 1;
+                const isEmpty = !trimmedVal;
+
+                return (
+                  <View key={i} style={{ gap: spacing(1) }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
+                      <View
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 14,
+                          backgroundColor: trimmedVal ? colors.success : colors.surfaceAlt,
+                          borderWidth: 1,
+                          borderColor: trimmedVal ? colors.success : colors.border,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: trimmedVal ? '#fff' : colors.textMuted }}>{i + 1}</Text>
+                      </View>
+
+                      <TextInput
+                        value={val}
+                        onChangeText={(text) => updateSubjectAt(i, text)}
+                        placeholder={t('Subject name')}
+                        placeholderTextColor={colors.textMuted}
+                        style={{
+                          flex: 1,
+                          padding: spacing(4),
+                          backgroundColor: colors.surfaceAlt,
+                          borderRadius: radii.lg,
+                          borderWidth: 1.5,
+                          borderColor: isEmpty || isDuplicate ? `${colors.danger}88` : trimmedVal ? `${colors.success}66` : colors.border,
+                          color: colors.textPrimary,
+                          fontSize: 15,
+                        }}
+                      />
+
+                      <Pressable
+                        onPress={() => removeSubjectAt(i)}
+                        disabled={localSubjects.length <= 1}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${t('Remove')} ${trimmedVal || t('subject')}`}
+                        style={({ pressed }) => ({
+                          width: 40,
+                          height: 40,
+                          borderRadius: radii.md,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: colors.surfaceAlt,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          opacity: localSubjects.length <= 1 ? 0.35 : pressed ? 0.8 : 1,
+                        })}
+                      >
+                        <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                      </Pressable>
+                    </View>
+
+                    {isEmpty && (
+                      <Text style={[typography.caption, { color: colors.danger, marginLeft: spacing(9) }]}>
+                        {t('Subject name cannot be empty.')}
+                      </Text>
+                    )}
+                    {!isEmpty && isDuplicate && (
+                      <Text style={[typography.caption, { color: colors.danger, marginLeft: spacing(9) }]}>
+                        {t('This subject is listed more than once.')}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* Add subject */}
+            <Pressable
+              onPress={addBlankSubject}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: spacing(2),
+                paddingVertical: spacing(4),
+                borderRadius: radii.lg,
+                borderWidth: 1.5,
+                borderStyle: 'dashed',
+                borderColor: colors.border,
+                backgroundColor: pressed ? colors.surfaceAlt : 'transparent',
+              })}
+            >
+              <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+              <Text style={[typography.label, { color: colors.primary }]}>{t('Add Subject')}</Text>
+            </Pressable>
+
+            {/* Save */}
+            <Pressable
+              onPress={handleSavePress}
+              disabled={!canSave}
+              style={({ pressed }) => ({
+                height: 56,
+                backgroundColor: canSave ? colors.primary : colors.surfaceAlt,
+                borderRadius: radii.lg,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: spacing(2),
+                opacity: canSave ? (pressed ? 0.9 : 1) : 0.5,
+                ...(Platform.OS === 'web' && canSave && { boxShadow: `0 4px 18px ${colors.primary}55` } as any),
+              })}
+            >
+              {isSaving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={20} color={canSave ? '#fff' : colors.textMuted} />
+                  <Text style={[typography.label, { color: canSave ? '#fff' : colors.textMuted, fontSize: 15, fontWeight: '700' }]}>
+                    {t('SAVE CHANGES')}
+                  </Text>
+                </>
+              )}
             </Pressable>
           </ScrollView>
         </Pressable>
@@ -950,11 +1246,13 @@ function PerformanceTable({
   profile,
   marks,
   onAddRecord,
+  onEditSubjects,
   onReset,
 }: {
   profile: StudentProfile;
   marks: MarkRecord[];
   onAddRecord: () => void;
+  onEditSubjects: () => void;
   onReset: () => void;
 }) {
   const colors = useTheme();
@@ -1106,7 +1404,7 @@ function PerformanceTable({
             </ScrollView>
 
             {/* Action buttons */}
-            <View style={{ flexDirection: 'row', gap: spacing(2) }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing(2) }}>
               {/* Sort */}
               <Pressable
                 onPress={() => setSortBy(s => s === 'subject' ? 'avg' : s === 'avg' ? 'count' : 'subject')}
@@ -1121,6 +1419,22 @@ function PerformanceTable({
                 <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>
                   {sortBy === 'subject' ? t('A–Z') : sortBy === 'avg' ? t('By Avg') : t('By Count')}
                 </Text>
+              </Pressable>
+
+              {/* Edit Subjects */}
+              <Pressable
+                onPress={onEditSubjects}
+                accessibilityRole="button"
+                accessibilityLabel={t('Edit Subjects')}
+                style={({ pressed }) => ({
+                  flexDirection: 'row', alignItems: 'center', gap: spacing(2),
+                  paddingHorizontal: spacing(4), paddingVertical: spacing(2),
+                  backgroundColor: colors.surface, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border,
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <Ionicons name="create-outline" size={14} color={colors.textSecondary} />
+                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>{t('Edit Subjects')}</Text>
               </Pressable>
 
               <Pressable
@@ -1139,6 +1453,8 @@ function PerformanceTable({
 
               <Pressable
                 onPress={onReset}
+                accessibilityRole="button"
+                accessibilityLabel={t('Clear all progress data')}
                 style={({ pressed }) => ({
                   width: 40, height: 40, borderRadius: radii.lg,
                   backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
@@ -1146,7 +1462,7 @@ function PerformanceTable({
                   opacity: pressed ? 0.85 : 1,
                 })}
               >
-                <Ionicons name="refresh-outline" size={16} color={colors.danger} />
+                <Ionicons name="trash-outline" size={16} color={colors.danger} />
               </Pressable>
             </View>
           </View>
@@ -1195,86 +1511,165 @@ export default function Progress() {
   const [marks, setMarks] = useState<MarkRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editSubjectsModalOpen, setEditSubjectsModalOpen] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [authResolved, setAuthResolved] = useState(false);
 
   useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, async (user) => {
-    try {
-      if (user) {
-        setUserId(user.uid);
+    const unsubscribe = subscribeToAuthState(async (user) => {
+      /*
+       * DIAGNOSTIC LOGGING — leave this in for now. After the native
+       * progressService + authService routing fix, this should log the
+       * same uid on Android that login produced. Check via
+       * `npx react-native log-android` or adb logcat.
+       */
+      console.log('[Progress] auth state fired. user =', user ? user.uid : null);
 
-        const loadedProfile = await getStudentProfile(user.uid);
+      try {
+        if (user) {
+          setUserId(user.uid);
 
-        if (loadedProfile) {
-          setProfile(loadedProfile);
+          const loadedProfile = await getStudentProfile(user.uid);
+
+          if (loadedProfile) {
+            setProfile(loadedProfile);
+          }
+
+          const loadedMarks = await getStudentMarks(user.uid);
+          setMarks(loadedMarks);
+        } else {
+          setUserId(null);
         }
-
-        const loadedMarks = await getStudentMarks(user.uid);
-        setMarks(loadedMarks);
+      } catch (err) {
+        console.error('[Progress] failed to load profile/marks:', err);
+        Alert.alert(
+          t("Error"),
+          t("Failed to load your progress data.")
+        );
+      } finally {
+        setAuthResolved(true);
+        setLoading(false);
       }
-    } catch (err) {
-      console.error(err);
-      Alert.alert(
-        t("Error"),
-        t("Failed to load your progress data.")
-      );
-    } finally {
-      setLoading(false);
-    }
-  });
+    });
 
-  return unsubscribe;
-}, []);
+    return unsubscribe;
+  }, []);
 
   const handleProfileComplete = async (newProfile: StudentProfile) => {
-    if (!userId) return;
+    if (!userId) {
+      /*
+       * This used to be a silent `return;` — which is exactly why saving
+       * appeared to do nothing with no error on Android. Now it surfaces
+       * loudly so it's obvious when this is the actual problem, instead of
+       * looking identical to a network hang.
+       */
+      console.warn('[Progress] handleProfileComplete called with no userId — aborting save.');
+      Alert.alert(
+        t('Not Signed In'),
+        t('We could not find an active sign-in session, so nothing was saved. Please close the app and sign in again.'),
+      );
+      return;
+    }
     try {
       await saveStudentProfile(userId, newProfile);
+      setProfile(newProfile);
     } catch (err) {
-      console.error(err);
+      console.error('[Progress] saveStudentProfile failed:', err);
       Alert.alert(t('Error'), t('Failed to save profile. Check Firestore rules.'));
     }
   };
 
   const handleAddRecord = async (record: MarkRecord) => {
-  if (!userId) return;
+    if (!userId) {
+      console.warn('[Progress] handleAddRecord called with no userId — aborting save.');
+      Alert.alert(
+        t('Not Signed In'),
+        t('We could not find an active sign-in session, so nothing was saved. Please close the app and sign in again.'),
+      );
+      return;
+    }
 
-  try {
-    const savedRecord = await addStudentMark(userId, record);
+    try {
+      const savedRecord = await addStudentMark(userId, record);
 
-    setMarks((prev) => [
-      ...prev,
-      savedRecord,
-    ]);
-  } catch (err) {
-    console.error(err);
+      setMarks((prev) => [
+        ...prev,
+        savedRecord,
+      ]);
+    } catch (err) {
+      console.error('[Progress] addStudentMark failed:', err);
+      Alert.alert(
+        t("Error"),
+        t("Failed to save record. Check Firestore rules.")
+      );
+    }
+  };
+
+  /**
+   * Persists an edited subject list back to the student's profile document.
+   * Returns a boolean so EditSubjectsModal knows whether it's safe to close
+   * (it stays open on failure so the student doesn't lose their edits).
+   */
+  const handleUpdateSubjects = async (updatedSubjects: string[]): Promise<boolean> => {
+    if (!userId || !profile) {
+      console.warn('[Progress] handleUpdateSubjects called with no active session/profile.');
+      Alert.alert(
+        t('Not Signed In'),
+        t('We could not find an active sign-in session, so nothing was saved. Please close the app and sign in again.'),
+      );
+      return false;
+    }
+
+    try {
+      const updatedProfile: StudentProfile = { ...profile, subjects: updatedSubjects };
+      await saveStudentProfile(userId, updatedProfile);
+      setProfile(updatedProfile);
+      return true;
+    } catch (err) {
+      console.error('[Progress] handleUpdateSubjects failed:', err);
+      Alert.alert(t('Error'), t('Failed to save your subjects. Check Firestore rules.'));
+      return false;
+    }
+  };
+
+  const handleReset = () => {
+    if (!userId) {
+      Alert.alert(t('Not Signed In'), t('We could not find an active sign-in session.'));
+      return;
+    }
+
+    /*
+     * `confirm()` is a browser-only global — it doesn't exist in React
+     * Native, so calling it on Android/iOS throws a ReferenceError before
+     * the reset logic even runs. Alert.alert with a destructive action
+     * button is the cross-platform equivalent, and is required here so the
+     * Clear icon can never wipe data with a single accidental tap.
+     */
     Alert.alert(
-      t("Error"),
-      t("Failed to save record. Check Firestore rules.")
+      t('Clear all progress data?'),
+      t('This will permanently delete your profile, subjects, and every saved result. This cannot be undone.'),
+      [
+        { text: t('Cancel'), style: 'cancel' },
+        {
+          text: t('Clear Everything'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await resetStudentProgress(userId);
+              setProfile(null);
+              setMarks([]);
+            } catch (err) {
+              console.error('[Progress] resetStudentProgress failed:', err);
+              Alert.alert(
+                t("Error"),
+                t("Failed to reset data.")
+              );
+            }
+          },
+        },
+      ]
     );
-  }
-};
-
-  const handleReset = async () => {
-  if (!userId) return;
-
-  if (!confirm(t("Delete ALL progress data? This cannot be undone."))) {
-    return;
-  }
-
-  try {
-    await resetStudentProgress(userId);
-
-    setProfile(null);
-    setMarks([]);
-  } catch (err) {
-    console.error(err);
-    Alert.alert(
-      t("Error"),
-      t("Failed to reset data.")
-    );
-  }
-};
+  };
 
   if (loading) {
     return (
@@ -1282,6 +1677,30 @@ export default function Progress() {
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing(4), paddingTop: spacing(12) }}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[typography.body, { color: colors.textMuted }]}>{t('Fetching your results…')}</Text>
+        </View>
+      </DashboardLayout>
+    );
+  }
+
+  if (authResolved && !userId) {
+    // Signed-out state made explicit instead of silently showing the wizard
+    // as if it will save (it won't have anywhere to save to).
+    return (
+      <DashboardLayout title={t('Progress')} subtitle={t('Sign in required')} showPointsCard={false}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing(4), paddingTop: spacing(12), paddingHorizontal: spacing(6) }}>
+          <Ionicons name="lock-closed-outline" size={40} color={colors.textMuted} />
+          <Text style={[typography.bodyStrong, { color: colors.textPrimary, textAlign: 'center' }]}>
+            {t('No active sign-in session was found')}
+          </Text>
+          <Text style={[typography.body, { color: colors.textMuted, textAlign: 'center' }]}>
+            {t('Please sign out and sign back in, then return to this screen.')}
+          </Text>
+          <Pressable
+            onPress={() => router.replace('/login')}
+            style={{ paddingHorizontal: spacing(6), paddingVertical: spacing(4), backgroundColor: colors.primary, borderRadius: radii.lg }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700' }}>{t('Go to Sign In')}</Text>
+          </Pressable>
         </View>
       </DashboardLayout>
     );
@@ -1300,6 +1719,7 @@ export default function Progress() {
           profile={profile}
           marks={marks}
           onAddRecord={() => setAddModalOpen(true)}
+          onEditSubjects={() => setEditSubjectsModalOpen(true)}
           onReset={handleReset}
         />
       )}
@@ -1314,6 +1734,13 @@ export default function Progress() {
         subjects={profile?.subjects || []}
         onSave={handleAddRecord}
         onClose={() => setAddModalOpen(false)}
+      />
+
+      <EditSubjectsModal
+        visible={editSubjectsModalOpen}
+        subjects={profile?.subjects || []}
+        onSave={handleUpdateSubjects}
+        onClose={() => setEditSubjectsModalOpen(false)}
       />
     </DashboardLayout>
   );

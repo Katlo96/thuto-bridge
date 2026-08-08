@@ -1,3 +1,4 @@
+
 import React, {
   useMemo, useState, useCallback, useEffect, useRef, memo,
 } from 'react';
@@ -661,6 +662,117 @@ function FacultyChip({ name, isActive, onPress }: { name: string; isActive: bool
     >
       <Text style={[typography.label, { color: isActive ? '#fff' : colors.textPrimary }]}>{name}</Text>
     </Pressable>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ScrollCarouselRow — wraps a horizontal ScrollView with always-visible
+// previous/next arrow buttons, so navigating a long chip list (institutions,
+// faculties, etc.) never depends on the user discovering they can swipe.
+//
+// Design notes:
+//  - Arrows only render once we've measured real overflow (contentWidth >
+//    containerWidth). Short lists that already fit on screen show no arrows
+//    at all — nothing to navigate to, so nothing is drawn.
+//  - Each press scrolls by "one viewport minus a small overlap" rather than
+//    a guessed chip width. This adapts correctly to any container size
+//    (phone, tablet, desktop sidebar) and leaves a sliver of the previous
+//    chip visible as a continuity cue, a standard carousel convention.
+//  - Buttons disable (rather than disappear) at each end, so the layout
+//    never shifts mid-interaction and the boundary is always obvious.
+//  - 32×32 touch targets with extra hitSlop keep this comfortable on touch
+//    screens, not just for mouse users.
+// ─────────────────────────────────────────────────────────────────────────────
+function ScrollCarouselRow({
+  children,
+  accessibilityLabel,
+}: {
+  children: React.ReactNode;
+  accessibilityLabel: string;
+}) {
+  const colors = useTheme();
+  const { t } = useLanguage();
+  const scrollRef = useRef<ScrollView>(null);
+
+  const [scrollX, setScrollX] = useState(0);
+  const [contentWidth, setContentWidth] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  const maxScrollX = Math.max(contentWidth - containerWidth, 0);
+  const isScrollable = maxScrollX > 2;
+  const canScrollLeft = isScrollable && scrollX > 2;
+  const canScrollRight = isScrollable && scrollX < maxScrollX - 2;
+
+  const scrollBy = useCallback((direction: 1 | -1) => {
+    // Scroll almost a full viewport at a time, leaving ~40px of overlap so
+    // the user can see they've moved rather than landing on a jarring cut.
+    const step = Math.max(containerWidth - 40, 160);
+    const next = Math.min(Math.max(scrollX + direction * step, 0), maxScrollX);
+    scrollRef.current?.scrollTo({ x: next, animated: true });
+  }, [containerWidth, scrollX, maxScrollX]);
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
+      {isScrollable && (
+        <Pressable
+          onPress={() => scrollBy(-1)}
+          disabled={!canScrollLeft}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`${accessibilityLabel} — ${t('previous')}`}
+          style={({ pressed }) => ({
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            opacity: canScrollLeft ? (pressed ? 0.8 : 1) : 0.35,
+          })}
+        >
+          <Ionicons name="chevron-back" size={16} color={colors.textSecondary} />
+        </Pressable>
+      )}
+
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        onScroll={(e) => setScrollX(e.nativeEvent.contentOffset.x)}
+        scrollEventThrottle={16}
+        onContentSizeChange={(w) => setContentWidth(w)}
+        onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+        style={{ flex: 1 }}
+      >
+        {children}
+      </ScrollView>
+
+      {isScrollable && (
+        <Pressable
+          onPress={() => scrollBy(1)}
+          disabled={!canScrollRight}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`${accessibilityLabel} — ${t('next')}`}
+          style={({ pressed }) => ({
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: canScrollRight ? colors.primary : colors.surface,
+            borderWidth: 1,
+            borderColor: canScrollRight ? colors.primary : colors.border,
+            opacity: canScrollRight ? (pressed ? 0.88 : 1) : 0.35,
+            ...(Platform.OS === 'web' && canScrollRight ? { boxShadow: `0 2px 8px ${colors.primary}55` } as any : {}),
+          })}
+        >
+          <Ionicons name="chevron-forward" size={16} color={canScrollRight ? '#fff' : colors.textSecondary} />
+        </Pressable>
+      )}
+    </View>
   );
 }
 
@@ -1635,7 +1747,7 @@ function DesktopCoursesView() {
             {typeFilter !== 'All' && filteredInstitutions.length > 0 && (
               <View style={{ marginBottom: spacing(6) }}>
                 <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>{t('SELECT INSTITUTION')}</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <ScrollCarouselRow accessibilityLabel={t('Institutions')}>
                   <View style={{ flexDirection: 'row', gap: spacing(2) }}>
                     {filteredInstitutions.map((inst) => (
                       <Pressable
@@ -1649,19 +1761,19 @@ function DesktopCoursesView() {
                       </Pressable>
                     ))}
                   </View>
-                </ScrollView>
+                </ScrollCarouselRow>
               </View>
             )}
 
             {selectedInstId && faculties.length > 0 && (
               <View style={{ marginBottom: spacing(6) }}>
                 <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.5, marginBottom: spacing(3) }]}>{t('BROWSE BY FACULTY')}</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <ScrollCarouselRow accessibilityLabel={t('Faculties')}>
                   <View style={{ flexDirection: 'row', gap: spacing(2) }}>
                     <FacultyChip name={t('All Faculties')} isActive={selectedFacultyId === null} onPress={() => setSelectedFacultyId(null)} />
                     {faculties.map((fac) => <FacultyChip key={fac.id} name={fac.name} isActive={selectedFacultyId === fac.id} onPress={() => setSelectedFacultyId(fac.id)} />)}
                   </View>
-                </ScrollView>
+                </ScrollCarouselRow>
               </View>
             )}
 

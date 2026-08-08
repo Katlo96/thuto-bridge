@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,6 @@ import {
   Platform,
   ScrollView,
   Alert,
-  Modal,
-  TextInput,
-  KeyboardAvoidingView,
   type ViewStyle,
   ActivityIndicator,
 } from 'react-native';
@@ -210,58 +207,89 @@ function FacultyChip({ name, isActive, onPress }: { name: string; isActive: bool
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Note Modal
+// Faculty carousel — horizontal scroll with prev/next arrow controls so users
+// aren't limited to swipe gestures to reach faculties further along the row.
 // ─────────────────────────────────────────────────────────────────────────────
-function NoteModal({
-  visible,
-  noteText,
-  onChangeText,
-  onClose,
-  onSave,
+function FacultyCarousel({
+  faculties,
+  selectedFacultyId,
+  onSelect,
 }: {
-  visible: boolean;
-  noteText: string;
-  onChangeText: (t: string) => void;
-  onClose: () => void;
-  onSave: () => void;
+  faculties: Faculty[];
+  selectedFacultyId: string | null;
+  onSelect: (id: string | null) => void;
 }) {
-  const colors = useTheme();
-  const elevation = useElevation('lg');
   const { t } = useLanguage();
+  const colors = useTheme();
+  const scrollRef = useRef<ScrollView>(null);
+  const [scrollX, setScrollX] = useState(0);
+  const [contentWidth, setContentWidth] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  const SCROLL_STEP = 220;
+  const maxScrollX = Math.max(0, contentWidth - containerWidth);
+  const canScrollLeft = scrollX > 4;
+  const canScrollRight = scrollX < maxScrollX - 4;
+
+  const scrollByStep = useCallback((direction: 'left' | 'right') => {
+    const target = direction === 'left'
+      ? Math.max(0, scrollX - SCROLL_STEP)
+      : Math.min(maxScrollX, scrollX + SCROLL_STEP);
+    scrollRef.current?.scrollTo({ x: target, animated: true });
+    setScrollX(target);
+  }, [scrollX, maxScrollX]);
+
+  const ArrowButton = ({ direction, disabled }: { direction: 'left' | 'right'; disabled: boolean }) => (
+    <Pressable
+      onPress={() => scrollByStep(direction)}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={direction === 'left' ? t('Previous Faculties') : t('Next Faculties')}
+      style={({ pressed }) => ({
+        width: 34,
+        height: 34,
+        borderRadius: radii.pill,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.surfaceAlt,
+        borderWidth: 1,
+        borderColor: colors.border,
+        opacity: disabled ? 0.35 : pressed ? 0.8 : 1,
+      })}
+    >
+      <Ionicons name={direction === 'left' ? 'chevron-back' : 'chevron-forward'} size={16} color={colors.primary} />
+    </Pressable>
+  );
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: spacing(5) }} onPress={onClose}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%', maxWidth: 500 }}>
-          <Pressable style={[{ backgroundColor: colors.surface, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }, elevation]} onPress={(e) => e.stopPropagation()}>
-            <View style={{ height: 3, backgroundColor: colors.primary }} />
-            <View style={{ padding: spacing(6), gap: spacing(5) }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={[typography.h2, { color: colors.textPrimary }]}>{t('Add Quick Note')}</Text>
-                <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={t('Close')} style={({ pressed }) => ({ width: 40, height: 40, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
-                  <Ionicons name="close" size={20} color={colors.textSecondary} />
-                </Pressable>
-              </View>
-              <TextInput
-                value={noteText}
-                onChangeText={onChangeText}
-                placeholder={t('e.g. Strong focus on practical skills. Good government sponsorship chances...')}
-                placeholderTextColor={colors.textMuted}
-                style={{ minHeight: 120, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, padding: spacing(4), backgroundColor: colors.surfaceAlt, color: colors.textPrimary, textAlignVertical: 'top', fontSize: 15 }}
-                multiline
-              />
-              <View style={{ flexDirection: 'row', gap: spacing(3) }}>
-                <Pressable onPress={onClose} style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.85 : 1 })}>
-                  <Text style={[typography.label, { color: colors.textPrimary }]}>{t('Cancel')}</Text>
-                </Pressable>
-                <Pressable onPress={onSave} style={({ pressed }) => ({ flex: 1, height: 52, borderRadius: radii.lg, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.9 : 1 })}>
-                  <Text style={[typography.label, { color: '#fff' }]}>{t('Save Note')}</Text>
-                </Pressable>
-              </View>
-            </View>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Pressable>
-    </Modal>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
+      <ArrowButton direction="left" disabled={!canScrollLeft} />
+      <View
+        style={{ flex: 1 }}
+        onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+      >
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: spacing(2) }}
+          onScroll={(e) => setScrollX(e.nativeEvent.contentOffset.x)}
+          onContentSizeChange={(w) => setContentWidth(w)}
+          scrollEventThrottle={16}
+        >
+          <FacultyChip name={t('All Faculties')} isActive={selectedFacultyId === null} onPress={() => onSelect(null)} />
+          {faculties.map((faculty) => (
+            <FacultyChip
+              key={faculty.id}
+              name={faculty.name}
+              isActive={selectedFacultyId === faculty.id}
+              onPress={() => onSelect(faculty.id)}
+            />
+          ))}
+        </ScrollView>
+      </View>
+      <ArrowButton direction="right" disabled={!canScrollRight} />
+    </View>
   );
 }
 
@@ -281,8 +309,6 @@ function BrigadeDetailsContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedFacultyId, setSelectedFacultyId] = useState<string | null>(null);
-  const [noteModalVisible, setNoteModalVisible] = useState(false);
-  const [noteText, setNoteText] = useState('');
 
   const INITIAL_VISIBLE_COUNT = 6;
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
@@ -398,12 +424,6 @@ function BrigadeDetailsContent() {
     router.push({ pathname: '/student/course-details', params: { id: courseId } });
   };
 
-  const handleSaveNote = () => {
-    Alert.alert(t('Note Saved'), t('Your note has been saved successfully.'));
-    setNoteModalVisible(false);
-    setNoteText('');
-  };
-
   if (loading) {
     return (
       <DashboardLayout title={t('Brigade Details')} subtitle={t('Loading...')} showPointsCard={false}>
@@ -430,176 +450,150 @@ function BrigadeDetailsContent() {
   }
 
   return (
-    <>
-      <DashboardLayout title={t('Brigade Details')} subtitle={brigade.name} showPointsCard={false}>
-        {/* Back + Breadcrumb */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
-          <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('Go Back')} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(4), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}>
-            <Ionicons name="arrow-back" size={17} color={colors.primary} />
-            <Text style={[typography.label, { color: colors.primary }]}>{t('Go Back')}</Text>
-          </Pressable>
-          <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]} numberOfLines={1}>
-            {t('Institutions › Brigades › ')}{brigade.badge}
-          </Text>
-        </View>
+    <DashboardLayout title={t('Brigade Details')} subtitle={brigade.name} showPointsCard={false}>
+      {/* Back + Breadcrumb */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginBottom: spacing(6) }}>
+        <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('Go Back')} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(4), paddingVertical: spacing(2), borderRadius: radii.lg, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.8 : 1 })}>
+          <Ionicons name="arrow-back" size={17} color={colors.primary} />
+          <Text style={[typography.label, { color: colors.primary }]}>{t('Go Back')}</Text>
+        </Pressable>
+        <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]} numberOfLines={1}>
+          {t('Institutions › Brigades › ')}{brigade.badge}
+        </Text>
+      </View>
 
-        <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: spacing(8) }}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            {/* Hero Card */}
-            <Card intensity="lg" accentColor={brigade.accentColor} style={{ marginBottom: spacing(7) }}>
-              <View style={{ padding: isMobile ? spacing(5) : spacing(7), gap: spacing(5) }}>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) }}>
-                  <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: `${brigade.accentColor}1A`, borderWidth: 1, borderColor: `${brigade.accentColor}44` }}>
-                    <Text style={[typography.label, { color: brigade.accentColor }]}>{brigade.badge}</Text>
-                  </View>
-                  <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border }}>
-                    <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>
-                      {brigade.ownership} • Est. {brigade.established}
-                    </Text>
-                  </View>
+      <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: spacing(8) }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          {/* Hero Card */}
+          <Card intensity="lg" accentColor={brigade.accentColor} style={{ marginBottom: spacing(7) }}>
+            <View style={{ padding: isMobile ? spacing(5) : spacing(7), gap: spacing(5) }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) }}>
+                <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: `${brigade.accentColor}1A`, borderWidth: 1, borderColor: `${brigade.accentColor}44` }}>
+                  <Text style={[typography.label, { color: brigade.accentColor }]}>{brigade.badge}</Text>
                 </View>
-
-                <Text style={[typography.hero, { color: colors.textPrimary, fontSize: isMobile ? 24 : 32, lineHeight: isMobile ? 30 : 38 }]}>
-                  {brigade.name}
-                </Text>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
-                  <Ionicons name="location-outline" size={14} color={brigade.accentColor} />
-                  <Text style={[typography.subtitle, { color: colors.textSecondary }]}>{brigade.location}</Text>
-                </View>
-
-                <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 24 }]}>{brigade.about}</Text>
-
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(4), paddingTop: spacing(4), borderTopWidth: 1, borderTopColor: colors.divider }}>
-                  <MetaItem icon="location-outline" label={t('Location')} value={brigade.location} />
-                  <MetaItem icon="globe-outline" label={t('Website')} value={brigade.website || t('N/A')} />
-                </View>
-              </View>
-            </Card>
-
-            {/* Faculties Filter */}
-            <Card style={{ marginBottom: spacing(6) }}>
-              <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
-                <SectionLabel title={t('Training Areas')} />
-                <SectionTitle title={t('Browse by Faculty')} icon="layers-outline" />
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing(2) }}>
-                  <FacultyChip name={t('All Faculties')} isActive={selectedFacultyId === null} onPress={() => handleFacultySelect(null)} />
-                  {faculties.map((faculty) => (
-                    <FacultyChip
-                      key={faculty.id}
-                      name={faculty.name}
-                      isActive={selectedFacultyId === faculty.id}
-                      onPress={() => handleFacultySelect(faculty.id)}
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-            </Card>
-
-            {/* Courses Section */}
-            <Card style={{ marginBottom: spacing(6) }}>
-              <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing(1) }}>
-                  <SectionLabel title={t('Programmes')} />
-                  <Text style={[typography.caption, { color: colors.textMuted }]}>
-                    {displayedCourses.length}{t(' of ')}{filteredCourses.length}
+                <View style={{ paddingHorizontal: spacing(3), paddingVertical: spacing(2), borderRadius: radii.pill, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border }}>
+                  <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>
+                    {brigade.ownership} • Est. {brigade.established}
                   </Text>
                 </View>
-                <SectionTitle title={t('Courses Offered')} icon="school-outline" />
+              </View>
 
-                {filteredCourses.length === 0 ? (
-                  <View style={{ padding: spacing(8), alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radii.xl }}>
-                    <Ionicons name="book-outline" size={48} color={colors.textMuted} />
-                    <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(3), textAlign: 'center' }]}>
-                      {t('No courses found.')}
-                    </Text>
+              <Text style={[typography.hero, { color: colors.textPrimary, fontSize: isMobile ? 24 : 32, lineHeight: isMobile ? 30 : 38 }]}>
+                {brigade.name}
+              </Text>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
+                <Ionicons name="location-outline" size={14} color={brigade.accentColor} />
+                <Text style={[typography.subtitle, { color: colors.textSecondary }]}>{brigade.location}</Text>
+              </View>
+
+              <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 24 }]}>{brigade.about}</Text>
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing(4), paddingTop: spacing(4), borderTopWidth: 1, borderTopColor: colors.divider }}>
+                <MetaItem icon="location-outline" label={t('Location')} value={brigade.location} />
+                <MetaItem icon="globe-outline" label={t('Website')} value={brigade.website || t('N/A')} />
+              </View>
+            </View>
+          </Card>
+
+          {/* Faculties Filter */}
+          <Card style={{ marginBottom: spacing(6) }}>
+            <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
+              <SectionLabel title={t('Training Areas')} />
+              <SectionTitle title={t('Browse by Faculty')} icon="layers-outline" />
+              <FacultyCarousel
+                faculties={faculties}
+                selectedFacultyId={selectedFacultyId}
+                onSelect={handleFacultySelect}
+              />
+            </View>
+          </Card>
+
+          {/* Courses Section */}
+          <Card style={{ marginBottom: spacing(6) }}>
+            <View style={{ padding: isMobile ? spacing(5) : spacing(6) }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing(1) }}>
+                <SectionLabel title={t('Programmes')} />
+                <Text style={[typography.caption, { color: colors.textMuted }]}>
+                  {displayedCourses.length}{t(' of ')}{filteredCourses.length}
+                </Text>
+              </View>
+              <SectionTitle title={t('Courses Offered')} icon="school-outline" />
+
+              {filteredCourses.length === 0 ? (
+                <View style={{ padding: spacing(8), alignItems: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radii.xl }}>
+                  <Ionicons name="book-outline" size={48} color={colors.textMuted} />
+                  <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing(3), textAlign: 'center' }]}>
+                    {t('No courses found.')}
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <View style={{ gap: spacing(2) }}>
+                    {displayedCourses.map((course) => (
+                      <CourseRow key={course.id} course={course} onPress={() => handleOpenCourse(course.id)} />
+                    ))}
                   </View>
-                ) : (
-                  <>
-                    <View style={{ gap: spacing(2) }}>
-                      {displayedCourses.map((course) => (
-                        <CourseRow key={course.id} course={course} onPress={() => handleOpenCourse(course.id)} />
-                      ))}
-                    </View>
 
-                    {hasMore && (
-                      <Pressable
-                        onPress={handleLoadMore}
-                        style={({ pressed }) => ({
-                          marginTop: spacing(6),
-                          paddingVertical: spacing(4),
-                          backgroundColor: colors.surfaceAlt,
-                          borderRadius: radii.lg,
-                          borderWidth: 1,
-                          borderColor: colors.border,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexDirection: 'row',
-                          gap: spacing(2),
-                          opacity: pressed ? 0.8 : 1,
-                        })}
-                      >
-                        <Text style={[typography.label, { color: colors.primary }]}>{t('Load More Courses')}</Text>
-                        <Ionicons name="chevron-down" size={16} color={colors.primary} />
-                      </Pressable>
-                    )}
-                  </>
-                )}
+                  {hasMore && (
+                    <Pressable
+                      onPress={handleLoadMore}
+                      style={({ pressed }) => ({
+                        marginTop: spacing(6),
+                        paddingVertical: spacing(4),
+                        backgroundColor: colors.surfaceAlt,
+                        borderRadius: radii.lg,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        gap: spacing(2),
+                        opacity: pressed ? 0.8 : 1,
+                      })}
+                    >
+                      <Text style={[typography.label, { color: colors.primary }]}>{t('Load More Courses')}</Text>
+                      <Ionicons name="chevron-down" size={16} color={colors.primary} />
+                    </Pressable>
+                  )}
+                </>
+              )}
+            </View>
+          </Card>
+        </View>
+
+        {/* Desktop Sidebar */}
+        {isDesktop && (
+          <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
+            <Card intensity="md">
+              <View style={{ padding: spacing(6), gap: spacing(3) }}>
+                <SectionLabel title={t('Actions')} />
+                <SectionTitle title={t('Quick Actions')} />
+                <Pressable onPress={handleVisitWebsite} accessibilityRole="button" accessibilityLabel={t('Visit Website')} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(4), backgroundColor: colors.primary, borderRadius: radii.lg, opacity: pressed ? 0.9 : 1 })}>
+                  <Ionicons name="open-outline" size={18} color="#fff" />
+                  <Text style={[typography.label, { color: '#fff' }]}>{t('Visit Website')}</Text>
+                </Pressable>
               </View>
             </Card>
           </View>
+        )}
 
-          {/* Desktop Sidebar */}
-          {isDesktop && (
-            <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
-              <Card intensity="md">
-                <View style={{ padding: spacing(6), gap: spacing(3) }}>
-                  <SectionLabel title={t('Actions')} />
-                  <SectionTitle title={t('Quick Actions')} />
-                  <Pressable onPress={handleVisitWebsite} accessibilityRole="button" accessibilityLabel={t('Visit Website')} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(4), backgroundColor: colors.primary, borderRadius: radii.lg, opacity: pressed ? 0.9 : 1 })}>
-                    <Ionicons name="open-outline" size={18} color="#fff" />
-                    <Text style={[typography.label, { color: '#fff' }]}>{t('Visit Website')}</Text>
-                  </Pressable>
-                  <Pressable onPress={() => setNoteModalVisible(true)} accessibilityRole="button" accessibilityLabel={t('Add Note')} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(4), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.9 : 1 })}>
-                    <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
-                    <Text style={[typography.label, { color: colors.textSecondary }]}>{t('Add Note')}</Text>
-                  </Pressable>
-                </View>
-              </Card>
-            </View>
-          )}
+        {/* Mobile Actions */}
+        {isMobile && (
+          <View style={{ gap: spacing(3), marginBottom: spacing(4) }}>
+            <Pressable onPress={handleVisitWebsite} accessibilityRole="button" accessibilityLabel={t('Official Website')} style={({ pressed }) => ({ height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing(3), backgroundColor: colors.primary, borderRadius: radii.xl, opacity: pressed ? 0.9 : 1 })}>
+              <Ionicons name="open-outline" size={20} color="#fff" />
+              <Text style={[typography.bodyStrong, { color: '#fff' }]}>{t('Official Website')}</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
 
-          {/* Mobile Actions */}
-          {isMobile && (
-            <View style={{ gap: spacing(3), marginBottom: spacing(4) }}>
-              <Pressable onPress={handleVisitWebsite} accessibilityRole="button" accessibilityLabel={t('Official Website')} style={({ pressed }) => ({ height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing(3), backgroundColor: colors.primary, borderRadius: radii.xl, opacity: pressed ? 0.9 : 1 })}>
-                <Ionicons name="open-outline" size={20} color="#fff" />
-                <Text style={[typography.bodyStrong, { color: '#fff' }]}>{t('Official Website')}</Text>
-              </Pressable>
-
-              <Pressable onPress={() => setNoteModalVisible(true)} accessibilityRole="button" accessibilityLabel={t('Add Note')} style={({ pressed }) => ({ height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing(3), backgroundColor: colors.surfaceAlt, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.9 : 1 })}>
-                <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
-                <Text style={[typography.bodyStrong, { color: colors.textSecondary }]}>{t('Add Note')}</Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
-
-        <StudentFooter
-          topSpacing={isMobile ? spacing(8) : spacing(10)}
-          maxWidth={1280}
-        />
-      </DashboardLayout>
-
-      {/* Note Modal */}
-      <NoteModal
-        visible={noteModalVisible}
-        noteText={noteText}
-        onChangeText={setNoteText}
-        onClose={() => setNoteModalVisible(false)}
-        onSave={handleSaveNote}
+      <StudentFooter
+        topSpacing={isMobile ? spacing(8) : spacing(10)}
+        maxWidth={1280}
       />
-    </>
+    </DashboardLayout>
   );
 }
 

@@ -257,7 +257,7 @@ function ResultsCard({ record, compact }: { record: AcademicYear; compact?: bool
   );
 }
 
-// SidebarPanel - FIXED with proper children
+// SidebarPanel — Sponsorship Check section removed
 function SidebarPanel({ academicData }: { academicData: AcademicYear[] }) {
   const colors = useTheme();
   const { t } = useLanguage();
@@ -266,7 +266,6 @@ function SidebarPanel({ academicData }: { academicData: AcademicYear[] }) {
   const totalPoints = bgcse?.totalPoints ?? 0;
   const subjectCount = allSubjects.length;
   const avgPoints = subjectCount > 0 ? (allSubjects.reduce((a, s) => a + s.points, 0) / subjectCount).toFixed(1) : '0';
-  const eligible = totalPoints >= 36;
 
   return (
     <View style={{ width: 300, flexShrink: 0, gap: spacing(5) }}>
@@ -289,38 +288,10 @@ function SidebarPanel({ academicData }: { academicData: AcademicYear[] }) {
         </View>
       </SectionCard>
 
-      <SectionCard title={t('Sponsorship Check')} icon="cash-outline" accentColor={eligible ? '#34D399' : '#FBBF24'}>
-        <View style={{ gap: spacing(4) }}>
-          <View style={{ padding: spacing(4), backgroundColor: eligible ? 'rgba(52,211,153,0.1)' : 'rgba(251,191,36,0.1)', borderRadius: radii.lg, borderWidth: 1, borderColor: eligible ? 'rgba(52,211,153,0.3)' : 'rgba(251,191,36,0.3)', flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
-            <Ionicons name={eligible ? 'checkmark-circle' : 'alert-circle'} size={22} color={eligible ? '#34D399' : '#FBBF24'} />
-            <View style={{ flex: 1 }}>
-              <Text style={[typography.bodyStrong, { color: eligible ? '#34D399' : '#FBBF24', fontSize: 13 }]}>{eligible ? t('Likely Eligible') : t('May Not Qualify')}</Text>
-              <Text style={[typography.caption, { color: '#94A3B8', fontSize: 10, marginTop: 2 }]}>{t('Gov. bursary requires 36+ pts')}</Text>
-            </View>
-          </View>
-          {[
-            { label: t('BURS Bursary'), req: '36 pts', met: totalPoints >= 36, color: '#60A5FA' },
-            { label: t('Debswana Scholarship'), req: '40 pts', met: totalPoints >= 40, color: '#34D399' },
-            { label: t('Standard Bank Bursary'), req: '34 pts', met: totalPoints >= 34, color: '#FBBF24' },
-            { label: t('BIUST Merit Award'), req: '42 pts', met: totalPoints >= 42, color: '#F472B6' },
-          ].map(({ label, req, met, color }) => (
-            <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3) }}>
-              <Ionicons name={met ? 'checkmark-circle-outline' : 'close-circle-outline'} size={16} color={met ? '#34D399' : '#94A3B8'} />
-              <View style={{ flex: 1 }}>
-                <Text style={[typography.body, { color: colors.textPrimary, fontSize: 12 }]}>{label}</Text>
-                <Text style={[typography.caption, { color: colors.textMuted, fontSize: 10 }]}>{t('Required ')}{req}</Text>
-              </View>
-              <Text style={[typography.caption, { color: met ? '#34D399' : '#94A3B8', fontWeight: '700', fontSize: 10 }]}>{met ? t('ELIGIBLE') : t('N/A')}</Text>
-            </View>
-          ))}
-        </View>
-      </SectionCard>
-
       <SectionCard title={t('Quick Actions')} icon="flash-outline" accentColor="#FBBF24">
         <View style={{ gap: spacing(3) }}>
           {[
-            { icon: 'cloud-upload-outline' as const, label: t('Upload Results PDF'), color: colors.primary },
-            { icon: 'calculator-outline' as const, label: t('Calculate Points'), color: '#34D399' },
+            { icon: 'calculator-outline' as const, label: t('Calculate Points'), color: '#34D399', route: '/student/enter-results' },
             { icon: 'ribbon-outline' as const, label: t('Check Scholarships'), color: '#FBBF24', route: '/student/scholarships' },
             { icon: 'school-outline' as const, label: t('Explore Universities'), color: '#60A5FA', route: '/student/universities' },
           ].map(({ icon, label, color, route }) => (
@@ -421,10 +392,6 @@ function AcademicRecordsContent() {
   }, [profile, marks]);
 
   const finalAcademicData = derivedAcademicData;
-  const bgcse = finalAcademicData[0];
-  const totalPoints = bgcse?.totalPoints ?? 0;
-  const subjectCount = bgcse?.subjects.length ?? 0;
-  const eligible = totalPoints >= 36;
 
   function getGradeFromScore(score: number): SubjectGrade {
     if (score >= 80) return 'A';

@@ -74,6 +74,25 @@ const SLOW_LOAD_BANNER_DELAY_MS = 4_000;
 // results in and yielding to the UI thread between pages.
 // ─────────────────────────────────────────────────────────────────────────────
 const IS_NATIVE_MOBILE = Platform.OS !== 'web';
+
+// Width-based mobile detection (`width < 768` from useWindowDimensions())
+// depends on the browser reporting a correct viewport width. If the web
+// build's <meta name="viewport" content="width=device-width"> tag is
+// missing or lost, phones render the page at a desktop-scale layout width
+// (~980px) — so a width check alone reports "desktop" even on an actual
+// phone, silently routing it into the heavy full-catalogue background
+// hydration path below. That path is exactly what "loads forever" on
+// mobile hardware/network. This user-agent check is a fallback that can't
+// be fooled by a broken viewport tag: if the UA looks like a phone, treat
+// it as mobile regardless of what CSS width says.
+function isMobileUserAgent(): boolean {
+  if (typeof navigator === 'undefined' || typeof navigator.userAgent !== 'string') {
+    return false;
+  }
+  return /Android|iPhone|iPod|Mobile|Windows Phone/i.test(navigator.userAgent)
+    && !/iPad/i.test(navigator.userAgent); // iPad gets tablet treatment, not the phone flow
+}
+
 // Web on phones is still Platform.OS === 'web', but it has the same slow
  // network + small localStorage profile as native. Treat narrow viewports
  // the same way as native so careers actually appear on mobile browsers.
@@ -126,6 +145,38 @@ async function safeDocs(
     await new Promise((res) => setTimeout(res, CAREER_FIRESTORE_RETRY_DELAY_MS));
     return await withTimeout(getDocs(ref), CAREER_FIRESTORE_TIMEOUT_MS);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// yieldToUI — replaces InteractionManager.runAfterInteractions.
+//
+// On-device debug logging confirmed InteractionManager.runAfterInteractions()
+// hangs indefinitely on mobile web (react-native-web on Android Chrome) —
+// every trace showed a 14-15s stall exactly at that call, resolving only
+// once some unrelated state update happened to occur. InteractionManager is
+// a React Native API for deferring work until native touch/animation
+// "interaction handles" clear; there's no equivalent native concept on web,
+// so react-native-web's polyfill has nothing reliable to resolve against in
+// this environment.
+//
+// On native, InteractionManager is used as designed. On web, this yields to
+// the browser with a double requestAnimationFrame instead — enough to let
+// the browser paint between batches without depending on RN's interaction
+// tracking at all.
+// ─────────────────────────────────────────────────────────────────────────────
+function yieldToUI(): Promise<void> {
+  if (Platform.OS === 'web') {
+    return new Promise<void>((resolve) => {
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      } else {
+        setTimeout(resolve, 0);
+      }
+    });
+  }
+  return new Promise<void>((resolve) => {
+    InteractionManager.runAfterInteractions(() => resolve());
+  });
 }
 
 function getFriendlyErrorMessage(err: unknown): string {
@@ -2961,8 +3012,8 @@ function CareerContent() {
   const shouldOpenSavedCareer =
     params.view === 'detail' || Boolean(routeCareerId || routeCareerTitle);
 
-  const isMobile = width < 768;
-  const isTablet = width >= 768 && width < 1024;
+  const isMobile = width < 768 || (!IS_NATIVE_MOBILE && isMobileUserAgent());
+  const isTablet = !isMobile && width >= 768 && width < 1024;
 
   const [viewState, setViewState] = useState<View3>('fields');
   const [activeField, setActiveField] = useState<Field | null>(null);
@@ -2993,6 +3044,18 @@ function CareerContent() {
   const mobileCursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
   const mobileInstitutionLookupRef = useRef<Map<string, InstitutionLookup>>(new Map());
   const mobileFacultyLookupRef = useRef<Map<string, FacultyLookup>>(new Map());
+
+  // loadCareerData is a stable useCallback ([] deps), so it can't read the
+  // component's `isMobile` directly without going stale. Mirroring it into
+  // a ref keeps the data-loading branch reading the exact same
+  // useWindowDimensions()-derived value the rest of the screen renders
+  // with, instead of a separate raw `window.innerWidth` check that could
+  // disagree with it (e.g. before RN Web's layout has settled on first
+  // paint, or inside an embedded/resized webview).
+  const isMobileViewportRef = useRef(isMobile);
+  useEffect(() => {
+    isMobileViewportRef.current = isMobile;
+  }, [isMobile]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -3057,7 +3120,9 @@ function CareerContent() {
         safeDocs(collection(db, 'institutions')),
         safeDocs(collection(db, 'faculties')),
       ]);
-      if (!mountedRef.current || bgTokenRef.current !== myToken) return;
+      if (!mountedRef.current || bgTokenRef.current !== myToken) {
+        return;
+      }
 
       const institutionLookup = new Map<string, InstitutionLookup>();
       institutionSnapshot.docs.forEach((document) => {
@@ -3074,14 +3139,13 @@ function CareerContent() {
       mobileInstitutionLookupRef.current = institutionLookup;
       mobileFacultyLookupRef.current = facultyLookup;
 
-      // Mobile browser (web + narrow viewport) has the same constraints as
-      // native: slow network and tiny localStorage. Use first-page + explicit
-      // "Load More" instead of downloading the whole courses collection.
-      // Desktop web still auto-hydrates in the background.
+      // Mobile browser (web + narrow viewport, OR a phone user-agent even
+      // if the viewport is misreporting) has the same constraints as
+      // native: slow network and tiny localStorage. Use first-page +
+      // explicit "Load More" instead of downloading the whole courses
+      // collection. Desktop web still auto-hydrates in the background.
       const isMobileWebViewport =
-        !IS_NATIVE_MOBILE &&
-        typeof window !== 'undefined' &&
-        window.innerWidth < 768;
+        !IS_NATIVE_MOBILE && (isMobileViewportRef.current || isMobileUserAgent());
 
       if (IS_NATIVE_MOBILE || isMobileWebViewport) {
         const firstSnap = await safeDocs(
@@ -3090,7 +3154,9 @@ function CareerContent() {
             firestoreLimit(CAREER_INITIAL_COURSE_BATCH),
           ),
         );
-        if (!mountedRef.current || bgTokenRef.current !== myToken) return;
+        if (!mountedRef.current || bgTokenRef.current !== myToken) {
+          return;
+        }
 
         const firstCourses = firstSnap.docs
           .map((document) =>
@@ -3098,9 +3164,7 @@ function CareerContent() {
           )
           .filter((course): course is CourseRecord => course !== null);
 
-        await new Promise<void>((resolve) => {
-          InteractionManager.runAfterInteractions(() => resolve());
-        });
+        await yieldToUI();
 
         mobileCoursesRef.current = firstCourses;
         mobileCursorRef.current =
@@ -3110,7 +3174,9 @@ function CareerContent() {
         );
 
         const generatedFields = buildCareerFields(firstCourses);
-        if (!mountedRef.current || bgTokenRef.current !== myToken) return;
+        if (!mountedRef.current || bgTokenRef.current !== myToken) {
+          return;
+        }
 
         setFields(generatedFields);
         setLoading(false);
@@ -3139,13 +3205,10 @@ function CareerContent() {
         )
         .filter((course): course is CourseRecord => course !== null);
 
-      await new Promise<void>((resolve) => {
-        InteractionManager.runAfterInteractions(() => resolve());
-      });
-
-      let generatedFields = buildCareerFields(collected);
+      await yieldToUI();
       if (!mountedRef.current || bgTokenRef.current !== myToken) return;
 
+      let generatedFields = buildCareerFields(collected);
       setFields(generatedFields);
       setLoading(false);
       setViewState('fields');
@@ -3185,12 +3248,9 @@ function CareerContent() {
             cursor = nextSnap.docs[nextSnap.docs.length - 1];
             hasMore = nextSnap.docs.length === CAREER_BACKGROUND_COURSE_BATCH;
 
-            await new Promise<void>((resolve) => {
-              InteractionManager.runAfterInteractions(() => resolve());
-            });
-
-            generatedFields = buildCareerFields(collected);
+            await yieldToUI();
             if (!mountedRef.current || bgTokenRef.current !== myToken) return;
+            generatedFields = buildCareerFields(collected);
             setFields(generatedFields);
           }
         } catch (hydrationError) {
@@ -3303,7 +3363,15 @@ function CareerContent() {
       }
     };
 
-    void initialiseCareerExplorer();
+    initialiseCareerExplorer().catch((error) => {
+      // Fired with `void` above, so any error thrown before it reaches
+      // loadCareerData's own try/catch would otherwise become a silent
+      // unhandled rejection — `loading` would stay stuck at its initial
+      // `true` value with no visible error at all. This keeps that case
+      // from hanging forever, even though it should never happen in
+      // practice.
+      console.error('initialiseCareerExplorer failed:', error);
+    });
 
     return () => {
       active = false;
@@ -3362,10 +3430,7 @@ function CareerContent() {
         nextSnap.docs.length === CAREER_BACKGROUND_COURSE_BATCH,
       );
 
-      await new Promise<void>((resolve) => {
-        InteractionManager.runAfterInteractions(() => resolve());
-      });
-
+      await yieldToUI();
       setFields(buildCareerFields(mobileCoursesRef.current));
     } catch (error) {
       console.warn('Could not load more careers:', error);
