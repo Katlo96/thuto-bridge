@@ -579,6 +579,17 @@ export default function Login() {
 
   const bioLabel = getBiometricLabel(biometricTypes);
 
+  const handleForgotPassword = useCallback(() => {
+    if (inputMode === "phone") {
+      router.push({
+        pathname: "/forgot-password",
+        params: { mode: "phone" },
+      });
+    } else {
+      router.push("/forgot-password");
+    }
+  }, [inputMode]);
+
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
       {Platform.OS === "web" ? (
@@ -969,35 +980,33 @@ export default function Login() {
                   </View>
                 )}
 
-                {inputMode === "email" && (
-                  <View
-                    style={{
-                      alignItems: "flex-end",
-                      marginTop: 8,
-                      marginBottom: 4,
-                    }}
+                <View
+                  style={{
+                    alignItems: "flex-end",
+                    marginTop: 8,
+                    marginBottom: 4,
+                  }}
+                >
+                  <Pressable
+                    onPress={handleForgotPassword}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("Forgot password?")}
+                    hitSlop={12}
                   >
-                    <Pressable
-                      onPress={() => router.push("/forgot-password")}
-                      accessibilityRole="button"
-                      accessibilityLabel={t("Forgot password?")}
-                      hitSlop={12}
+                    <Text
+                      style={[
+                        typo.caption,
+                        {
+                          color: colors.primary,
+                          fontWeight: "700",
+                          textDecorationLine: "underline",
+                        },
+                      ]}
                     >
-                      <Text
-                        style={[
-                          typo.caption,
-                          {
-                            color: colors.primary,
-                            fontWeight: "700",
-                            textDecorationLine: "underline",
-                          },
-                        ]}
-                      >
-                        {t("Forgot password?")}
-                      </Text>
-                    </Pressable>
-                  </View>
-                )}
+                      {t("Forgot password?")}
+                    </Text>
+                  </Pressable>
+                </View>
 
                 {errorMessage && (
                   <View

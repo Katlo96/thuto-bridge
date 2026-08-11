@@ -127,6 +127,48 @@ const WIZARD_STEPS: { key: WizardStep; label: string; icon: keyof typeof Ionicon
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
+// confirmDestructiveAction — cross-platform blocking confirm dialog
+//
+// `Alert.alert` is a native-only API under the hood: on Android/iOS it
+// shows a proper native dialog with multiple buttons, but `react-native-web`
+// does not implement it for a multi-button call — the call just silently
+// no-ops (no console warning, no thrown error, nothing rendered). That is
+// exactly why the "Remove Subject" confirmation and the "Clear Everything"
+// reset confirmation both appeared to do nothing at all on web while
+// working fine on Android/iOS: `Alert.alert` was being called, it just has
+// no web implementation.
+//
+// `window.confirm` is the correct web-native equivalent of a blocking
+// yes/no prompt, so we branch on platform here instead of relying on
+// `Alert.alert` alone. This mirrors the existing pattern in this codebase
+// of resolving platform differences explicitly rather than assuming a
+// cross-platform API "just works" everywhere.
+// ─────────────────────────────────────────────────────────────────────────────
+function confirmDestructiveAction(
+  title: string,
+  message: string,
+  confirmLabel: string,
+  cancelLabel: string,
+  onConfirm: () => void
+) {
+  if (Platform.OS === 'web') {
+    const confirmed =
+      typeof window !== 'undefined' && typeof window.confirm === 'function'
+        ? window.confirm(`${title}\n\n${message}`)
+        : false;
+    if (confirmed) {
+      onConfirm();
+    }
+    return;
+  }
+
+  Alert.alert(title, message, [
+    { text: cancelLabel, style: 'cancel' },
+    { text: confirmLabel, style: 'destructive', onPress: onConfirm },
+  ]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Elevation helper
 // ─────────────────────────────────────────────────────────────────────────────
 function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md'): ViewStyle {
@@ -846,7 +888,10 @@ function AddRecordModal({
 // ─────────────────────────────────────────────────────────────────────────────
 // EditSubjectsModal — lets the student edit every subject on their profile
 // (rename existing ones, remove ones no longer taken, add new ones) without
-// having to go through Setup again.
+// having to go through Setup again. Removing a subject now asks for
+// confirmation first, matching the same safety pattern as the full data
+// reset, since removing a subject here also detaches it from the profile
+// permanently once "SAVE CHANGES" is pressed.
 // ─────────────────────────────────────────────────────────────────────────────
 function EditSubjectsModal({
   visible,
@@ -882,6 +927,22 @@ function EditSubjectsModal({
 
   const removeSubjectAt = (index: number) => {
     setLocalSubjects((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Confirmation gate in front of removeSubjectAt — a subject can represent
+  // months of saved results, so a single accidental tap should never be
+  // enough to drop it from the list. Uses confirmDestructiveAction so this
+  // actually shows a dialog on web too, not just Android/iOS.
+  const confirmRemoveSubject = (index: number) => {
+    if (localSubjects.length <= 1) return;
+    const label = localSubjects[index]?.trim() || t('this subject');
+    confirmDestructiveAction(
+      t('Remove Subject?'),
+      `${t('Are you sure you want to remove')} "${label}" ${t('from your profile? This will not delete results already saved under it, but it will no longer appear in Progress.')}`,
+      t('Remove'),
+      t('Cancel'),
+      () => removeSubjectAt(index)
+    );
   };
 
   const addBlankSubject = () => {
@@ -1010,7 +1071,7 @@ function EditSubjectsModal({
                       />
 
                       <Pressable
-                        onPress={() => removeSubjectAt(i)}
+                        onPress={() => confirmRemoveSubject(i)}
                         disabled={localSubjects.length <= 1}
                         accessibilityRole="button"
                         accessibilityLabel={`${t('Remove')} ${trimmedVal || t('subject')}`}
@@ -1024,6 +1085,7 @@ function EditSubjectsModal({
                           borderWidth: 1,
                           borderColor: colors.border,
                           opacity: localSubjects.length <= 1 ? 0.35 : pressed ? 0.8 : 1,
+                          ...(Platform.OS === 'web' && localSubjects.length > 1 && { cursor: 'pointer' } as any),
                         })}
                       >
                         <Ionicons name="trash-outline" size={16} color={colors.danger} />
@@ -1639,35 +1701,30 @@ export default function Progress() {
     }
 
     /*
-     * `confirm()` is a browser-only global — it doesn't exist in React
-     * Native, so calling it on Android/iOS throws a ReferenceError before
-     * the reset logic even runs. Alert.alert with a destructive action
-     * button is the cross-platform equivalent, and is required here so the
-     * Clear icon can never wipe data with a single accidental tap.
+     * `confirmDestructiveAction` branches to `window.confirm` on web and
+     * `Alert.alert` on Android/iOS — plain `Alert.alert` with multiple
+     * buttons silently does nothing on web (no dialog, no error), which
+     * would have made this reset button exhibit the exact same "nothing
+     * happens" bug that the subject-removal trash icon had.
      */
-    Alert.alert(
+    confirmDestructiveAction(
       t('Clear all progress data?'),
-      t('This will permanently delete your profile, subjects, and every saved result. This cannot be undone.'),
-      [
-        { text: t('Cancel'), style: 'cancel' },
-        {
-          text: t('Clear Everything'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await resetStudentProgress(userId);
-              setProfile(null);
-              setMarks([]);
-            } catch (err) {
-              console.error('[Progress] resetStudentProgress failed:', err);
-              Alert.alert(
-                t("Error"),
-                t("Failed to reset data.")
-              );
-            }
-          },
-        },
-      ]
+      t('This will permanently erase your account\'s saved profile, subjects, and every recorded result, and restart this screen from scratch at the setup wizard. This cannot be undone.'),
+      t('Clear Everything'),
+      t('Cancel'),
+      async () => {
+        try {
+          await resetStudentProgress(userId);
+          setProfile(null);
+          setMarks([]);
+        } catch (err) {
+          console.error('[Progress] resetStudentProgress failed:', err);
+          Alert.alert(
+            t("Error"),
+            t("Failed to reset data.")
+          );
+        }
+      }
     );
   };
 

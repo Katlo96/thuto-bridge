@@ -1,17 +1,17 @@
 // screens/student/StudentNotificationsScreen.tsx
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
   Pressable,
   ScrollView,
   useWindowDimensions,
-  Alert,
   Platform,
+  Animated,
+  type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import {
   StudentMenuProvider,
   useStudentMenu,
@@ -32,13 +32,13 @@ import StudentFooter from '../../components/student/StudentFooter';
 // ─────────────────────────────────────────────────────────────────────────────
 // Local Elevation Helper
 // ─────────────────────────────────────────────────────────────────────────────
-function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md') {
-  return useMemo(() => {
+function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md'): ViewStyle {
+  return useMemo<ViewStyle>(() => {
     const opacity = 0.28;
     const radius = intensity === 'sm' ? 6 : intensity === 'md' ? 14 : 22;
     const offsetY = intensity === 'sm' ? 2 : intensity === 'md' ? 5 : 10;
 
-    return Platform.select({
+    return (Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: offsetY },
@@ -50,58 +50,139 @@ function useElevation(intensity: 'sm' | 'md' | 'lg' = 'md') {
       },
       web: {
         boxShadow: `0 ${offsetY}px ${radius * 1.5}px rgba(0,0,0,${opacity})`,
-      },
+      } as any,
       default: {},
-    });
+    }) ?? {}) as ViewStyle;
   }, [intensity]);
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Types
-───────────────────────────────────────────────────────────────────────────── */
-type NotifType = 'info' | 'warning' | 'success';
-type NotifFilter = 'all' | 'important' | 'deadlines';
+// ─────────────────────────────────────────────────────────────────────────────
+// AnimatedCard — fade+slide in on mount, staggered by `delay`
+// ─────────────────────────────────────────────────────────────────────────────
+function AnimatedCard({
+  children,
+  delay = 0,
+  style,
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  style?: any;
+}) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(16)).current;
 
-type Notif = {
-  id: string;
-  type: NotifType;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 420, delay, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, delay, useNativeDriver: true, damping: 18, stiffness: 120 }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View style={[style, { opacity, transform: [{ translateY }] }]}>
+      {children}
+    </Animated.View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PulsingBadge — a slow, subtle breathing ring behind the hero icon.
+// Purely decorative, native-driver only, so it costs nothing on JS thread.
+// ─────────────────────────────────────────────────────────────────────────────
+function PulsingRing({ color, size }: { color: string; size: number }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0.35)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 1.35, duration: 1800, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0, duration: 1800, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.35, duration: 0, useNativeDriver: true }),
+        ]),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        borderWidth: 2,
+        borderColor: color,
+        opacity,
+        transform: [{ scale }],
+      }}
+    />
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Feature preview data — what students will see once this ships.
+   Purely informational; nothing here is interactive since the feature
+   itself doesn't exist yet. Icons chosen to be immediately legible at a
+   glance rather than merely decorative.
+───────────────────────────────────────────────────────────────────────────── */
+type PreviewFeature = {
+  key: string;
+  icon: keyof typeof Ionicons.glyphMap;
   title: string;
-  body: string;
-  time: string;
-  read: boolean;
-  tag?: NotifFilter;
+  description: string;
+  color: 'primary' | 'success' | 'warning';
 };
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Data
-───────────────────────────────────────────────────────────────────────────── */
-const INITIAL_DATA: Notif[] = [
+const PREVIEW_FEATURES: PreviewFeature[] = [
   {
-    id: '1',
-    type: 'success',
-    title: 'New course match available',
-    body: 'Biology at University of Botswana aligns with your profile.',
-    time: '2h ago',
-    read: false,
-    tag: 'important',
+    key: 'scholarships-new',
+    icon: 'ribbon-outline',
+    title: 'New scholarships uploaded',
+    description: 'Be first to know the moment a new scholarship matching your profile is added.',
+    color: 'success',
   },
   {
-    id: '2',
-    type: 'warning',
-    title: 'Application deadline approaching',
-    body: 'B.A Psychology closes in 3 days. Prepare your documents.',
-    time: 'Yesterday',
-    read: false,
-    tag: 'deadlines',
+    key: 'scholarships-expiring',
+    icon: 'hourglass-outline',
+    title: 'Scholarships closing soon',
+    description: 'Timely reminders before application windows close, so nothing is missed.',
+    color: 'warning',
   },
   {
-    id: '3',
-    type: 'info',
-    title: 'Scholarship update',
-    body: 'New international scholarship opportunities added.',
-    time: '2 days ago',
-    read: true,
-    tag: 'important',
+    key: 'courses-new',
+    icon: 'book-outline',
+    title: 'New courses added',
+    description: 'Alerts when new courses are published across our partner institutions.',
+    color: 'primary',
+  },
+  {
+    key: 'institutions-new',
+    icon: 'business-outline',
+    title: 'New universities & colleges',
+    description: 'Updates whenever a new university or college joins the platform.',
+    color: 'primary',
+  },
+  {
+    key: 'brigades-new',
+    icon: 'construct-outline',
+    title: 'New brigades & their courses',
+    description: 'Notifications covering brigades and the vocational courses they offer.',
+    color: 'success',
+  },
+  {
+    key: 'general-updates',
+    icon: 'megaphone-outline',
+    title: 'Project announcements',
+    description: 'General updates and important announcements about Thuto Bridge.',
+    color: 'warning',
   },
 ];
 
@@ -121,7 +202,8 @@ function StudentNotificationsContent() {
   const colors = useTheme();
   const { t } = useLanguage();
   const { openMenu } = useStudentMenu();
-  const elevationMd = useElevation('md');
+  const heroElevation = useElevation('lg');
+  const cardElevation = useElevation('sm');
 
   const breakpoint = useMemo<'mobile' | 'tablet' | 'desktop'>(() => {
     if (width < 768) return 'mobile';
@@ -130,30 +212,15 @@ function StudentNotificationsContent() {
   }, [width]);
 
   const isDesktop = breakpoint === 'desktop';
+  const isTablet = breakpoint === 'tablet';
   const isMobile = breakpoint === 'mobile';
 
-  const [filter, setFilter] = useState<NotifFilter>('all');
-  const [items, setItems] = useState<Notif[]>(INITIAL_DATA);
+  // Feature-card width: 1 column on mobile, 2 on tablet, 3 on desktop.
+  // Percentages (rather than fixed pixels) so every card keeps scaling
+  // cleanly across phones, tablets, foldables, and desktop breakpoints.
+  const cardWidth = isDesktop ? '31.5%' : isTablet ? '48%' : '100%';
 
-  const filtered = useMemo(() => {
-    if (filter === 'all') return items;
-    if (filter === 'important') return items.filter((n) => n.tag === 'important');
-    return items.filter((n) => n.tag === 'deadlines');
-  }, [items, filter]);
-
-  const markAllRead = useCallback(() => {
-    setItems((prev) => prev.map((n) => ({ ...n, read: true })));
-  }, []);
-
-  const clearRead = useCallback(() => {
-    setItems((prev) => prev.filter((n) => !n.read));
-  }, []);
-
-  const toggleRead = useCallback((id: string) => {
-    setItems((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: !n.read } : n))
-    );
-  }, []);
+  const heroIconColor = colors.primary;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -179,7 +246,7 @@ function StudentNotificationsContent() {
           >
             <View>
               <Text style={[typography.h1, { color: colors.textPrimary }]}>
-                Notifications
+                {t('Notifications')}
               </Text>
               <Text
                 style={[
@@ -187,7 +254,7 @@ function StudentNotificationsContent() {
                   { color: colors.textSecondary, marginTop: spacing(1) },
                 ]}
               >
-                Updates, deadlines & important alerts
+                {t('Updates, deadlines & important alerts')}
               </Text>
             </View>
 
@@ -210,71 +277,235 @@ function StudentNotificationsContent() {
             </Pressable>
           </View>
 
-          {/* Filters & Actions */}
-          <View
-            style={{
-              flexDirection: isDesktop ? 'row' : 'column',
-              gap: spacing(4),
-              marginBottom: spacing(6),
-              alignItems: 'flex-start',
-            }}
-          >
-            <View style={{ flexDirection: 'row', gap: spacing(2), flexWrap: 'wrap' }}>
-              {(['all', 'important', 'deadlines'] as NotifFilter[]).map((f) => (
-                <FilterChip
-                  key={f}
-                  label={f}
-                  active={filter === f}
-                  onPress={() => setFilter(f)}
-                />
-              ))}
-            </View>
+          {/* Hero: in-development status */}
+          <AnimatedCard delay={0}>
+            <View
+              style={[
+                {
+                  backgroundColor: colors.surface,
+                  borderRadius: radii.xxl,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  overflow: 'hidden',
+                },
+                heroElevation,
+              ]}
+            >
+              <View style={{ height: 4, backgroundColor: heroIconColor }} />
 
-            <View style={{ flexDirection: 'row', gap: spacing(3), flexWrap: 'wrap' }}>
-              <ActionBtn
-                label={t('Mark all read')}
-                icon="checkmark-done-outline"
-                onPress={markAllRead}
-              />
-              <ActionBtn
-                label={t('Clear read')}
-                icon="trash-outline"
-                onPress={clearRead}
-              />
-            </View>
-          </View>
-
-          {/* Notifications List */}
-          <View style={{ gap: spacing(4) }}>
-            {filtered.length === 0 ? (
               <View
-                style={[
-                  {
-                    padding: spacing(10),
-                    backgroundColor: colors.surface,
-                    borderRadius: radii.xxl,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    alignItems: 'center',
-                  },
-                  elevationMd,
-                ]}
+                style={{
+                  padding: isMobile ? spacing(7) : spacing(10),
+                  alignItems: 'center',
+                  gap: spacing(5),
+                }}
               >
-                <Ionicons name="notifications-off-outline" size={48} color={colors.textMuted} />
-                <Text style={[typography.h2, { color: colors.textPrimary, marginTop: spacing(4) }]}>
-                  No notifications
+                {/* Icon with pulsing ring */}
+                <View
+                  style={{
+                    width: 88,
+                    height: 88,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <PulsingRing color={heroIconColor} size={88} />
+                  <View
+                    style={{
+                      width: 72,
+                      height: 72,
+                      borderRadius: 36,
+                      backgroundColor: `${heroIconColor}18`,
+                      borderWidth: 1.5,
+                      borderColor: `${heroIconColor}44`,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="notifications-outline" size={32} color={heroIconColor} />
+                  </View>
+                </View>
+
+                {/* Status pill */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing(2),
+                    paddingHorizontal: spacing(4),
+                    paddingVertical: spacing(2),
+                    borderRadius: radii.pill,
+                    backgroundColor: `${colors.warning}18`,
+                    borderWidth: 1,
+                    borderColor: `${colors.warning}44`,
+                  }}
+                >
+                  <Ionicons name="construct-outline" size={13} color={colors.warning} />
+                  <Text
+                    style={[
+                      typography.caption,
+                      { color: colors.warning, fontWeight: '700', letterSpacing: 0.5, fontSize: 11 },
+                    ]}
+                  >
+                    {t('CURRENTLY IN TESTING')}
+                  </Text>
+                </View>
+
+                {/* Headline */}
+                <Text
+                  style={[
+                    typography.h2,
+                    { color: colors.textPrimary, textAlign: 'center', maxWidth: 480 },
+                  ]}
+                >
+                  {t('Notifications are still being built')}
+                </Text>
+
+                {/* Body copy */}
+                <Text
+                  style={[
+                    typography.body,
+                    {
+                      color: colors.textSecondary,
+                      textAlign: 'center',
+                      lineHeight: 24,
+                      maxWidth: 520,
+                    },
+                  ]}
+                >
+                  {t(
+                    'This part of Thuto Bridge is undergoing testing ahead of full release. Once the platform is complete, this is where you\u2019ll receive timely updates tailored to your studies.'
+                  )}
                 </Text>
               </View>
-            ) : (
-              filtered.map((n) => (
-                <NotificationCard
-                  key={n.id}
-                  item={n}
-                  onPress={() => toggleRead(n.id)}
-                />
-              ))
-            )}
+            </View>
+          </AnimatedCard>
+
+          {/* What's coming */}
+          <View style={{ marginTop: spacing(9) }}>
+            <AnimatedCard delay={60}>
+              <View style={{ marginBottom: spacing(5) }}>
+                <Text style={[typography.h2, { color: colors.textPrimary }]}>
+                  {t('What you\u2019ll be notified about')}
+                </Text>
+                <Text
+                  style={[
+                    typography.body,
+                    { color: colors.textMuted, marginTop: spacing(1), lineHeight: 22 },
+                  ]}
+                >
+                  {t('A preview of what goes live here once the full platform launches.')}
+                </Text>
+              </View>
+            </AnimatedCard>
+
+            <View
+              style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: spacing(4),
+              }}
+            >
+              {PREVIEW_FEATURES.map((feature, i) => {
+                const accent =
+                  feature.color === 'success'
+                    ? colors.success
+                    : feature.color === 'warning'
+                    ? colors.warning
+                    : colors.primary;
+
+                return (
+                  <AnimatedCard
+                    key={feature.key}
+                    delay={100 + i * 50}
+                    style={{ width: cardWidth as any }}
+                  >
+                    <View
+                      style={[
+                        {
+                          backgroundColor: colors.surface,
+                          borderRadius: radii.xl,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          padding: spacing(5),
+                          gap: spacing(3),
+                          height: '100%',
+                        },
+                        cardElevation,
+                      ]}
+                    >
+                      <View
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: radii.lg,
+                          backgroundColor: `${accent}18`,
+                          borderWidth: 1,
+                          borderColor: `${accent}3A`,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Ionicons name={feature.icon} size={20} color={accent} />
+                      </View>
+
+                      <Text
+                        style={[
+                          typography.bodyStrong,
+                          { color: colors.textPrimary, fontSize: 15 },
+                        ]}
+                      >
+                        {t(feature.title)}
+                      </Text>
+
+                      <Text
+                        style={[
+                          typography.caption,
+                          { color: colors.textMuted, lineHeight: 18 },
+                        ]}
+                      >
+                        {t(feature.description)}
+                      </Text>
+                    </View>
+                  </AnimatedCard>
+                );
+              })}
+            </View>
           </View>
+
+          {/* Closing reassurance */}
+          <AnimatedCard delay={100 + PREVIEW_FEATURES.length * 50 + 60}>
+            <View
+              style={{
+                marginTop: spacing(8),
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                gap: spacing(3),
+                padding: spacing(4),
+                borderRadius: radii.lg,
+                backgroundColor: `${colors.primary}0D`,
+                borderWidth: 1,
+                borderColor: `${colors.primary}26`,
+              }}
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={16}
+                color={colors.primary}
+                style={{ marginTop: 1 }}
+              />
+              <Text
+                style={[
+                  typography.caption,
+                  { color: colors.textSecondary, flex: 1, lineHeight: 18 },
+                ]}
+              >
+                {t(
+                  'No action is needed from you right now \u2014 this screen will update automatically once notifications are live.'
+                )}
+              </Text>
+            </View>
+          </AnimatedCard>
 
           <StudentFooter
             topSpacing={isMobile ? spacing(8) : spacing(10)}
@@ -283,186 +514,5 @@ function StudentNotificationsContent() {
         </ScrollView>
       </SafeAreaView>
     </View>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   Reusable Components
-───────────────────────────────────────────────────────────────────────────── */
-function FilterChip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  const colors = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ selected: active }}
-      style={({ pressed }) => ({
-        paddingHorizontal: spacing(5),
-        paddingVertical: spacing(2.5),
-        borderRadius: radii.pill,
-        borderWidth: 1,
-        borderColor: active ? colors.primary : colors.border,
-        backgroundColor: active ? `${colors.primary}22` : colors.surfaceAlt, // primarySoft equivalent
-        opacity: pressed ? 0.85 : 1,
-      })}
-    >
-      <Text
-        style={[
-          typography.label,
-          { color: active ? colors.primary : colors.textSecondary },
-        ]}
-      >
-        {label.toUpperCase()}
-      </Text>
-    </Pressable>
-  );
-}
-
-function ActionBtn({
-  label,
-  icon,
-  onPress,
-}: {
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
-}) {
-  const colors = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing(2),
-        paddingHorizontal: spacing(5),
-        paddingVertical: spacing(3),
-        borderRadius: radii.lg,
-        backgroundColor: colors.surfaceAlt,
-        borderWidth: 1,
-        borderColor: colors.border,
-        opacity: pressed ? 0.85 : 1,
-        transform: pressed ? [{ scale: 0.98 }] : [],
-      })}
-    >
-      <Ionicons name={icon} size={18} color={colors.textPrimary} />
-      <Text style={[typography.label, { color: colors.textPrimary }]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function NotificationCard({
-  item,
-  onPress,
-}: {
-  item: Notif;
-  onPress: () => void;
-}) {
-  const colors = useTheme();
-  const { t } = useLanguage();
-  const elevation = useElevation('md');
-
-  const icon =
-    item.type === 'success'
-      ? 'checkmark-circle-outline'
-      : item.type === 'warning'
-      ? 'warning-outline'
-      : 'information-circle-outline';
-
-  const accentColor =
-    item.type === 'success'
-      ? colors.success
-      : item.type === 'warning'
-      ? colors.warning
-      : colors.primary;
-
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${item.read ? t('Mark as unread') : t('Mark as read')}: ${item.title}`}
-      accessibilityState={{ selected: !item.read }}
-      style={({ pressed }) => ([
-        {
-          flexDirection: 'row',
-          gap: spacing(4),
-          padding: spacing(5),
-          backgroundColor: item.read ? colors.surface : colors.surfaceAlt,
-          borderRadius: radii.xxl,
-          borderWidth: 1,
-          borderColor: item.read ? colors.border : colors.primary,
-        },
-        elevation,
-        pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
-      ])}
-    >
-      <View
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: radii.xl,
-          backgroundColor: `${accentColor}22`,
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderWidth: 1,
-          borderColor: `${accentColor}44`,
-        }}
-      >
-        <Ionicons name={icon} size={22} color={accentColor} />
-      </View>
-
-      <View style={{ flex: 1 }}>
-        <Text
-          style={[
-            typography.bodyStrong,
-            { color: colors.textPrimary, marginBottom: spacing(1) },
-          ]}
-        >
-          {item.title}
-        </Text>
-        <Text
-          style={[typography.body, { color: colors.textSecondary, lineHeight: 20 }]}
-          numberOfLines={2}
-        >
-          {item.body}
-        </Text>
-
-        <View
-          style={{
-            marginTop: spacing(3),
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <Text style={[typography.caption, { color: colors.textMuted }]}>
-            {item.time}
-          </Text>
-          {!item.read && (
-            <View
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 999,
-                backgroundColor: colors.primary,
-              }}
-            />
-          )}
-        </View>
-      </View>
-    </Pressable>
   );
 }
