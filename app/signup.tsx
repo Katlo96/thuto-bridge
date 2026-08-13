@@ -106,6 +106,7 @@ function ConfirmModal({ visible, type, email, phone, onPrimary, onSecondary }: C
     textMuted:     scheme === 'light' ? '#7A919E' : '#7A919E',
     primary:    '#4A9FC6',
     success:    '#22C55E',
+    warning:    '#F59E0B',
     border:     scheme === 'light' ? 'rgba(10,17,26,0.08)' : 'rgba(234,242,248,0.12)',
     divider:    scheme === 'light' ? 'rgba(10,17,26,0.07)' : 'rgba(234,242,248,0.08)',
   };
@@ -140,7 +141,7 @@ function ConfirmModal({ visible, type, email, phone, onPrimary, onSecondary }: C
             </Text>
 
             {/* Subtitle */}
-            <Text style={[typo.body, { color: colors.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: sp(5) }]}>
+            <Text style={[typo.body, { color: colors.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: sp(3) }]}>
               {isEmail
                 ? `${t('A verification link has been sent to')}\n`
                 : `${t('A one-time code has been sent to')}\n`}
@@ -148,6 +149,16 @@ function ConfirmModal({ visible, type, email, phone, onPrimary, onSecondary }: C
                 {isEmail ? email : maskedPhone}
               </Text>
             </Text>
+
+            {/* Explicit "must verify before login" callout for email signups */}
+            {isEmail && (
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sp(2), marginBottom: sp(4), padding: sp(3), backgroundColor: `${colors.warning}12`, borderRadius: radii.md, borderWidth: 1, borderColor: `${colors.warning}30` }}>
+                <Ionicons name="alert-circle-outline" size={16} color={colors.warning} style={{ marginTop: 1 }} />
+                <Text style={[typo.caption, { color: colors.textSecondary, flex: 1, lineHeight: 17 }]}>
+                  {t("You won't be able to sign in until your email address is verified. Please verify it before returning to the login screen.")}
+                </Text>
+              </View>
+            )}
 
             {/* Info steps — extracted to typed const to satisfy TypeScript */}
             {(() => {
@@ -176,12 +187,12 @@ function ConfirmModal({ visible, type, email, phone, onPrimary, onSecondary }: C
               );
             })()}
 
-            {/* Extra note for email */}
+            {/* Extra note for email — spam/junk folder disclaimer */}
             {isEmail && (
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: sp(2), marginBottom: sp(5), padding: sp(3), backgroundColor: `${colors.primary}0A`, borderRadius: radii.md, borderWidth: 1, borderColor: `${colors.primary}18` }}>
                 <Ionicons name="information-circle-outline" size={14} color={colors.primary} style={{ marginTop: 1 }} />
                 <Text style={[typo.caption, { color: colors.textSecondary, flex: 1, fontSize: 11, lineHeight: 16 }]}>
-                  Can't find it? Check your spam or junk folder. The link expires in 24 hours.
+                  {t("Can't find the verification email in your inbox? Check your spam or junk folder. The link expires in 24 hours.")}
                 </Text>
               </View>
             )}

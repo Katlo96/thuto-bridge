@@ -58,6 +58,8 @@ import {
   saveStudentProfile,
   getStudentMarks,
   addStudentMark,
+  updateStudentMark,
+  deleteStudentMark,
   resetStudentProgress,
 } from "../../services/progressService";
 
@@ -704,17 +706,30 @@ function ScoreSlider({ value, onChange }: { value: number; onChange: (v: number)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AddRecordModal
+// RecordModal — used for BOTH adding a new result and editing an existing
+// one. When `initialRecord` is passed, the modal pre-fills its fields from
+// that record, switches its labels to "Edit Result" / "SAVE CHANGES", and
+// reveals a "DELETE RESULT" action. Saving always goes through
+// updateStudentMark/addStudentMark in progressService, which write to the
+// signed-in student's `students/{userId}/marks/{id}` Firestore document —
+// so an edit or delete made here is visible from any other device the same
+// account signs into, not just this one.
 // ─────────────────────────────────────────────────────────────────────────────
-function AddRecordModal({
+function RecordModal({
   visible,
   subjects,
+  initialRecord,
   onSave,
+  onUpdate,
+  onDelete,
   onClose,
 }: {
   visible: boolean;
   subjects: string[];
+  initialRecord?: MarkRecord | null;
   onSave: (record: MarkRecord) => void | Promise<void>;
+  onUpdate: (record: MarkRecord) => void | Promise<void>;
+  onDelete: (id: string) => void | Promise<void>;
   onClose: () => void;
 }) {
   const colors = useTheme();
@@ -722,36 +737,82 @@ function AddRecordModal({
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const modalElevation = useElevation('lg');
+  const isEditing = !!initialRecord;
+
   const [subject, setSubject] = useState('');
   const [score, setScore] = useState(65);
   const [examType, setExamType] = useState<ExamType>('End of Term Exam');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const canSave = !!subject && !!examType && !!date && !isSaving;
+  // Re-sync fields to whichever record (or blank defaults) applies every
+  // time the modal opens, so a previous edit/add session never leaks into
+  // the next one, and switching between "Add" and "Edit" always shows the
+  // right starting values.
+  useEffect(() => {
+    if (visible) {
+      if (initialRecord) {
+        setSubject(initialRecord.subject);
+        setScore(initialRecord.score);
+        setExamType(initialRecord.examType);
+        setDate(initialRecord.date);
+      } else {
+        setSubject('');
+        setScore(65);
+        setExamType('End of Term Exam');
+        setDate(new Date().toISOString().slice(0, 10));
+      }
+    }
+  }, [visible, initialRecord]);
+
+  const canSave = !!subject && !!examType && !!date && !isSaving && !isDeleting;
   const grade = getGrade(score);
+
+  const closeIfIdle = () => {
+    if (isSaving || isDeleting) return;
+    onClose();
+  };
 
   const handleSave = async () => {
     if (!canSave) return;
     setIsSaving(true);
     try {
-      await onSave({ id: Date.now().toString(), subject, score, examType, date });
-      // reset
-      setSubject('');
-      setScore(65);
-      setExamType('End of Term Exam');
-      setDate(new Date().toISOString().slice(0, 10));
+      if (isEditing && initialRecord) {
+        await onUpdate({ ...initialRecord, subject, score, examType, date });
+      } else {
+        await onSave({ id: Date.now().toString(), subject, score, examType, date });
+      }
       onClose();
     } finally {
       setIsSaving(false);
     }
   };
 
+  const handleDelete = () => {
+    if (!initialRecord || isSaving || isDeleting) return;
+    confirmDestructiveAction(
+      t('Delete this result?'),
+      t('This will permanently remove this result from your progress. This cannot be undone.'),
+      t('Delete'),
+      t('Cancel'),
+      async () => {
+        setIsDeleting(true);
+        try {
+          await onDelete(initialRecord.id);
+          onClose();
+        } finally {
+          setIsDeleting(false);
+        }
+      }
+    );
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={closeIfIdle}>
       <Pressable
         style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: spacing(4) }}
-        onPress={onClose}
+        onPress={closeIfIdle}
       >
         <Pressable
           onPress={(e) => e.stopPropagation()}
@@ -761,12 +822,12 @@ function AddRecordModal({
           <View style={{ height: 5, backgroundColor: grade.color }} />
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing(6), paddingBottom: spacing(4) }}>
             <View>
-              <Text style={[typography.h2, { color: colors.textPrimary }]}>{t('Add Result')}</Text>
+              <Text style={[typography.h2, { color: colors.textPrimary }]}>{isEditing ? t('Edit Result') : t('Add Result')}</Text>
               <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing(1) }]}>
                 {subject ? `${subject} · ${grade.letter} ${t('grade')}` : t('Select a subject to get started')}
               </Text>
             </View>
-            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={t('Close')} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable onPress={closeIfIdle} accessibilityRole="button" accessibilityLabel={t('Close')} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
               <Ionicons name="close" size={18} color={colors.textSecondary} />
             </Pressable>
           </View>
@@ -874,10 +935,41 @@ function AddRecordModal({
               ) : (
                 <>
                   <Ionicons name="checkmark-circle" size={20} color={canSave ? '#fff' : colors.textMuted} />
-                  <Text style={[typography.label, { color: canSave ? '#fff' : colors.textMuted, fontSize: 15, fontWeight: '700' }]}>{t('SAVE RESULT')}</Text>
+                  <Text style={[typography.label, { color: canSave ? '#fff' : colors.textMuted, fontSize: 15, fontWeight: '700' }]}>
+                    {isEditing ? t('SAVE CHANGES') : t('SAVE RESULT')}
+                  </Text>
                 </>
               )}
             </Pressable>
+
+            {/* Delete (edit mode only) */}
+            {isEditing && (
+              <Pressable
+                onPress={handleDelete}
+                disabled={isSaving || isDeleting}
+                style={({ pressed }) => ({
+                  height: 48,
+                  backgroundColor: 'transparent',
+                  borderRadius: radii.lg,
+                  borderWidth: 1.5,
+                  borderColor: `${colors.danger}66`,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: spacing(2),
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator size="small" color={colors.danger} />
+                ) : (
+                  <>
+                    <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                    <Text style={[typography.label, { color: colors.danger, fontSize: 14, fontWeight: '700' }]}>{t('DELETE RESULT')}</Text>
+                  </>
+                )}
+              </Pressable>
+            )}
           </ScrollView>
         </Pressable>
       </Pressable>
@@ -1210,6 +1302,7 @@ function SubjectCard({
   count,
   marks,
   delay,
+  onEditMark,
 }: {
   subject: string;
   avg: number | null;
@@ -1219,6 +1312,7 @@ function SubjectCard({
   count: number;
   marks: MarkRecord[];
   delay: number;
+  onEditMark: (mark: MarkRecord) => void;
 }) {
   const colors = useTheme();
   const { t } = useLanguage();
@@ -1277,23 +1371,44 @@ function SubjectCard({
           {subjectMarks.length === 0 ? (
             <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center' }]}>{t('No results recorded for this subject yet.')}</Text>
           ) : (
-            subjectMarks.map((m, i) => {
-              const g = getGrade(m.score);
-              return (
-                <View key={m.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(3), padding: spacing(3), backgroundColor: colors.surfaceAlt, borderRadius: radii.lg }}>
-                  <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: `${g.color}22`, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: `${g.color}44` }}>
-                    <Text style={{ fontSize: 12, fontWeight: '900', color: g.color }}>{g.letter}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 13 }]}>{t(EXAM_TYPE_SHORT[m.examType])} · {m.score}%</Text>
-                    <Text style={[typography.caption, { color: colors.textMuted }]}>{m.date}</Text>
-                  </View>
-                  <View style={{ height: 36, width: 36, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 18, fontWeight: '900', color: g.color }}>{m.score}</Text>
-                  </View>
-                </View>
-              );
-            })
+            <>
+              <Text style={[typography.caption, { color: colors.textMuted }]}>
+                {t('Tap a result to edit or delete it.')}
+              </Text>
+              {subjectMarks.map((m) => {
+                const g = getGrade(m.score);
+                return (
+                  <Pressable
+                    key={m.id}
+                    onPress={() => onEditMark(m)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('Edit result')} ${m.subject} ${m.score}%`}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: spacing(3),
+                      padding: spacing(3),
+                      backgroundColor: colors.surfaceAlt,
+                      borderRadius: radii.lg,
+                      opacity: pressed ? 0.85 : 1,
+                      ...(Platform.OS === 'web' && { cursor: 'pointer' } as any),
+                    })}
+                  >
+                    <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: `${g.color}22`, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: `${g.color}44` }}>
+                      <Text style={{ fontSize: 12, fontWeight: '900', color: g.color }}>{g.letter}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontSize: 13 }]}>{t(EXAM_TYPE_SHORT[m.examType])} · {m.score}%</Text>
+                      <Text style={[typography.caption, { color: colors.textMuted }]}>{m.date}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing(2) }}>
+                      <Text style={{ fontSize: 18, fontWeight: '900', color: g.color }}>{m.score}</Text>
+                      <Ionicons name="create-outline" size={15} color={colors.textMuted} />
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </>
           )}
         </View>
       )}
@@ -1309,12 +1424,14 @@ function PerformanceTable({
   marks,
   onAddRecord,
   onEditSubjects,
+  onEditMark,
   onReset,
 }: {
   profile: StudentProfile;
   marks: MarkRecord[];
   onAddRecord: () => void;
   onEditSubjects: () => void;
+  onEditMark: (mark: MarkRecord) => void;
   onReset: () => void;
 }) {
   const colors = useTheme();
@@ -1553,6 +1670,7 @@ function PerformanceTable({
               count={row.count}
               marks={marks}
               delay={i * 40}
+              onEditMark={onEditMark}
             />
           ))}
         </View>
@@ -1572,7 +1690,8 @@ export default function Progress() {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [marks, setMarks] = useState<MarkRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [recordModalOpen, setRecordModalOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<MarkRecord | null>(null);
   const [editSubjectsModalOpen, setEditSubjectsModalOpen] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [authResolved, setAuthResolved] = useState(false);
@@ -1641,6 +1760,23 @@ export default function Progress() {
     }
   };
 
+  // Opens the Add/Edit modal in "add" mode (no existing record).
+  const openAddRecord = () => {
+    setEditingRecord(null);
+    setRecordModalOpen(true);
+  };
+
+  // Opens the same modal in "edit" mode, pre-filled with the tapped result.
+  const openEditRecord = (record: MarkRecord) => {
+    setEditingRecord(record);
+    setRecordModalOpen(true);
+  };
+
+  const closeRecordModal = () => {
+    setRecordModalOpen(false);
+    setEditingRecord(null);
+  };
+
   const handleAddRecord = async (record: MarkRecord) => {
     if (!userId) {
       console.warn('[Progress] handleAddRecord called with no userId — aborting save.');
@@ -1663,6 +1799,61 @@ export default function Progress() {
       Alert.alert(
         t("Error"),
         t("Failed to save record. Check Firestore rules.")
+      );
+    }
+  };
+
+  /**
+   * Persists an edit to an EXISTING result. Writes to the same
+   * `students/{userId}/marks/{id}` Firestore document the result already
+   * lives in, so the change is tied to the account (not the device) and
+   * shows up the next time this account's marks are loaded anywhere.
+   */
+  const handleUpdateRecord = async (record: MarkRecord) => {
+    if (!userId) {
+      console.warn('[Progress] handleUpdateRecord called with no userId — aborting save.');
+      Alert.alert(
+        t('Not Signed In'),
+        t('We could not find an active sign-in session, so nothing was saved. Please close the app and sign in again.'),
+      );
+      return;
+    }
+
+    try {
+      await updateStudentMark(userId, record);
+      setMarks((prev) => prev.map((m) => (m.id === record.id ? record : m)));
+    } catch (err) {
+      console.error('[Progress] updateStudentMark failed:', err);
+      Alert.alert(
+        t("Error"),
+        t("Failed to update record. Check Firestore rules.")
+      );
+    }
+  };
+
+  /**
+   * Permanently removes a single result from Firestore and local state.
+   * The RecordModal already gates this behind a confirmation dialog before
+   * calling it.
+   */
+  const handleDeleteRecord = async (id: string) => {
+    if (!userId) {
+      console.warn('[Progress] handleDeleteRecord called with no userId — aborting delete.');
+      Alert.alert(
+        t('Not Signed In'),
+        t('We could not find an active sign-in session, so nothing was deleted. Please close the app and sign in again.'),
+      );
+      return;
+    }
+
+    try {
+      await deleteStudentMark(userId, id);
+      setMarks((prev) => prev.filter((m) => m.id !== id));
+    } catch (err) {
+      console.error('[Progress] deleteStudentMark failed:', err);
+      Alert.alert(
+        t("Error"),
+        t("Failed to delete record. Check Firestore rules.")
       );
     }
   };
@@ -1775,8 +1966,9 @@ export default function Progress() {
         <PerformanceTable
           profile={profile}
           marks={marks}
-          onAddRecord={() => setAddModalOpen(true)}
+          onAddRecord={openAddRecord}
           onEditSubjects={() => setEditSubjectsModalOpen(true)}
+          onEditMark={openEditRecord}
           onReset={handleReset}
         />
       )}
@@ -1786,11 +1978,14 @@ export default function Progress() {
         maxWidth={1280}
       />
 
-      <AddRecordModal
-        visible={addModalOpen}
+      <RecordModal
+        visible={recordModalOpen}
         subjects={profile?.subjects || []}
+        initialRecord={editingRecord}
         onSave={handleAddRecord}
-        onClose={() => setAddModalOpen(false)}
+        onUpdate={handleUpdateRecord}
+        onDelete={handleDeleteRecord}
+        onClose={closeRecordModal}
       />
 
       <EditSubjectsModal

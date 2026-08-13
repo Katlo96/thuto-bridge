@@ -157,6 +157,41 @@ export async function addStudentMark(
   };
 }
 
+/*
+ * Edits an existing result in place, keyed by the mark's own Firestore
+ * document ID (the same `marks/{id}` doc that addStudentMark created).
+ * This targets `students/{userId}/marks/{id}` under the signed-in
+ * @react-native-firebase Auth session, so an edit made on this device is
+ * read back by getStudentMarks() — on this device or any other, native or
+ * web — the next time that same account signs in and this screen loads.
+ */
+export async function updateStudentMark(
+  userId: string,
+  record: MarkRecord
+): Promise<void> {
+  const { id, ...data } = record;
+
+  await withTimeout(
+    setDoc(doc(db, "students", userId, "marks", id), data),
+    "updateStudentMark"
+  );
+}
+
+/*
+ * Deletes a single result. Kept separate from resetStudentProgress (which
+ * wipes everything) so a student can remove one bad/duplicate entry
+ * without losing the rest of their history.
+ */
+export async function deleteStudentMark(
+  userId: string,
+  markId: string
+): Promise<void> {
+  await withTimeout(
+    deleteDoc(doc(db, "students", userId, "marks", markId)),
+    "deleteStudentMark"
+  );
+}
+
 export async function resetStudentProgress(userId: string) {
   await withTimeout(
     deleteDoc(doc(db, "students", userId, "profile", "main")),
